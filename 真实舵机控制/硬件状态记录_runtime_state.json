@@ -1,0 +1,11 @@
+{
+  "说明": "运行时状态文件。程序连接后会记录启动 raw、当前 raw、逻辑角度和多圈状态。",
+  "connected": false,
+  "dry_run": true,
+  "updated_at": null,
+  "startup_present_raw": {},
+  "raw_present_position": {},
+  "关节角度": {},
+  "multi_turn_state": {},
+  "gripper": {}
+}

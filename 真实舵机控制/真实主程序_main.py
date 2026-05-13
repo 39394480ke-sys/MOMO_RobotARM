@@ -111,12 +111,24 @@ def 处理命令(
         打印标定状态(控制器.calibration_report())
         return False
 
+    if 命令 == "标定说明":
+        打印标定说明()
+        return False
+
+    if 命令 == "应用标定":
+        打印应用标定提示()
+        return False
+
     if 命令 == "移动":
         执行移动(参数, 控制器)
         return False
 
     if 命令 == "移动单关节":
         执行移动单关节(参数, 控制器)
+        return False
+
+    if 命令 == "微调":
+        执行微调(参数, 控制器)
         return False
 
     if 命令 == "夹爪":
@@ -196,10 +208,16 @@ def 标准化命令(命令: str) -> str:
         "状态": "状态",
         "calibration": "标定状态",
         "标定状态": "标定状态",
+        "标定说明": "标定说明",
+        "应用标定": "应用标定",
         "移动": "移动",
         "move": "移动",
         "移动单关节": "移动单关节",
         "move-one": "移动单关节",
+        "微调": "微调",
+        "相对移动": "微调",
+        "jog": "微调",
+        "jog-one": "微调",
         "夹爪": "夹爪",
         "gripper": "夹爪",
         "张开夹爪": "张开夹爪",
@@ -249,7 +267,8 @@ def 执行移动单关节(参数: list[str], 控制器: RealArmController) -> No
     """执行：移动单关节 2 2。"""
 
     if len(参数) != 2:
-        print("移动单关节失败：格式应为：移动单关节 关节编号 角度")
+        print("移动单关节失败：格式应为：移动单关节 关节编号 目标绝对角度")
+        print("注意：这是绝对角度，不是相对加减。连续小步移动请用：微调 关节编号 增量角度")
         return
     try:
         joint_no = int(参数[0])
@@ -262,7 +281,28 @@ def 执行移动单关节(参数: list[str], 控制器: RealArmController) -> No
         return
 
     joint_key = JOINT_ORDER[joint_no - 1]
+    print(f"移动单关节是绝对角度命令：{joint_label(joint_key)} 将移动到 {target_deg:.2f} 度。")
     打印结果(控制器.move_joint(joint_key, target_deg))
+
+
+def 执行微调(参数: list[str], 控制器: RealArmController) -> None:
+    """执行：微调 1 1，表示 J1 在当前角度基础上加 1 度。"""
+
+    if len(参数) != 2:
+        print("微调失败：格式应为：微调 关节编号 增量角度")
+        print("示例：微调 1 1 表示 J1 当前角度 +1 度；微调 1 -1 表示 J1 当前角度 -1 度。")
+        return
+    try:
+        joint_no = int(参数[0])
+        delta_deg = float(参数[1])
+    except ValueError:
+        print("微调失败：关节编号必须是整数，增量角度必须是数字。")
+        return
+    if joint_no < 1 or joint_no > len(JOINT_ORDER):
+        print("微调失败：关节编号必须是 1 到 5。")
+        return
+    joint_key = JOINT_ORDER[joint_no - 1]
+    打印结果(控制器.jog_joint(joint_key, delta_deg))
 
 
 def 执行夹爪(参数: list[str], 控制器: RealArmController) -> None:
@@ -397,7 +437,15 @@ def 打印标定状态(report: dict[str, Any]) -> None:
 
     print("\n标定状态：")
     print(f"标定文件：{report['标定文件']}")
+    print(f"文件存在：{'是' if report.get('是否存在') else '否'}")
     print(f"允许真机移动：{'是' if report['允许真机移动'] else '否'}")
+    if report.get("标定说明"):
+        print(f"标定说明：{report['标定说明']}")
+    if report.get("_meta"):
+        meta = report["_meta"]
+        print(f"生成脚本：{meta.get('script', '未知')}")
+        print(f"单圈有限位关节：{', '.join(meta.get('bounded_single_turn_joints', []))}")
+        print(f"多圈 absolute raw 关节：{', '.join(meta.get('absolute_raw_joints', []))}")
     for joint_key, item in report["项目"].items():
         status = "完整" if item["完整"] else "不完整"
         print(f"  {item['show_name']} ({joint_key})：{status}")
@@ -405,6 +453,46 @@ def 打印标定状态(report: dict[str, Any]) -> None:
             print(f"    - {issue}")
         if item["缺失字段"]:
             print(f"    - 缺失字段：{', '.join(item['缺失字段'])}")
+
+
+def 打印标定说明() -> None:
+    """打印标定程序说明。"""
+
+    print(
+        """
+标定说明：
+  重新标定请退出当前程序后运行：
+    mamba activate momo_rebot
+    cd 真实舵机控制
+    python 标定程序_calibrate.py
+
+  只应用已有标定请运行：
+    mamba activate momo_rebot
+    cd 真实舵机控制
+    python 标定应用_apply_calibration.py
+
+区别：
+  dry-run：不需要真实依赖，不连接硬件。
+  标定程序：需要真实依赖和硬件，读取/写入寄存器，生成 标定文件.json。
+  真实控制：需要真实依赖和硬件，每次 connect() 只读取 标定文件.json，不重新标定。
+""".strip()
+    )
+
+
+def 打印应用标定提示() -> None:
+    """为了安全，主程序内不直接应用标定。"""
+
+    print(
+        """
+应用标定需要退出当前交互控制程序后单独运行：
+  mamba activate momo_rebot
+  cd 真实舵机控制
+  python 标定应用_apply_calibration.py
+
+该脚本会把已有 标定文件.json 中的寄存器配置写入真实舵机。
+第一版不在交互控制过程中直接应用标定，避免误操作。
+""".strip()
+    )
 
 
 def 打印名称列表(title: str, names: list[str]) -> None:
@@ -443,8 +531,12 @@ def 打印帮助() -> None:
   连接
   状态
   标定状态
+  标定说明
+  应用标定
   移动 0 20 30 10 0
-  移动单关节 2 2
+  移动单关节 2 2      # 绝对角度：J2 移动到 2 度
+  微调 2 1             # 相对角度：J2 在当前角度基础上 +1 度
+  微调 2 -1            # 相对角度：J2 在当前角度基础上 -1 度
   夹爪 50
   张开夹爪
   闭合夹爪

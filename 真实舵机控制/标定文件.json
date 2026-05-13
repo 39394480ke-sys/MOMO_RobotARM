@@ -1,16 +1,22 @@
 {
-  "说明": "这是原 MomoAgent / SOARM MOCE 当前标定文件的初始模板。每台机械臂仍然必须重新确认零点、方向、限位；默认 dry_run=true，不会真实写舵机。",
-  "shoulder_pan": {
-    "show_name": "J1_底座旋转",
-    "模式": "单圈",
-    "direction": 1,
-    "id": 1,
-    "drive_mode": 0,
-    "homing_offset": 39,
-    "range_min": 752,
-    "range_max": 3323,
-    "operating_mode": 0,
-    "zero_present_raw": 2047
+  "_meta": {
+    "generated_at_unix_s": 1778589753.2018628,
+    "script": "标定程序_calibrate.py",
+    "bounded_single_turn_joints": [
+      "shoulder_pan",
+      "wrist_flex",
+      "gripper"
+    ],
+    "absolute_raw_joints": [
+      "shoulder_lift",
+      "elbow_flex",
+      "wrist_roll"
+    ],
+    "notes": {
+      "bounded_single_turn": "J1/J4/夹爪使用有限位单圈标定。",
+      "absolute_raw": "J2/J3/J5 使用 mode 0 + Phase 28 + 0/0 限位的多圈绝对 raw 模式。",
+      "home": "home() 回到由 zero_present_raw / home_present_raw 定义的相对 0 度。"
+    }
   },
   "shoulder_lift": {
     "show_name": "J2_肩部抬升",
@@ -23,8 +29,8 @@
     "range_min": 0,
     "range_max": 0,
     "operating_mode": 0,
-    "home_present_raw": 2241,
-    "home_present_wrapped_raw": 2241
+    "home_present_raw": 1977,
+    "home_present_wrapped_raw": 1977
   },
   "elbow_flex": {
     "show_name": "J3_肘部弯曲",
@@ -37,20 +43,8 @@
     "range_min": 0,
     "range_max": 0,
     "operating_mode": 0,
-    "home_present_raw": 6628,
-    "home_present_wrapped_raw": 2532
-  },
-  "wrist_flex": {
-    "show_name": "J4_腕部俯仰",
-    "模式": "单圈",
-    "direction": 1,
-    "id": 4,
-    "drive_mode": 0,
-    "homing_offset": -1805,
-    "range_min": 410,
-    "range_max": 2205,
-    "operating_mode": 0,
-    "zero_present_raw": 2043
+    "home_present_raw": 5447,
+    "home_present_wrapped_raw": 1351
   },
   "wrist_roll": {
     "show_name": "J5_腕部旋转",
@@ -63,8 +57,32 @@
     "range_min": 0,
     "range_max": 0,
     "operating_mode": 0,
-    "home_present_raw": 311,
-    "home_present_wrapped_raw": 311
+    "home_present_raw": 2409,
+    "home_present_wrapped_raw": 2409
+  },
+  "shoulder_pan": {
+    "show_name": "J1_底座旋转",
+    "模式": "单圈",
+    "direction": 1,
+    "id": 1,
+    "drive_mode": 0,
+    "homing_offset": 4,
+    "range_min": 793,
+    "range_max": 3351,
+    "operating_mode": 0,
+    "zero_present_raw": 2047
+  },
+  "wrist_flex": {
+    "show_name": "J4_腕部俯仰",
+    "模式": "单圈",
+    "direction": 1,
+    "id": 4,
+    "drive_mode": 0,
+    "homing_offset": -1805,
+    "range_min": 393,
+    "range_max": 2192,
+    "operating_mode": 0,
+    "zero_present_raw": 2086
   },
   "gripper": {
     "show_name": "夹爪_ID6",
@@ -73,9 +91,9 @@
     "id": 6,
     "drive_mode": 0,
     "homing_offset": 2047,
-    "range_min": 1450,
-    "range_max": 2900,
+    "range_min": 1530,
+    "range_max": 2865,
     "operating_mode": 0,
-    "zero_present_raw": 1450
+    "zero_present_raw": 1530
   }
 }

@@ -1,11 +1,119 @@
 {
   "说明": "运行时状态文件。程序连接后会记录启动 raw、当前 raw、逻辑角度和多圈状态。",
   "connected": false,
-  "dry_run": true,
-  "updated_at": null,
-  "startup_present_raw": {},
-  "raw_present_position": {},
-  "关节角度": {},
-  "multi_turn_state": {},
-  "gripper": {}
+  "dry_run": false,
+  "updated_at": "2026-05-12 21:03:44",
+  "startup_present_raw": {
+    "shoulder_pan": 2047,
+    "shoulder_lift": 1977,
+    "elbow_flex": 5447,
+    "wrist_flex": 2086,
+    "wrist_roll": 2409,
+    "gripper": 1530
+  },
+  "raw_present_position": {
+    "shoulder_pan": 2460,
+    "shoulder_lift": 1486,
+    "elbow_flex": 5832,
+    "wrist_flex": 1568,
+    "wrist_roll": 2338,
+    "gripper": 1532
+  },
+  "关节角度": {
+    "shoulder_pan": 36.298828125,
+    "shoulder_lift": 8.14232016509434,
+    "elbow_flex": 6.04248046875,
+    "wrist_flex": 45.52734375,
+    "wrist_roll": -6.240234375
+  },
+  "multi_turn_state": {
+    "shoulder_lift": {
+      "show_name": "J2_肩部抬升",
+      "home_present_raw": 1977,
+      "current_raw": 1486,
+      "relative_raw": -491,
+      "joint_deg": 8.14232016509434,
+      "goal_raw": 1486
+    },
+    "elbow_flex": {
+      "show_name": "J3_肘部弯曲",
+      "home_present_raw": 5447,
+      "current_raw": 5832,
+      "relative_raw": 385,
+      "joint_deg": 6.04248046875,
+      "goal_raw": 5832
+    },
+    "wrist_roll": {
+      "show_name": "J5_腕部旋转",
+      "home_present_raw": 2409,
+      "current_raw": 2338,
+      "relative_raw": -71,
+      "joint_deg": -6.240234375,
+      "goal_raw": 2338
+    }
+  },
+  "gripper": {
+    "present_raw": 1532,
+    "open_value": 0.149812734082397,
+    "range_min": 1530,
+    "range_max": 2865
+  },
+  "calibration_path": "/Users/ke/Library/Mobile Documents/com~apple~CloudDocs/Code/机械臂/真实舵机控制/标定文件.json",
+  "mapping_details": {
+    "shoulder_pan": {
+      "joint_key": "shoulder_pan",
+      "show_name": "J1_底座旋转",
+      "模式": "单圈",
+      "joint_scale": 1.0,
+      "direction": 1,
+      "reference_raw": 2047,
+      "present_raw": 2460,
+      "relative_raw": 413,
+      "joint_deg": 36.298828125
+    },
+    "shoulder_lift": {
+      "joint_key": "shoulder_lift",
+      "show_name": "J2_肩部抬升",
+      "模式": "多圈",
+      "joint_scale": -5.3,
+      "direction": 1,
+      "reference_raw": 1977,
+      "present_raw": 1486,
+      "relative_raw": -491,
+      "joint_deg": 8.14232016509434
+    },
+    "elbow_flex": {
+      "joint_key": "elbow_flex",
+      "show_name": "J3_肘部弯曲",
+      "模式": "多圈",
+      "joint_scale": 5.6,
+      "direction": 1,
+      "reference_raw": 5447,
+      "present_raw": 5832,
+      "relative_raw": 385,
+      "joint_deg": 6.04248046875
+    },
+    "wrist_flex": {
+      "joint_key": "wrist_flex",
+      "show_name": "J4_腕部俯仰",
+      "模式": "单圈",
+      "joint_scale": -1.0,
+      "direction": 1,
+      "reference_raw": 2086,
+      "present_raw": 1568,
+      "relative_raw": -518,
+      "joint_deg": 45.52734375
+    },
+    "wrist_roll": {
+      "joint_key": "wrist_roll",
+      "show_name": "J5_腕部旋转",
+      "模式": "多圈",
+      "joint_scale": 1.0,
+      "direction": 1,
+      "reference_raw": 2409,
+      "present_raw": 2338,
+      "relative_raw": -71,
+      "joint_deg": -6.240234375
+    }
+  }
 }

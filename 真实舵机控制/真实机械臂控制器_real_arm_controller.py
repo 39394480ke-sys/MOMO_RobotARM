@@ -69,16 +69,32 @@ class RealArmController:
         """连接驱动并读取当前位置。"""
 
         try:
+            self._reload_config_and_calibration()
+            report = self.calibration_manager.calibration_report()
+            if not report["允许真机移动"] and not self.is_dry_run():
+                return 操作结果(
+                    False,
+                    "缺少标定文件或标定不完整，请先运行 标定程序_calibrate.py。",
+                )
+
             print(self.safety_checker.startup_warning())
             self.driver.connect()
             self.connected = True
             self.current_raw = self.driver.read_all_present_positions()
             self.runtime_state["connected"] = True
             self.runtime_state["dry_run"] = self.is_dry_run()
-            self.runtime_state["startup_present_raw"] = dict(self.current_raw)
+            self.runtime_state["calibration_path"] = str(self.calibration_manager.path)
+            self.runtime_state["startup_present_raw"] = self._build_calibrated_startup_raw()
             self._refresh_state_from_raw(self.current_raw)
             self._save_runtime_state()
-            return 操作结果(True, "连接成功，已读取当前舵机状态。")
+            if self.is_dry_run():
+                return 操作结果(True, "连接成功，已加载标定文件并读取 dry-run 舵机状态。")
+            return 操作结果(
+                True,
+                f"已连接真实机械臂。已加载标定文件：{self.calibration_manager.path.name}。"
+                "当前状态已根据 zero_present_raw / home_present_raw 计算。"
+                "如果机械零点不正确，请运行 标定程序_calibrate.py。",
+            )
         except Exception as 错误:
             self.connected = False
             return 操作结果(False, f"连接失败：{错误}")
@@ -138,8 +154,10 @@ class RealArmController:
             "已连接": self.connected,
             "关节角度": dict(self.current_joint_deg),
             "raw_present_position": dict(self.current_raw),
-            "multi_turn_state": dict(self.runtime_state.get("multi_turn_state", {})),
-            "夹爪": dict(self.runtime_state.get("gripper", {"开合": self.current_gripper})),
+            "multi_turn_state": dict(self.runtime_state.get("multi_turn_state", {})) if self.current_raw else {},
+            "夹爪": dict(self.runtime_state.get("gripper", {"开合": self.current_gripper}))
+            if "gripper" in self.current_raw
+            else {"open_value": self.current_gripper},
         }
 
     def move_joints(self, target_deg_by_joint: dict[str, float]) -> 操作结果:
@@ -195,6 +213,25 @@ class RealArmController:
         if joint_key not in self.joint_config_by_key:
             return 操作结果(False, f"未知关节：{joint_key}")
         return self.move_joints({joint_key: float(target_deg)})
+
+    def jog_joint(self, joint_key: str, delta_deg: float) -> 操作结果:
+        """相对当前位置微调单个关节。"""
+
+        if joint_key not in self.joint_config_by_key:
+            return 操作结果(False, f"未知关节：{joint_key}")
+        if not self.connected:
+            return 操作结果(False, "尚未连接。请先输入：连接")
+
+        state = self.get_state()
+        if "错误" in state:
+            return 操作结果(False, state["错误"])
+        current_deg = float(state.get("关节角度", {}).get(joint_key, self.current_joint_deg.get(joint_key, 0.0)))
+        target_deg = current_deg + float(delta_deg)
+        print(
+            f"{joint_label(joint_key)} 当前角度={current_deg:.2f} 度，"
+            f"微调={float(delta_deg):+.2f} 度，目标角度={target_deg:.2f} 度。"
+        )
+        return self.move_joint(joint_key, target_deg)
 
     def move_home(self) -> 操作结果:
         """回到配置默认姿态。"""
@@ -289,6 +326,10 @@ class RealArmController:
     def calibration_report(self) -> dict[str, Any]:
         """返回标定状态报告。"""
 
+        try:
+            self.calibration_manager.reload()
+        except Exception:
+            pass
         return self.calibration_manager.calibration_report()
 
     # 阶段三动作播放器兼容接口
@@ -368,6 +409,40 @@ class RealArmController:
         if self.is_dry_run():
             return MockServoDriver(self.config, self.calibration_manager.data)
         return RealServoDriver(self.config, self.calibration_manager.data)
+
+    def _reload_config_and_calibration(self) -> None:
+        """连接前重新读取配置和标定文件。
+
+        connect() 只加载标定，不重新标定，不覆盖 home_present_raw / zero_present_raw。
+        """
+
+        self.config = 读取配置(self.config_path)
+        self.joint_order = list(self.config.get("robot", {}).get("joint_order", JOINT_ORDER))
+        self.joint_config_by_key = self._build_joint_config_by_key()
+        calibration_path = self._resolve_path(self.config.get("calibration", {}).get("path", "标定文件.json"))
+        self.calibration_manager = CalibrationManager(calibration_path, self.config)
+        self.safety_checker = SafetyChecker(self.config, self.calibration_manager)
+        self.driver = self._create_driver()
+
+    def _build_calibrated_startup_raw(self) -> dict[str, int]:
+        """按标定零点建立 runtime startup_raw。
+
+        单圈使用 zero_present_raw，多圈使用 home_present_raw，夹爪使用 zero_present_raw 或 range_min。
+        """
+
+        startup_raw: dict[str, int] = {}
+        for joint_key in self.joint_order:
+            if not self.calibration_manager.has(joint_key):
+                continue
+            entry = self.calibration_manager.get(joint_key)
+            if entry.get("模式") == "多圈":
+                startup_raw[joint_key] = int(entry["home_present_raw"])
+            else:
+                startup_raw[joint_key] = int(entry["zero_present_raw"])
+        if self.calibration_manager.has("gripper"):
+            entry = self.calibration_manager.get("gripper")
+            startup_raw["gripper"] = int(entry.get("zero_present_raw", entry.get("range_min", 0)))
+        return startup_raw
 
     def _build_joint_config_by_key(self) -> dict[str, dict[str, Any]]:
         robot = self.config.get("robot", {})

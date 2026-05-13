@@ -46,7 +46,8 @@ class CalibrationManager:
         """加载标定文件。"""
 
         if not self.path.exists():
-            raise FileNotFoundError(f"没有找到标定文件：{self.path}")
+            self.data = {}
+            return self.data
 
         try:
             with self.path.open("r", encoding="utf-8") as 文件:
@@ -59,6 +60,11 @@ class CalibrationManager:
 
         self.data = data
         return self.data
+
+    def reload(self) -> dict[str, Any]:
+        """重新加载标定文件。"""
+
+        return self.load()
 
     def save(self) -> None:
         """保存标定文件。"""
@@ -144,8 +150,13 @@ class CalibrationManager:
 
         项目 = {joint_key: self.joint_report(joint_key) for joint_key in check_keys}
         允许真机移动 = all(report["完整"] for report in 项目.values())
+        if not self.path.exists():
+            允许真机移动 = False
         return {
             "标定文件": str(self.path),
+            "是否存在": self.path.exists(),
+            "标定说明": self.data.get("说明", self.data.get("_meta", {}).get("notes", {})),
+            "_meta": self.data.get("_meta", {}),
             "允许真机移动": 允许真机移动,
             "项目": 项目,
         }

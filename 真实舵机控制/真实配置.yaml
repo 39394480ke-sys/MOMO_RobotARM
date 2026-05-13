@@ -6,7 +6,7 @@
     "port": "/dev/tty.usbmodem5B141127021",
     "timeout": 2.0,
     "robot_id": "soarmmoce",
-    "dry_run": true,
+    "dry_run": false,
     "gripper_available": true,
     "arm_p_coefficient": 16,
     "arm_d_coefficient": 8,

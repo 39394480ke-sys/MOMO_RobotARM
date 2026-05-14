@@ -69,9 +69,16 @@ class CartesianController:
         duration: float = 1.0,
         wait: bool = True,
         dry_run: bool | None = None,
+        seed_joints_deg: Sequence[float] | None = None,
     ) -> dict[str, Any]:
         config = self.config.get("kinematics", {})
-        seed_q = [math.radians(value) for value in self.get_current_joints_deg()]
+        if seed_joints_deg is None:
+            seed_source_deg = self.get_current_joints_deg()
+            seed_source = "current"
+        else:
+            seed_source_deg = [float(value) for value in seed_joints_deg]
+            seed_source = "custom"
+        seed_q = [math.radians(value) for value in seed_source_deg]
         ik = self.kinematics_model.inverse(
             target_xyz=xyz,
             target_rpy=rpy,
@@ -108,6 +115,10 @@ class CartesianController:
             "dry_run": should_dry_run,
             "target_xyz_m": [float(value) for value in xyz],
             "target_rpy_rad": [float(value) for value in rpy] if rpy is not None else None,
+            "ik_seed": {
+                "source": seed_source,
+                "joints_deg": {name: float(seed_source_deg[idx]) for idx, name in enumerate(self.joint_names)},
+            },
             "target_joints_deg": target_deg,
             "ik": ik,
         }
@@ -132,6 +143,7 @@ class CartesianController:
         duration: float = 1.0,
         wait: bool = True,
         dry_run: bool | None = None,
+        seed_joints_deg: Sequence[float] | None = None,
     ) -> dict[str, Any]:
         current_pose = self.get_end_effector_pose()
         target_xyz, target_rpy = self.kinematics_model.compose_delta_target(
@@ -148,6 +160,7 @@ class CartesianController:
             duration=duration,
             wait=wait,
             dry_run=dry_run,
+            seed_joints_deg=seed_joints_deg,
         )
         result["action"] = "move_delta"
         result["frame"] = "tool" if str(frame).strip().lower() == "tool" else "base"
@@ -165,6 +178,7 @@ class CartesianController:
         duration: float = 1.0,
         wait: bool = True,
         dry_run: bool | None = None,
+        seed_joints_deg: Sequence[float] | None = None,
     ) -> dict[str, Any]:
         frame_norm = "tool" if str(frame).strip().lower() == "tool" else "base"
         if frame_norm == "tool":
@@ -180,8 +194,16 @@ class CartesianController:
                 duration=duration,
                 wait=wait,
                 dry_run=dry_run,
+                seed_joints_deg=seed_joints_deg,
             )
-        return self.move_pose([x, y, z], rpy=rpy, duration=duration, wait=wait, dry_run=dry_run)
+        return self.move_pose(
+            [x, y, z],
+            rpy=rpy,
+            duration=duration,
+            wait=wait,
+            dry_run=dry_run,
+            seed_joints_deg=seed_joints_deg,
+        )
 
     def _call_move_joints(self, target_deg: dict[str, float], duration: float, wait: bool) -> Any:
         controller = self.arm_controller

@@ -233,6 +233,16 @@ class KinematicsModel:
         self._client_id = _pb.connect(_pb.GUI if self.use_gui else _pb.DIRECT)
         if self._client_id < 0:
             raise RuntimeError("PyBullet 连接失败。")
+        if self.use_gui:
+            _pb.configureDebugVisualizer(_pb.COV_ENABLE_GUI, 1, physicsClientId=self._client_id)
+            _pb.configureDebugVisualizer(_pb.COV_ENABLE_MOUSE_PICKING, 1, physicsClientId=self._client_id)
+            _pb.resetDebugVisualizerCamera(
+                cameraDistance=0.65,
+                cameraYaw=45.0,
+                cameraPitch=-25.0,
+                cameraTargetPosition=[0.0, 0.0, 0.18],
+                physicsClientId=self._client_id,
+            )
 
         self._robot_id = _pb.loadURDF(
             str(self.urdf_path),
@@ -319,9 +329,44 @@ class KinematicsModel:
         if client_id is None or not PYBULLET_AVAILABLE or _pb is None:
             return
         try:
-            _pb.disconnect(physicsClientId=int(client_id))
+            if self.is_connected():
+                _pb.disconnect(physicsClientId=int(client_id))
         finally:
             self._client_id = None
+
+    def is_connected(self) -> bool:
+        client_id = getattr(self, "_client_id", None)
+        if client_id is None or not PYBULLET_AVAILABLE or _pb is None:
+            return False
+        info = _pb.getConnectionInfo(physicsClientId=int(client_id))
+        return bool(info.get("isConnected", 0))
+
+    def step_simulation(self) -> None:
+        client_id = getattr(self, "_client_id", None)
+        if client_id is None or not PYBULLET_AVAILABLE or _pb is None:
+            return
+        if not self.is_connected():
+            self._client_id = None
+            return
+        _pb.stepSimulation(physicsClientId=int(client_id))
+
+    def add_debug_slider(self, name: str, lower: float, upper: float, start: float) -> int:
+        if not self.use_gui or not self.is_connected():
+            raise RuntimeError("Debug slider 只能在 PyBullet GUI 模式使用。")
+        return int(
+            _pb.addUserDebugParameter(
+                str(name),
+                float(lower),
+                float(upper),
+                float(start),
+                physicsClientId=int(self._client_id),
+            )
+        )
+
+    def read_debug_slider(self, slider_id: int) -> float:
+        if not self.use_gui or not self.is_connected():
+            raise RuntimeError("PyBullet GUI 已关闭。")
+        return float(_pb.readUserDebugParameter(int(slider_id), physicsClientId=int(self._client_id)))
 
     def forward(self, q_user_rad: Sequence[float]) -> dict[str, list[float]]:
         q_model = self._user_to_model_q(q_user_rad)

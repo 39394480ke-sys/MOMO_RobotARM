@@ -104,6 +104,16 @@ joint_name_aliases:
 
 ## 打开 3D 仿真
 
+如果只是检查 URDF 外观、旋转视角、缩放模型，推荐直接用 VS Code 的 `URDF Visualizer: 预览 URDF/Xacro` 打开：
+
+```text
+URDF运动学仿真/urdf/soarmoce_urdf.urdf
+```
+
+这个 URDF 里的 STL 路径是 `../meshes/*.STL`，从 `urdf/` 目录下打开时可以正确找到模型文件。
+
+PyBullet 查看器更适合做 FK / IK 和动作播放验证：
+
 ```bash
 python3 3D仿真_pybullet_viewer.py
 ```
@@ -118,7 +128,7 @@ python3 3D仿真_pybullet_viewer.py
 退出
 ```
 
-这个查看器只加载 URDF，不连接真实舵机。
+这个查看器只加载 URDF，不连接真实舵机。部分 macOS / Metal 版本的 PyBullet 不能稳定读取 GUI 滑块；如果窗口提示滑块不可用，就用 `移动 ...` 或 `播放动作 ...` 命令控制。
 
 ## 中文主程序
 
@@ -239,4 +249,61 @@ python3 测试脚本_test/02_正运动学测试.py
 python3 测试脚本_test/03_逆运动学测试.py
 python3 测试脚本_test/04_末端增量移动测试.py
 python3 测试脚本_test/05_3D仿真显示测试.py
+python3 测试脚本_test/06_阶段五接阶段四dryrun测试.py
+python3 测试脚本_test/07_真实移动前检查与执行.py --xyz -0.01829269342124462 -0.09768977761268616 0.1212569996714592
 ```
+
+## 阶段五接阶段四 dry-run
+
+先激活项目环境，并站在项目根目录：
+
+```bash
+mamba activate momo_rebot
+cd "/Users/ke/Library/Mobile Documents/com~apple~CloudDocs/Code/机械臂"
+```
+
+运行：
+
+```bash
+python URDF运动学仿真/测试脚本_test/06_阶段五接阶段四dryrun测试.py
+```
+
+这个脚本会：
+
+```text
+阶段五 IK
+  -> 阶段四 RealArmController.move_joints
+  -> 阶段四 dry-run MockServoDriver
+```
+
+它会创建临时阶段四配置，强制 `dry_run=true`，不会修改 `真实舵机控制/真实配置.yaml`，也不会访问真实舵机。
+
+默认目标点来自 FK 姿态 `[0, 20, 30, 10, 0]`，通常能通过阶段四安全范围。你也可以传自己的目标：
+
+```bash
+python URDF运动学仿真/测试脚本_test/06_阶段五接阶段四dryrun测试.py --xyz 0.20 0.05 0.18
+```
+
+如果阶段四报角度超范围，例如 J1 超出 `[-90, 90]`，说明这个目标点不适合直接执行，需要换更安全的 xyz。
+
+## 真实移动前检查和执行
+
+先只检查，不移动：
+
+```bash
+python URDF运动学仿真/测试脚本_test/07_真实移动前检查与执行.py \
+  --xyz -0.01829269342124462 -0.09768977761268616 0.1212569996714592
+```
+
+检查模式只计算 IK 和目标角度，不连接真实舵机。
+
+确认已经完成阶段四标定、单关节小幅移动、06 dry-run 集成测试后，才可以真实执行：
+
+```bash
+python URDF运动学仿真/测试脚本_test/07_真实移动前检查与执行.py \
+  --xyz -0.01829269342124462 -0.09768977761268616 0.1212569996714592 \
+  --execute-real \
+  --i-understand-risk
+```
+
+真实执行时脚本仍然只调用阶段四 `move_joints()`，不会绕过阶段四的标定、安全检查和角度映射。

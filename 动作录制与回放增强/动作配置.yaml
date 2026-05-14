@@ -1,0 +1,49 @@
+robot:
+  sdk_joint_names:
+    - shoulder_pan
+    - shoulder_lift
+    - elbow_flex
+    - wrist_flex
+    - wrist_roll
+
+  中文关节名:
+    shoulder_pan: 底座旋转
+    shoulder_lift: 肩部抬升
+    elbow_flex: 肘部弯曲
+    wrist_flex: 腕部俯仰
+    wrist_roll: 腕部旋转
+
+  multi_turn_joints:
+    - shoulder_lift
+    - elbow_flex
+    - wrist_roll
+
+  gripper_key: gripper
+
+files:
+  action_library_dir: 动作库
+  record_dir: 录制记录
+  runtime_log: 运行日志/motion_runtime.log
+
+recording:
+  default_pose_count: 2
+  wait_for_enter: true
+  include_tcp_pose: true
+  include_raw_position: true
+  include_multi_turn_state: true
+  include_gripper: true
+
+playback:
+  default_duration_sec: 1.5
+  default_interval_sec: 0.3
+  update_hz: 25.0
+  real_mode_min_duration_sec: 2.0
+  dry_run_default: true
+  clamp_to_limits: true
+  stop_on_limit_violation: true
+  return_to_first_pose_before_replay: true
+
+safety:
+  max_single_step_deg: 15.0
+  real_mode_max_single_step_deg: 5.0
+  require_confirm_before_real_replay: true

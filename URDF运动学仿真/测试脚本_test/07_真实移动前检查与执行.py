@@ -72,7 +72,6 @@ def 解析参数() -> argparse.Namespace:
     parser.add_argument("--duration", type=float, default=1.0)
     parser.add_argument("--seed-home", action="store_true", help="IK 使用 [0,0,0,0,0] 作为种子，而不是当前真实关节角")
     parser.add_argument("--seed-deg", nargs=5, type=float, default=None, metavar=("J1", "J2", "J3", "J4", "J5"))
-    parser.add_argument("--max-joint-delta-deg", type=float, default=5.0, help="单次每个关节最大允许变化，默认 5 度")
     parser.add_argument("--hold-seconds", type=float, default=3.0, help="真实写入后保持连接等待的秒数")
     parser.add_argument("--disable-torque-on-exit", action="store_true", help="退出时关闭扭矩。默认不断扭矩，避免刚写入就掉力。")
     parser.add_argument("--execute-real", action="store_true", help="通过阶段四真实模式执行 move_joints")
@@ -100,18 +99,6 @@ def 关节角度差报告(current_deg: dict[str, float], target_deg: dict[str, f
             "delta_deg": float(target) - current,
         }
     return report
-
-
-def 检查关节变化上限(delta_report: dict[str, dict[str, float]], max_delta_deg: float) -> tuple[bool, str]:
-    limit = abs(float(max_delta_deg))
-    too_large = [
-        f"{joint_key}: {entry['delta_deg']:+.2f} deg"
-        for joint_key, entry in delta_report.items()
-        if abs(float(entry["delta_deg"])) > limit
-    ]
-    if too_large:
-        return False, f"单次关节变化超过 {limit:.2f} 度，禁止执行：" + "；".join(too_large)
-    return True, "关节变化在允许范围内。"
 
 
 def 解析IK种子(args: argparse.Namespace) -> list[float] | None:
@@ -199,10 +186,6 @@ def main() -> int:
                 for idx, joint_key in enumerate(SDK_JOINT_NAMES)
             }
             delta_report = 关节角度差报告(current_angles, target_joints_deg)
-            delta_ok, delta_message = 检查关节变化上限(delta_report, float(args.max_joint_delta_deg))
-            if not delta_ok:
-                打印_json({"ok": False, "错误": delta_message, "joint_delta_deg": delta_report})
-                return 1
             move_result = 真实控制器.move_joints(target_joints_deg)
             result = {
                 "ok": bool(getattr(move_result, "成功", False)),
@@ -210,7 +193,7 @@ def main() -> int:
                 "真实执行": True,
                 "target_joints_deg": target_joints_deg,
                 "joint_delta_deg": delta_report,
-                "delta_check": delta_message,
+                "说明": "已移除 5 度变化硬保护；仍会经过阶段四角度范围和标定 raw 安全检查。",
                 "move_result": move_result,
             }
         else:
@@ -231,13 +214,8 @@ def main() -> int:
                 current_angles,
                 result.get("target_joints_deg", {}),
             )
-            delta_ok, delta_message = 检查关节变化上限(result["joint_delta_deg"], float(args.max_joint_delta_deg))
-            result["delta_check"] = delta_message
-            if not delta_ok:
-                result["ok"] = False
-                result["错误"] = delta_message
-                result["move_result"] = "已阻止：IK 目标关节变化过大。"
-            elif result.get("ok"):
+            result["说明"] = "已移除 5 度变化硬保护；仍会经过阶段四角度范围和标定 raw 安全检查。"
+            if result.get("ok"):
                 move_result = 真实控制器.move_joints(result.get("target_joints_deg", {}))
                 result["move_result"] = move_result
                 result["ok"] = bool(getattr(move_result, "成功", False))

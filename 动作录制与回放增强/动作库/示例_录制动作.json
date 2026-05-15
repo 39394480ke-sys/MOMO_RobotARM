@@ -2,7 +2,7 @@
   "schema_version": "momo_replay_sequence_v1",
   "name": "示例录制动作",
   "description": "示例录制动作 示例动作",
-  "created_at": "2026-05-14 01:48:21",
+  "created_at": "2026-05-14 22:20:32",
   "source": "stage6_seed",
   "joint_order": [
     "shoulder_pan",
@@ -20,7 +20,7 @@
     {
       "index": 1,
       "name": "pose_1",
-      "recorded_at": "2026-05-14 01:48:21",
+      "recorded_at": "2026-05-14 22:20:32",
       "duration_sec": 1.5,
       "hold_sec": 0.3,
       "joint_targets_deg": {
@@ -32,16 +32,15 @@
       },
       "tcp_pose": {
         "xyz": [
-          0.32,
-          0.0,
-          0.08
+          -0.018863914534449577,
+          -0.07778584957122803,
+          0.22858183085918427
         ],
         "rpy": [
-          0.0,
-          0.0,
-          0.0
-        ],
-        "source": "approximate_fk_without_pybullet"
+          3.0000010658457387e-06,
+          -3.4641021085876976e-07,
+          0.028708999767394494
+        ]
       },
       "raw_present_position": {
         "shoulder_pan": 2047,
@@ -101,7 +100,7 @@
     {
       "index": 2,
       "name": "pose_2",
-      "recorded_at": "2026-05-14 01:48:21",
+      "recorded_at": "2026-05-14 22:20:32",
       "duration_sec": 1.5,
       "hold_sec": 0.3,
       "joint_targets_deg": {
@@ -109,20 +108,19 @@
         "shoulder_lift": 15.0,
         "elbow_flex": 25.0,
         "wrist_flex": 5.0,
-        "wrist_roll": 10.0
+        "wrist_roll": -10.0
       },
       "tcp_pose": {
         "xyz": [
-          0.255396,
-          -0.068433,
-          0.244761
+          0.002473680069670081,
+          -0.09671290963888168,
+          0.1434277445077896
         ],
         "rpy": [
-          0.0,
-          0.785398,
-          -0.087266
-        ],
-        "source": "approximate_fk_without_pybullet"
+          0.7777471880132507,
+          -0.12309811606710325,
+          0.4145472844546818
+        ]
       },
       "raw_present_position": {
         "shoulder_pan": 1897,
@@ -152,11 +150,11 @@
         },
         "wrist_roll": {
           "startup_raw": 311,
-          "current_raw": 425,
-          "continuous_raw": 114,
-          "relative_raw": 114,
-          "motor_deg": 10.0,
-          "joint_deg": 10.0,
+          "current_raw": 197,
+          "continuous_raw": -114,
+          "relative_raw": -114,
+          "motor_deg": -10.0,
+          "joint_deg": -10.0,
           "goal_raw": null
         }
       },
@@ -171,12 +169,12 @@
         "shoulder_lift": 15.0,
         "elbow_flex": 25.0,
         "wrist_flex": 5.0,
-        "wrist_roll": 10.0
+        "wrist_roll": -10.0
       },
       "replay_multi_turn_continuous_raw": {
         "shoulder_lift": 171.0,
         "elbow_flex": 284.0,
-        "wrist_roll": 114.0
+        "wrist_roll": -114.0
       }
     }
   ]

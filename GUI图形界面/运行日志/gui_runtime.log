@@ -1,0 +1,16 @@
+
+{"time": "2026-05-14 15:30:59", "level": "info", "event": "set_mode", "message": "已切换模式：dry_run", "mode": "dry_run"}
+{"time": "2026-05-14 15:30:59", "level": "info", "event": "set_mode", "message": "已切换模式：dry_run", "mode": "dry_run"}
+{"time": "2026-05-14 15:30:59", "level": "info", "event": "connect", "message": "连接成功，已加载标定文件并读取 dry-run 舵机状态。", "mode": "dry_run"}
+{"time": "2026-05-14 15:30:59", "level": "info", "event": "connect", "message": "连接成功，已加载标定文件并读取 dry-run 舵机状态。", "mode": "dry_run"}
+{"time": "2026-05-14 15:30:59", "level": "info", "event": "move_joint_delta", "message": "移动命令已完成。", "joint_key": "shoulder_pan", "delta_deg": 1.0}
+{"time": "2026-05-14 15:30:59", "level": "info", "event": "move_joint_delta", "message": "移动命令已完成。", "joint_key": "shoulder_lift", "delta_deg": -1.0}
+{"time": "2026-05-14 15:30:59", "level": "info", "event": "disconnect", "message": "已断开。", "mode": "dry_run"}
+{"time": "2026-05-14 15:30:59", "level": "info", "event": "home", "message": "移动命令已完成。"}
+{"time": "2026-05-14 15:30:59", "level": "warning", "event": "stop", "message": "已保持当前位置。"}
+{"time": "2026-05-14 15:30:59", "level": "info", "event": "disconnect", "message": "已断开。", "mode": "dry_run"}
+{"time": "2026-05-14 15:32:52", "level": "info", "event": "set_mode", "message": "已切换模式：dry_run", "mode": "dry_run"}
+{"time": "2026-05-14 15:32:52", "level": "info", "event": "connect", "message": "连接成功，已加载标定文件并读取 dry-run 舵机状态。", "mode": "dry_run"}
+{"time": "2026-05-14 15:32:52", "level": "info", "event": "home", "message": "移动命令已完成。"}
+{"time": "2026-05-14 15:32:52", "level": "warning", "event": "stop", "message": "已保持当前位置。"}
+{"time": "2026-05-14 15:32:52", "level": "info", "event": "disconnect", "message": "已断开。", "mode": "dry_run"}

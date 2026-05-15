@@ -7,7 +7,7 @@ from pathlib import Path
 
 from 动作录制器_action_recorder import ActionRecorder
 from 动作回放器_sequence_player import SequencePlayer
-from 动作工具_common import SimulatedStage6Controller, create_dry_run_real_controller, is_real_mode_controller, load_config, resolve_stage6_path
+from 动作工具_common import SimulatedStage6Controller, create_dry_run_real_controller, create_real_controller, is_real_mode_controller, load_config, resolve_stage6_path
 
 
 def main() -> None:
@@ -15,15 +15,16 @@ def main() -> None:
     parser.add_argument("--pose-count", type=int, default=2, help="录制姿态数量")
     parser.add_argument("--output", default="动作库/我的动作.json", help="输出动作 JSON")
     parser.add_argument("--real", action="store_true", help="使用阶段四真实控制器。默认不启用")
+    parser.add_argument("--dry-run-real", action="store_true", help="使用阶段四 dry-run 控制器，不真实写舵机")
     parser.add_argument("--replay-after-record", action="store_true", help="录制后立即回放")
     args = parser.parse_args()
 
     config = load_config()
     output = resolve_stage6_path(args.output)
 
-    if args.real:
+    if args.real or args.dry_run_real:
         print("警告：真实示教涉及真实机械臂。请扶住机械臂，确认急停和断电方式可用。")
-        controller = create_dry_run_real_controller()
+        controller = create_real_controller() if args.real else create_dry_run_real_controller()
         result = controller.connect()
         print(result.消息)
         if is_real_mode_controller(controller):

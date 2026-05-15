@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import sys
 from pathlib import Path
 from typing import Any
@@ -12,8 +13,11 @@ from 角度映射_angle_mapper import JOINT_ORDER, MULTI_TURN_JOINTS, joint_labe
 
 当前目录 = Path(__file__).resolve().parent
 仿真目录 = (当前目录 / "../仿真控制系统").resolve()
+运动学目录 = (当前目录 / "../URDF运动学仿真").resolve()
 if str(仿真目录) not in sys.path:
     sys.path.insert(0, str(仿真目录))
+if str(运动学目录) not in sys.path:
+    sys.path.insert(0, str(运动学目录))
 
 try:
     from 动作播放器_action_player import 动作播放器
@@ -21,6 +25,12 @@ try:
 except Exception:
     动作播放器 = None
     姿态管理器 = None
+
+try:
+    from 运动学模型_kinematics_model import SDK_JOINT_NAMES, 创建运动学模型
+except Exception:
+    SDK_JOINT_NAMES = list(JOINT_ORDER)
+    创建运动学模型 = None
 
 
 def 主函数() -> None:
@@ -414,6 +424,8 @@ def 打印状态(控制器: RealArmController) -> None:
         raw = state.get("raw_present_position", {}).get(joint_key, "未读取")
         print(f"  {joint_label(joint_key)} ({joint_key})：{angle:.2f} 度，raw={raw}")
 
+    打印末端坐标(state)
+
     print("多圈状态：")
     multi_turn_state = state.get("multi_turn_state", {})
     for joint_key in MULTI_TURN_JOINTS:
@@ -430,6 +442,32 @@ def 打印状态(控制器: RealArmController) -> None:
     gripper = state.get("夹爪", {})
     if gripper:
         print(f"夹爪：{gripper.get('open_value', 0.0):.1f}% raw={gripper.get('present_raw', '未读取')}")
+
+
+def 打印末端坐标(state: dict[str, Any]) -> None:
+    """用当前关节角度解算并打印末端 xyz。"""
+
+    if 创建运动学模型 is None:
+        print("末端坐标：运动学模块不可用，无法解算 xyz。")
+        return
+
+    model = None
+    try:
+        关节角度 = state.get("关节角度", {})
+        q_rad = [math.radians(float(关节角度[joint_key])) for joint_key in SDK_JOINT_NAMES]
+        model = 创建运动学模型(运动学目录 / "运动学配置.yaml", use_gui=False)
+        tcp_pose = model.forward(q_rad)
+        x, y, z = [float(value) for value in tcp_pose["xyz"]]
+        print(
+            "末端坐标 xyz："
+            f"x={x:.4f} m，y={y:.4f} m，z={z:.4f} m "
+            f"({x * 1000:.1f} mm, {y * 1000:.1f} mm, {z * 1000:.1f} mm)"
+        )
+    except Exception as 错误:
+        print(f"末端坐标：解算失败：{错误}")
+    finally:
+        if model is not None:
+            model.close()
 
 
 def 打印标定状态(report: dict[str, Any]) -> None:

@@ -2,7 +2,7 @@
   "schema_version": "momo_replay_sequence_v1",
   "name": "recorded_pose_sequence",
   "description": "通过示教模式录制的动作",
-  "created_at": "2026-05-14 01:48:21",
+  "created_at": "2026-05-14 22:21:11",
   "source": "teach_mode",
   "joint_order": [
     "shoulder_pan",
@@ -20,7 +20,7 @@
     {
       "index": 1,
       "name": "pose_1",
-      "recorded_at": "2026-05-14 01:48:21",
+      "recorded_at": "2026-05-14 22:21:12",
       "duration_sec": 1.5,
       "hold_sec": 0.3,
       "joint_targets_deg": {
@@ -32,16 +32,15 @@
       },
       "tcp_pose": {
         "xyz": [
-          0.32,
-          0.0,
-          0.08
+          -0.018863914534449577,
+          -0.07778584957122803,
+          0.22858183085918427
         ],
         "rpy": [
-          0.0,
-          0.0,
-          0.0
-        ],
-        "source": "approximate_fk_without_pybullet"
+          3.0000010658457387e-06,
+          -3.4641021085876976e-07,
+          0.028708999767394494
+        ]
       },
       "raw_present_position": {
         "shoulder_pan": 2047,
@@ -101,7 +100,7 @@
     {
       "index": 2,
       "name": "pose_2",
-      "recorded_at": "2026-05-14 01:48:21",
+      "recorded_at": "2026-05-14 22:21:12",
       "duration_sec": 1.5,
       "hold_sec": 0.3,
       "joint_targets_deg": {
@@ -113,16 +112,15 @@
       },
       "tcp_pose": {
         "xyz": [
-          0.32,
-          0.0,
-          0.08
+          -0.018863914534449577,
+          -0.07778584957122803,
+          0.22858183085918427
         ],
         "rpy": [
-          0.0,
-          0.0,
-          0.0
-        ],
-        "source": "approximate_fk_without_pybullet"
+          3.0000010658457387e-06,
+          -3.4641021085876976e-07,
+          0.028708999767394494
+        ]
       },
       "raw_present_position": {
         "shoulder_pan": 2047,

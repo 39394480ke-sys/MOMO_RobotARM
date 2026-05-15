@@ -1,8 +1,6 @@
 {
-  "说明": "运行时状态文件。程序连接后会记录启动 raw、当前 raw、逻辑角度和多圈状态。",
-  "connected": true,
+  "connected": false,
   "dry_run": true,
-  "updated_at": "2026-05-14 21:51:01",
   "startup_present_raw": {
     "shoulder_pan": 2047,
     "shoulder_lift": 2112,
@@ -17,7 +15,7 @@
     "elbow_flex": 2643,
     "wrist_flex": 2072,
     "wrist_roll": 2415,
-    "gripper": 1504
+    "gripper": 2196
   },
   "关节角度": {
     "shoulder_pan": 0.0,
@@ -53,12 +51,13 @@
     }
   },
   "gripper": {
-    "present_raw": 1504,
-    "open_value": 0.0,
+    "present_raw": 2196,
+    "open_value": 50.0,
     "range_min": 1504,
     "range_max": 2888
   },
   "calibration_path": "/Users/ke/Library/Mobile Documents/com~apple~CloudDocs/Code/机械臂/真实舵机控制/标定文件.json",
+  "updated_at": "2026-05-14 15:32:52",
   "mapping_details": {
     "shoulder_pan": {
       "joint_key": "shoulder_pan",

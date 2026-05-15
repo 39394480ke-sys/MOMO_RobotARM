@@ -1,0 +1,50 @@
+"""阶段七 GUI 主程序。"""
+
+from __future__ import annotations
+
+import json
+import sys
+from pathlib import Path
+
+
+BASE_DIR = Path(__file__).resolve().parent
+if str(BASE_DIR) not in sys.path:
+    sys.path.insert(0, str(BASE_DIR))
+
+
+def load_gui_config() -> dict:
+    path = BASE_DIR / "GUI配置.yaml"
+    text = path.read_text(encoding="utf-8")
+    try:
+        import yaml  # type: ignore
+
+        data = yaml.safe_load(text) or {}
+    except Exception:
+        data = json.loads(text)
+    return data if isinstance(data, dict) else {}
+
+
+def main() -> int:
+    try:
+        from PyQt5.QtWidgets import QApplication
+    except Exception as exc:
+        print(f"PyQt5 未安装，无法启动 GUI：{exc}")
+        print("请运行：pip install PyQt5 pyyaml numpy")
+        return 1
+
+    from gui_app.主题_theme import build_stylesheet
+    from gui_app.主窗口_main_window import MainWindow
+    from gui_app.控制器桥接_controller_bridge import ControllerBridge
+
+    config = load_gui_config()
+    app = QApplication(sys.argv)
+    app.setStyleSheet(build_stylesheet())
+    bridge = ControllerBridge(config, BASE_DIR)
+    bridge.set_mode(str(config.get("app", {}).get("default_mode", "dry_run")))
+    window = MainWindow(bridge, config)
+    window.show()
+    return app.exec_()
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

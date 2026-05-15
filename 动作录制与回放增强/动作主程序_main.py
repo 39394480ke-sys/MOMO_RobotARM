@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import shlex
 import threading
 from pathlib import Path
@@ -9,7 +10,7 @@ from pathlib import Path
 from 动作文件管理_action_library import ActionLibrary
 from 动作录制器_action_recorder import ActionRecorder
 from 动作回放器_sequence_player import SequencePlayer
-from 动作工具_common import SimulatedStage6Controller, load_config, resolve_stage6_path
+from 动作工具_common import SimulatedStage6Controller, create_dry_run_real_controller, create_real_controller, load_config, resolve_stage6_path
 
 
 HELP_TEXT = """命令：
@@ -31,8 +32,23 @@ HELP_TEXT = """命令：
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description="阶段六动作录制与回放增强系统")
+    parser.add_argument(
+        "--mode",
+        choices=["仿真", "dry-run", "真实"],
+        default="仿真",
+        help="控制器模式。默认仿真；dry-run 使用阶段四 Mock 驱动；真实会连接真实机械臂。",
+    )
+    args = parser.parse_args()
+
     config = load_config()
-    controller = SimulatedStage6Controller()
+    if args.mode == "dry-run":
+        controller = create_dry_run_real_controller()
+    elif args.mode == "真实":
+        print("警告：真实模式会连接并可能移动真实机械臂。回放动作前仍需要二次确认。")
+        controller = create_real_controller()
+    else:
+        controller = SimulatedStage6Controller()
     print(controller.connect().消息)
     library = ActionLibrary(config)
     recorder = ActionRecorder(controller, config)

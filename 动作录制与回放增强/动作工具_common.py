@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import math
 import sys
+import tempfile
 import time
 from copy import deepcopy
 from pathlib import Path
@@ -445,15 +446,24 @@ class SimulatedStage6Controller:
         return SimpleResult(True, "仿真已停止。")
 
 
-def create_dry_run_real_controller() -> Any:
+def create_stage4_controller(dry_run: bool = True) -> Any:
     ensure_stage_paths()
     from copy import deepcopy
     from 真实机械臂控制器_real_arm_controller import RealArmController
 
     original_config = read_json(STAGE4_DIR / "真实配置.yaml")
     config = deepcopy(original_config)
-    config.setdefault("transport", {})["dry_run"] = True
-    runtime_config = BASE_DIR / "运行日志" / "dry_run_真实配置_runtime.yaml"
+    config.setdefault("transport", {})["dry_run"] = bool(dry_run)
+    mode_name = "dry_run" if dry_run else "real"
+    runtime_config = Path(tempfile.gettempdir()) / f"momo_stage6_{mode_name}_真实配置_runtime.yaml"
     write_json(runtime_config, config)
     controller = RealArmController(runtime_config)
     return controller
+
+
+def create_dry_run_real_controller() -> Any:
+    return create_stage4_controller(dry_run=True)
+
+
+def create_real_controller() -> Any:
+    return create_stage4_controller(dry_run=False)

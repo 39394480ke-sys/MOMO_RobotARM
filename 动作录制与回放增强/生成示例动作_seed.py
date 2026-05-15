@@ -32,7 +32,7 @@ def main() -> None:
             "挥手_增强",
             [
                 {"shoulder_pan": 0, "shoulder_lift": 20, "elbow_flex": 30, "wrist_flex": 10, "wrist_roll": -25},
-                {"shoulder_pan": 0, "shoulder_lift": 20, "elbow_flex": 30, "wrist_flex": 10, "wrist_roll": 25},
+                {"shoulder_pan": 0, "shoulder_lift": 20, "elbow_flex": 30, "wrist_flex": 10, "wrist_roll": -5},
                 {"shoulder_pan": 0, "shoulder_lift": 20, "elbow_flex": 30, "wrist_flex": 10, "wrist_roll": -20},
             ],
             [60, 60, 60],
@@ -41,7 +41,7 @@ def main() -> None:
             "展示动作_增强",
             [
                 {"shoulder_pan": 0, "shoulder_lift": 0, "elbow_flex": 0, "wrist_flex": 0, "wrist_roll": 0},
-                {"shoulder_pan": 20, "shoulder_lift": 25, "elbow_flex": 35, "wrist_flex": -10, "wrist_roll": 15},
+                {"shoulder_pan": 20, "shoulder_lift": 25, "elbow_flex": 35, "wrist_flex": -10, "wrist_roll": -15},
             ],
             [50, 80],
         ),
@@ -49,7 +49,7 @@ def main() -> None:
             "示例录制动作",
             [
                 {"shoulder_pan": 0, "shoulder_lift": 0, "elbow_flex": 0, "wrist_flex": 0, "wrist_roll": 0},
-                {"shoulder_pan": -15, "shoulder_lift": 15, "elbow_flex": 25, "wrist_flex": 5, "wrist_roll": 10},
+                {"shoulder_pan": -15, "shoulder_lift": 15, "elbow_flex": 25, "wrist_flex": 5, "wrist_roll": -10},
             ],
             [0, 50],
         ),

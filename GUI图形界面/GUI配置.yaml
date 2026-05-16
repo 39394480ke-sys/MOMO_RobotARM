@@ -12,8 +12,7 @@ controller:
   kinematics_config_path: ../URDF运动学仿真/运动学配置.yaml
 
 safety:
-  real_mode_requires_confirm: true
-  real_move_confirm_text: 我确认机械臂周围安全
+  real_mode_requires_confirm: false
   default_dry_run: true
   max_gui_step_deg: 5.0
   max_real_step_deg: 2.0

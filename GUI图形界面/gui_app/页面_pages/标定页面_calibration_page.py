@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from PyQt5.QtCore import pyqtSignal
 from PyQt5.QtWidgets import QLabel, QPushButton, QTableWidget, QTableWidgetItem, QTextEdit, QVBoxLayout, QWidget
 
@@ -34,7 +36,15 @@ class CalibrationPage(QWidget):
         layout.addWidget(self.help_button)
         layout.addWidget(self.command_text)
         self.refresh_button.clicked.connect(self.refresh_requested.emit)
-        self.help_button.clicked.connect(lambda: self.command_text.append("\n标定说明路径：../真实舵机控制/标定说明.md"))
+        self.help_button.clicked.connect(self._show_calibration_help)
+
+    def _show_calibration_help(self) -> None:
+        path = Path(__file__).resolve().parents[3] / "真实舵机控制" / "标定说明.md"
+        if not path.exists():
+            self.command_text.setPlainText(f"未找到标定说明：{path}")
+            return
+        text = path.read_text(encoding="utf-8", errors="replace")
+        self.command_text.setPlainText(f"标定说明：{path}\n\n{text}")
 
     def set_status(self, report: dict) -> None:
         calibration = report.get("calibration", report)

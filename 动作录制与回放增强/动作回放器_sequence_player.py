@@ -144,7 +144,10 @@ class SequencePlayer:
         if is_real_mode_controller(self.controller):
             max_step = float(self.config.get("safety", {}).get("real_mode_max_single_step_deg", 5.0))
         current = state_joint_targets(extract_state(self.controller), self.joint_order)
-        frames = self.interpolator.split_large_step(current, targets, max_step)
+        update_hz = float(self.config.get("playback", {}).get("update_hz", 10.0))
+        smooth_frames = self.interpolator.interpolate_joints(current, targets, duration_sec, update_hz)
+        safety_frames = self.interpolator.split_large_step(current, targets, max_step)
+        frames = smooth_frames if len(smooth_frames) >= len(safety_frames) else safety_frames
         per_frame_sleep = max(0.0, duration_sec / max(1, len(frames)))
 
         for frame_index, frame in enumerate(frames, start=1):

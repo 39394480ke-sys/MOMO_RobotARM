@@ -19,6 +19,10 @@ def build_stylesheet() -> str:
         font-size: 18px;
         font-weight: 700;
     }
+    QLabel#PanelTitle {
+        font-size: 15px;
+        font-weight: 700;
+    }
     QPushButton {
         background: #ffffff;
         border: 1px solid #c7d0da;
@@ -37,6 +41,15 @@ def build_stylesheet() -> str:
         color: white;
         border: 1px solid #a51f1f;
         font-weight: 700;
+    }
+    QPushButton#WarningButton {
+        background: #fff7e6;
+        color: #7a4b00;
+        border: 1px solid #d89a22;
+        font-weight: 700;
+    }
+    QPushButton#WarningButton:hover {
+        background: #ffefc2;
     }
     QPushButton#PrimaryButton {
         background: #1769aa;
@@ -63,6 +76,24 @@ def build_stylesheet() -> str:
     QListWidget#NavList::item:selected {
         background: #3f5166;
     }
+    QWidget#PersistentLogPanel {
+        background: #ffffff;
+        border-left: 1px solid #d8dee6;
+    }
+    QSplitter#ContentSplitter::handle {
+        background: #d8dee6;
+        width: 3px;
+    }
+    QSplitter#ContentSplitter::handle:hover {
+        background: #9fb0c2;
+    }
+    QSplitter#RightInspectorSplitter::handle {
+        background: #d8dee6;
+        height: 3px;
+    }
+    QSplitter#RightInspectorSplitter::handle:hover {
+        background: #9fb0c2;
+    }
     QGroupBox {
         border: 1px solid #d4dce6;
         border-radius: 7px;
@@ -77,4 +108,3 @@ def build_stylesheet() -> str:
         padding: 0 4px;
     }
     """
-

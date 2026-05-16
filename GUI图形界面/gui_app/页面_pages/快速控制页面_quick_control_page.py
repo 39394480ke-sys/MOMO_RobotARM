@@ -2,18 +2,18 @@
 
 from __future__ import annotations
 
-from PyQt5.QtCore import pyqtSignal
-from PyQt5.QtWidgets import QComboBox, QGroupBox, QHBoxLayout, QPushButton, QVBoxLayout, QWidget
+from PyQt5.QtCore import QTimer, pyqtSignal
+from PyQt5.QtWidgets import QComboBox, QDoubleSpinBox, QGroupBox, QHBoxLayout, QLabel, QPushButton, QRadioButton, QButtonGroup, QVBoxLayout, QWidget
 
 from gui_app.控制器桥接_controller_bridge import JOINT_LABELS, JOINT_ORDER
 from gui_app.组件_widgets.TCP显示_tcp_display import TCPDisplay
-from gui_app.组件_widgets.仿真视图_sim_view import SimView
 from gui_app.组件_widgets.关节控制条_joint_control import JointControlRow
 from gui_app.组件_widgets.夹爪控制器_gripper_control import GripperControl
 
 
 class QuickControlPage(QWidget):
     joint_delta_requested = pyqtSignal(str, float)
+    continuous_delta_requested = pyqtSignal(str, float)
     gripper_requested = pyqtSignal(float)
     home_requested = pyqtSignal()
     stop_requested = pyqtSignal()
@@ -22,6 +22,10 @@ class QuickControlPage(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.rows: dict[str, JointControlRow] = {}
+        self.control_mode = "step"
+        self.active_joint: str | None = None
+        self.active_direction = 0
+        self.continuous_interval_ms = 90
         layout = QHBoxLayout(self)
 
         left = QVBoxLayout()
@@ -29,18 +33,49 @@ class QuickControlPage(QWidget):
         joint_layout = QVBoxLayout(joint_box)
         for joint in JOINT_ORDER:
             row = JointControlRow(joint, JOINT_LABELS[joint])
-            row.delta_requested.connect(self.joint_delta_requested.emit)
+            row.delta_requested.connect(self._step_delta_requested)
+            row.continuous_pressed.connect(self._continuous_pressed)
+            row.continuous_released.connect(self._continuous_released)
             self.rows[joint] = row
             joint_layout.addWidget(row)
 
+        mode_row = QHBoxLayout()
+        self.step_mode_radio = QRadioButton("步进")
+        self.continuous_mode_radio = QRadioButton("连续")
+        self.step_mode_radio.setChecked(True)
+        self.mode_group = QButtonGroup(self)
+        self.mode_group.addButton(self.step_mode_radio)
+        self.mode_group.addButton(self.continuous_mode_radio)
+        mode_row.addWidget(self.step_mode_radio)
+        mode_row.addWidget(self.continuous_mode_radio)
+        mode_row.addStretch(1)
+        joint_layout.addLayout(mode_row)
+
         step_row = QHBoxLayout()
+        step_row.addWidget(QLabel("步进角度"))
         self.step_combo = QComboBox()
-        for value in (0.5, 1, 2, 5):
+        for value in (0.5, 1, 2, 3, 4, 5):
             self.step_combo.addItem(f"{value:g} 度", float(value))
         self.step_combo.setCurrentIndex(1)
         step_row.addWidget(self.step_combo)
         step_row.addStretch(1)
         joint_layout.addLayout(step_row)
+
+        speed_row = QHBoxLayout()
+        speed_row.addWidget(QLabel("连续速度"))
+        self.speed_input = QDoubleSpinBox()
+        self.speed_input.setRange(0.2, 20.0)
+        self.speed_input.setValue(6.0)
+        self.speed_input.setSingleStep(0.5)
+        self.speed_input.setSuffix(" deg/s")
+        self.speed_input.setMinimumWidth(120)
+        speed_row.addWidget(self.speed_input)
+        speed_row.addStretch(1)
+        joint_layout.addLayout(speed_row)
+
+        self.continuous_timer = QTimer(self)
+        self.continuous_timer.setInterval(self.continuous_interval_ms)
+        self.continuous_timer.timeout.connect(self._continuous_tick)
 
         self.gripper = GripperControl()
         self.gripper.value_requested.connect(self.gripper_requested.emit)
@@ -67,20 +102,51 @@ class QuickControlPage(QWidget):
         left.addWidget(tcp_box)
         left.addStretch(1)
 
-        self.sim_view = SimView()
-        layout.addLayout(left, 2)
-        layout.addWidget(self.sim_view, 3)
+        layout.addLayout(left, 1)
 
         self.step_combo.currentIndexChanged.connect(self._step_changed)
+        self.step_mode_radio.toggled.connect(self._mode_changed)
         self.home_button.clicked.connect(self.home_requested.emit)
         self.refresh_button.clicked.connect(self.refresh_requested.emit)
         self.stop_button.clicked.connect(self.stop_requested.emit)
         self._step_changed()
+        self._mode_changed()
 
     def _step_changed(self) -> None:
         step = float(self.step_combo.currentData())
         for row in self.rows.values():
             row.set_step(step)
+
+    def _step_delta_requested(self, joint: str, delta: float) -> None:
+        if self.control_mode != "step":
+            return
+        self.joint_delta_requested.emit(joint, delta)
+
+    def _mode_changed(self) -> None:
+        self.control_mode = "continuous" if self.continuous_mode_radio.isChecked() else "step"
+        self.speed_input.setEnabled(self.control_mode == "continuous")
+        self.step_combo.setEnabled(self.control_mode == "step")
+        if self.control_mode == "step":
+            self._continuous_released()
+
+    def _continuous_pressed(self, joint: str, direction: int) -> None:
+        if self.control_mode != "continuous":
+            return
+        self.active_joint = joint
+        self.active_direction = int(direction)
+        self._continuous_tick()
+        self.continuous_timer.start()
+
+    def _continuous_released(self) -> None:
+        self.continuous_timer.stop()
+        self.active_joint = None
+        self.active_direction = 0
+
+    def _continuous_tick(self) -> None:
+        if not self.active_joint or not self.active_direction:
+            return
+        delta = float(self.speed_input.value()) * (self.continuous_interval_ms / 1000.0) * float(self.active_direction)
+        self.continuous_delta_requested.emit(self.active_joint, delta)
 
     def set_real_mode(self, is_real: bool, max_real_step: float = 2.0) -> None:
         if is_real:
@@ -103,5 +169,3 @@ class QuickControlPage(QWidget):
         if grip is not None:
             self.gripper.set_value(float(grip))
         self.tcp_display.update_pose(state.get("tcp_pose"))
-        self.sim_view.update_state(joints)
-

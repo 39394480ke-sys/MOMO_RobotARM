@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from typing import Callable
 
-from PyQt5.QtCore import QTimer
-from PyQt5.QtWidgets import QFrame, QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QMainWindow, QPushButton, QStackedWidget, QVBoxLayout, QWidget
+from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtWidgets import QApplication, QFrame, QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QMainWindow, QPushButton, QSizePolicy, QSpinBox, QSplitter, QStackedWidget, QVBoxLayout, QWidget
 
 from gui_app.后台任务_worker import ActionPlayWorker, CalibrationStatusWorker, ConnectWorker, MoveWorker, StatePollWorker
 from gui_app.状态_store import AppStore
-from gui_app.组件_widgets.安全确认对话框_safety_dialog import ask_safety_confirm
+from gui_app.组件_widgets.仿真视图_sim_view import SimView
 from gui_app.组件_widgets.状态栏_status_bar import GlobalStatusBar
 from gui_app.页面_pages.动作页面_action_page import ActionPage
 from gui_app.页面_pages.姿态页面_pose_page import PosePage
@@ -28,14 +28,35 @@ class MainWindow(QMainWindow):
         self.store = AppStore()
         self.workers = []
         self.polling = False
+        self.motion_busy = False
+        self.pending_kinematic_targets: dict | None = None
+        self.continuous_move_busy = False
 
         self.setWindowTitle(str(config.get("app", {}).get("title", "我的 MomoAgent GUI 控制台")))
-        self.resize(1180, 760)
+        self._apply_initial_window_geometry()
         self._build_ui()
         self._connect_signals()
         self._setup_timer()
         self._refresh_all_lists()
         self.update_header()
+
+    def _apply_initial_window_geometry(self) -> None:
+        screen = QApplication.primaryScreen()
+        if screen is None:
+            self.resize(1180, 760)
+            self.setMinimumSize(860, 560)
+            return
+
+        available = screen.availableGeometry()
+        width = min(1280, max(900, int(available.width() * 0.86)))
+        height = min(820, max(600, int(available.height() * 0.82)))
+        width = min(width, available.width() - 40)
+        height = min(height, available.height() - 40)
+        x = available.x() + max(20, (available.width() - width) // 2)
+        y = available.y() + max(20, (available.height() - height) // 2)
+
+        self.setMinimumSize(min(860, width), min(560, height))
+        self.setGeometry(x, y, width, height)
 
     def _build_ui(self) -> None:
         root = QWidget()
@@ -50,6 +71,18 @@ class MainWindow(QMainWindow):
         self.mode_label = QLabel("模式：dry-run")
         self.conn_label = QLabel("连接：未连接")
         self.error_label = QLabel("")
+        self.speed_label = QLabel("速度")
+        self.speed_spin = QSpinBox()
+        self.speed_spin.setRange(10, 100)
+        self.speed_spin.setSingleStep(5)
+        self.speed_spin.setValue(int(float(self.config.get("motion", {}).get("default_speed_percent", 50))))
+        self.speed_spin.setSuffix("%")
+        self.speed_spin.setFixedWidth(78)
+        self.bridge.set_motion_speed_percent(self.speed_spin.value())
+        self.home_button = QPushButton("Home")
+        self.home_button.setObjectName("PrimaryButton")
+        self.release_torque_button = QPushButton("释放力矩")
+        self.release_torque_button.setObjectName("WarningButton")
         self.stop_button = QPushButton("急停")
         self.stop_button.setObjectName("DangerButton")
         top_layout.addWidget(self.title_label)
@@ -57,6 +90,10 @@ class MainWindow(QMainWindow):
         top_layout.addWidget(self.mode_label)
         top_layout.addWidget(self.conn_label)
         top_layout.addWidget(self.error_label)
+        top_layout.addWidget(self.speed_label)
+        top_layout.addWidget(self.speed_spin)
+        top_layout.addWidget(self.home_button)
+        top_layout.addWidget(self.release_torque_button)
         top_layout.addWidget(self.stop_button)
 
         body = QWidget()
@@ -66,6 +103,8 @@ class MainWindow(QMainWindow):
         self.nav.setObjectName("NavList")
         self.nav.setFixedWidth(150)
         self.stack = QStackedWidget()
+        self.stack.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.stack.setMinimumWidth(520)
 
         self.settings_page = SettingsPage(self.bridge)
         self.quick_page = QuickControlPage()
@@ -74,6 +113,11 @@ class MainWindow(QMainWindow):
         self.kinematics_page = KinematicsPage()
         self.calibration_page = CalibrationPage()
         self.log_page = LogPage(self.bridge.log_path)
+        self.log_page.setObjectName("PersistentLogPanel")
+        self.log_page.setMinimumWidth(280)
+        self.persistent_sim_view = SimView()
+        self.persistent_sim_view.setObjectName("PersistentSimView")
+        self.persistent_sim_view.setMinimumHeight(240)
 
         pages = [
             ("设置", self.settings_page),
@@ -82,15 +126,37 @@ class MainWindow(QMainWindow):
             ("动作", self.action_page),
             ("运动学", self.kinematics_page),
             ("标定", self.calibration_page),
-            ("日志", self.log_page),
         ]
         for title, page in pages:
             self.nav.addItem(QListWidgetItem(title))
             self.stack.addWidget(page)
         self.nav.setCurrentRow(0)
 
+        content_splitter = QSplitter()
+        content_splitter.setObjectName("ContentSplitter")
+        content_splitter.setOpaqueResize(False)
+        content_splitter.setHandleWidth(6)
+        content_splitter.addWidget(self.stack)
+        right_splitter = QSplitter()
+        right_splitter.setOrientation(Qt.Vertical)
+        right_splitter.setObjectName("RightInspectorSplitter")
+        right_splitter.setMinimumWidth(360)
+        right_splitter.setOpaqueResize(False)
+        right_splitter.setHandleWidth(6)
+        right_splitter.addWidget(self.log_page)
+        right_splitter.addWidget(self.persistent_sim_view)
+        right_splitter.setStretchFactor(0, 2)
+        right_splitter.setStretchFactor(1, 1)
+        right_splitter.setSizes([420, 280])
+        right_splitter.setChildrenCollapsible(False)
+        content_splitter.addWidget(right_splitter)
+        content_splitter.setStretchFactor(0, 3)
+        content_splitter.setStretchFactor(1, 1)
+        content_splitter.setSizes([840, 360])
+        content_splitter.setChildrenCollapsible(False)
+
         body_layout.addWidget(self.nav)
-        body_layout.addWidget(self.stack, 1)
+        body_layout.addWidget(content_splitter, 1)
         root_layout.addWidget(top)
         root_layout.addWidget(body, 1)
         self.setCentralWidget(root)
@@ -100,6 +166,9 @@ class MainWindow(QMainWindow):
 
     def _connect_signals(self) -> None:
         self.nav.currentRowChanged.connect(self.stack.setCurrentIndex)
+        self.speed_spin.valueChanged.connect(lambda value: self._handle_result(self.bridge.set_motion_speed_percent(value)))
+        self.home_button.clicked.connect(lambda: self._run_move(self.bridge.home))
+        self.release_torque_button.clicked.connect(self._release_torque)
         self.stop_button.clicked.connect(self._stop_now)
 
         self.settings_page.mode_change_requested.connect(self._set_mode)
@@ -110,6 +179,7 @@ class MainWindow(QMainWindow):
         self.settings_page.calibration_check_requested.connect(self._refresh_calibration)
 
         self.quick_page.joint_delta_requested.connect(lambda joint, delta: self._run_move(lambda: self.bridge.move_joint_delta(joint, delta)))
+        self.quick_page.continuous_delta_requested.connect(self._run_continuous_move)
         self.quick_page.gripper_requested.connect(lambda value: self._run_move(lambda: self.bridge.set_gripper(value)))
         self.quick_page.home_requested.connect(lambda: self._run_move(self.bridge.home))
         self.quick_page.stop_requested.connect(self._stop_now)
@@ -127,11 +197,11 @@ class MainWindow(QMainWindow):
         self.action_page.stop_requested.connect(lambda: self._handle_result(self.bridge.stop_action()))
         self.action_page.delete_requested.connect(lambda name: self._handle_result_and_refresh(self.bridge.delete_action(name), self._refresh_actions))
 
-        self.kinematics_page.fk_requested.connect(lambda joints: self.kinematics_page.show_result(self.bridge.compute_fk(joints)))
-        self.kinematics_page.ik_requested.connect(lambda xyz, rpy: self.kinematics_page.show_result(self.bridge.compute_ik(xyz, rpy)))
-        self.kinematics_page.execute_ik_requested.connect(lambda targets: self._run_dangerous(lambda: self.bridge.move_joints(targets), "真实模式执行 IK"))
-        self.kinematics_page.delta_requested.connect(lambda dx, dy, dz, frame: self._run_dangerous(lambda: self.bridge.move_delta(dx, dy, dz, frame), "真实模式末端移动"))
+        self.kinematics_page.fk_requested.connect(self._compute_fk)
+        self.kinematics_page.ik_requested.connect(self._compute_ik)
+        self.kinematics_page.delta_requested.connect(self._compute_delta)
         self.kinematics_page.refresh_tcp_requested.connect(lambda: self.kinematics_page.show_result(self.bridge.get_tcp_pose()))
+        self.kinematics_page.execute_result_requested.connect(self._execute_kinematic_result)
 
         self.calibration_page.refresh_requested.connect(self._refresh_calibration)
 
@@ -142,10 +212,6 @@ class MainWindow(QMainWindow):
         self.timer.start()
 
     def _set_mode(self, mode: str) -> None:
-        if mode == "real" and self.config.get("safety", {}).get("real_mode_requires_confirm", True):
-            if not ask_safety_confirm(self, self._confirm_text(), "切换真实模式"):
-                self.settings_page.set_mode(self.bridge.get_mode())
-                return
         result = self.bridge.set_mode(mode)
         if not result.get("ok"):
             self.settings_page.set_mode(self.bridge.get_mode())
@@ -154,8 +220,6 @@ class MainWindow(QMainWindow):
 
     def _connect_controller(self) -> None:
         self.bridge.set_serial_port(self.settings_page.port_input.text())
-        if self.bridge.get_mode() == "real" and not ask_safety_confirm(self, self._confirm_text(), "连接真实硬件"):
-            return
         self._run_worker(ConnectWorker(self.bridge.connect), disable=[self.settings_page.connect_button])
 
     def _disconnect_controller(self) -> None:
@@ -165,21 +229,38 @@ class MainWindow(QMainWindow):
     def _run_move(self, task: Callable[[], dict]) -> None:
         self._run_dangerous(task, "真实模式移动")
 
-    def _run_dangerous(self, task: Callable[[], dict], title: str) -> None:
-        if self.bridge.get_mode() == "real" and not ask_safety_confirm(self, self._confirm_text(), title):
+    def _run_continuous_move(self, joint: str, delta: float) -> None:
+        if self.continuous_move_busy:
             return
-        self._run_worker(MoveWorker(task))
+        self.continuous_move_busy = True
+        self._run_dangerous(
+            lambda: self.bridge.move_joint_delta(joint, delta),
+            "真实模式连续移动",
+            on_finished=lambda: setattr(self, "continuous_move_busy", False),
+        )
+
+    def _run_dangerous(
+        self,
+        task: Callable[[], dict],
+        title: str,
+        on_result: Callable[[dict], None] | None = None,
+        on_finished: Callable[[], None] | None = None,
+    ) -> None:
+        if self.motion_busy:
+            if on_finished is not None:
+                on_finished()
+            self._handle_result({"ok": False, "message": "上一个运动命令还在执行，请稍后再试。"})
+            return
+        self._run_worker(MoveWorker(task), on_result=on_result, on_finished=on_finished)
 
     def _run_action(self, name: str) -> None:
-        if self.bridge.get_mode() == "real" and not ask_safety_confirm(self, self._confirm_text(), "真实模式播放动作"):
-            return
         self._run_worker(ActionPlayWorker(self.bridge.play_action, name), disable=[self.action_page.play_button, self.action_page.delete_button])
 
     def _refresh_calibration(self) -> None:
         self._run_worker(CalibrationStatusWorker(self.bridge.get_calibration_status))
 
     def _poll_state_once(self) -> None:
-        if self.polling:
+        if self.polling or self.motion_busy:
             return
         self.polling = True
         worker = StatePollWorker(self.bridge.get_state)
@@ -193,6 +274,7 @@ class MainWindow(QMainWindow):
         data = result.get("data", {})
         self.store.set_state_payload(data)
         self.quick_page.update_state(data)
+        self.persistent_sim_view.update_state(data.get("joints_deg", {}), data.get("tcp_pose"))
         self.update_header()
 
     def _state_error(self, result: dict) -> None:
@@ -219,13 +301,77 @@ class MainWindow(QMainWindow):
     def _stop_now(self) -> None:
         self._handle_result(self.bridge.stop())
 
-    def _run_worker(self, worker, disable: list[QPushButton] | None = None) -> None:
+    def _release_torque(self) -> None:
+        self._run_dangerous(self.bridge.release_torque, "真实模式释放力矩")
+
+    def _compute_fk(self, joints: list) -> None:
+        result = self.bridge.compute_fk(joints)
+        self.kinematics_page.show_result(result)
+        if result.get("ok"):
+            self._set_pending_kinematic_result(result, result.get("data", {}).get("tcp_pose"), "FK 目标")
+
+    def _compute_ik(self, xyz: list, rpy: object) -> None:
+        result = self.bridge.compute_ik(xyz, rpy)
+        self.kinematics_page.show_result(result)
+        if result.get("ok"):
+            ik = result.get("data", {}).get("ik", {})
+            self._set_pending_kinematic_result(result, {"xyz": ik.get("xyz"), "rpy": ik.get("rpy")}, "IK 目标")
+
+    def _compute_delta(self, dx: float, dy: float, dz: float, frame: str) -> None:
+        result = self.bridge.compute_delta(dx, dy, dz, frame)
+        self.kinematics_page.show_result(result)
+        if result.get("ok"):
+            self._set_pending_kinematic_result(result, result.get("data", {}).get("target_tcp_pose"), "增量目标")
+
+    def _set_pending_kinematic_result(self, result: dict, target_pose: dict | None, label: str) -> None:
+        targets = result.get("data", {}).get("target_joints_deg")
+        if targets:
+            self.pending_kinematic_targets = targets
+        if target_pose:
+            self.persistent_sim_view.set_target_pose(target_pose, label)
+
+    def _execute_kinematic_result(self) -> None:
+        if not self.pending_kinematic_targets:
+            self.kinematics_page.show_result({"ok": False, "message": "没有可执行的计算结果。请先计算 FK、IK 或末端增量。"})
+            return
+        self.kinematics_page.show_result({"ok": True, "message": "正在执行最后一次计算结果..."})
+        self._run_dangerous(
+            lambda: self.bridge.move_joints_smooth(self.pending_kinematic_targets or {}, label="执行运动学结果"),
+            "真实模式执行运动学结果",
+            on_result=self._kinematic_execution_finished,
+        )
+
+    def _kinematic_execution_finished(self, result: dict) -> None:
+        self.kinematics_page.show_result(result)
+        if result.get("ok"):
+            self.pending_kinematic_targets = None
+            self.persistent_sim_view.set_target_pose(None)
+            self._poll_state_once()
+
+    def _run_worker(
+        self,
+        worker,
+        disable: list[QPushButton] | None = None,
+        on_result: Callable[[dict], None] | None = None,
+        on_finished: Callable[[], None] | None = None,
+    ) -> None:
         disabled = disable or []
+        is_move_worker = isinstance(worker, (MoveWorker, ActionPlayWorker))
+        if is_move_worker:
+            self.motion_busy = True
         for button in disabled:
             button.setEnabled(False)
         worker.finished_result.connect(self._handle_result)
         worker.error_result.connect(self._handle_result)
+        if on_result is not None:
+            worker.finished_result.connect(on_result)
+            worker.error_result.connect(on_result)
         worker.finished.connect(lambda: [button.setEnabled(True) for button in disabled])
+        if on_finished is not None:
+            worker.finished.connect(on_finished)
+        if is_move_worker:
+            worker.finished.connect(lambda: setattr(self, "motion_busy", False))
+            worker.finished.connect(lambda: QTimer.singleShot(80, self._poll_state_once))
         worker.finished.connect(self.update_header)
         self.workers.append(worker)
         worker.start()
@@ -238,6 +384,10 @@ class MainWindow(QMainWindow):
         self.store.update_from_result(result)
         self.settings_page.show_result(result)
         self.log_page.append_result(result)
+        targets = result.get("data", {}).get("targets_deg")
+        if isinstance(targets, dict):
+            self.quick_page.update_state({"joints_deg": targets})
+            self.persistent_sim_view.update_state(targets)
         if result.get("data", {}).get("calibration"):
             self.calibration_page.set_status(result["data"])
             self.store.gui_state.calibration_ok = bool(result["data"]["calibration"].get("允许真机移动"))
@@ -255,6 +405,3 @@ class MainWindow(QMainWindow):
         self.conn_label.setText(f"连接：{'已连接' if state.connected else '未连接'}")
         self.error_label.setText(f"错误：{state.last_error}" if state.last_error else "")
         self.status_bar.update_status(mode, state.connected, state.calibration_ok, state.action_status, state.last_error)
-
-    def _confirm_text(self) -> str:
-        return str(self.config.get("safety", {}).get("real_move_confirm_text", "我确认机械臂周围安全"))

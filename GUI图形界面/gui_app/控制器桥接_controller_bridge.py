@@ -10,6 +10,7 @@ import math
 import shutil
 import sys
 import tempfile
+import threading
 import time
 import traceback
 from pathlib import Path
@@ -53,11 +54,22 @@ class ControllerBridge:
         self.action_status = "空闲"
         self._dry_run_config_path: Path | None = None
         self.serial_port_override: str | None = None
+        self.io_lock = threading.RLock()
         self.log_path = self._resolve_gui_path(config.get("app", {}).get("log_path", "运行日志/gui_runtime.log"))
         self.log_path.parent.mkdir(parents=True, exist_ok=True)
+        self.motion_speed_percent = float(config.get("motion", {}).get("default_speed_percent", 50.0))
         self._install_stage_paths()
 
+    def set_motion_speed_percent(self, percent: float) -> dict[str, Any]:
+        self.motion_speed_percent = max(10.0, min(100.0, float(percent)))
+        self._log("info", "set_motion_speed", f"全局速度已设置为 {self.motion_speed_percent:.0f}%。", speed_percent=self.motion_speed_percent)
+        return ok("全局速度已更新。", {"speed_percent": self.motion_speed_percent})
+
     def connect(self) -> dict[str, Any]:
+        with self.io_lock:
+            return self._connect_unlocked()
+
+    def _connect_unlocked(self) -> dict[str, Any]:
         try:
             self._ensure_controller()
             if self.controller is None:
@@ -74,6 +86,10 @@ class ControllerBridge:
             return self._exception("连接失败", exc)
 
     def disconnect(self) -> dict[str, Any]:
+        with self.io_lock:
+            return self._disconnect_unlocked()
+
+    def _disconnect_unlocked(self) -> dict[str, Any]:
         try:
             if self.controller is not None and hasattr(self.controller, "disconnect"):
                 result = self.controller.disconnect()
@@ -113,6 +129,10 @@ class ControllerBridge:
         return ok("串口设置已更新。", {"port": self.serial_port_override})
 
     def get_state(self) -> dict[str, Any]:
+        with self.io_lock:
+            return self._get_state_unlocked()
+
+    def _get_state_unlocked(self) -> dict[str, Any]:
         try:
             self._ensure_controller()
             if self.controller is None:
@@ -136,6 +156,10 @@ class ControllerBridge:
             return self._exception("读取状态失败", exc)
 
     def move_joints(self, targets_deg: dict[str, float] | list[float]) -> dict[str, Any]:
+        with self.io_lock:
+            return self._move_joints_unlocked(targets_deg)
+
+    def _move_joints_unlocked(self, targets_deg: dict[str, float] | list[float]) -> dict[str, Any]:
         try:
             self._ensure_controller()
             if self.controller is None:
@@ -153,7 +177,32 @@ class ControllerBridge:
         except Exception as exc:
             return self._exception("关节移动失败", exc)
 
+    def move_joints_smooth(self, targets_deg: dict[str, float] | list[float], label: str = "平滑移动") -> dict[str, Any]:
+        with self.io_lock:
+            return self._move_joints_smooth_unlocked(targets_deg, label)
+
+    def _move_joints_smooth_unlocked(self, targets_deg: dict[str, float] | list[float], label: str = "平滑移动") -> dict[str, Any]:
+        try:
+            targets = self._normalize_targets(targets_deg)
+            max_delta = 0.0
+            state_result = self.get_state()
+            if not state_result.get("ok"):
+                return state_result
+            current = state_result.get("data", {}).get("joints_deg", {})
+            for joint, target in targets.items():
+                max_delta = max(max_delta, abs(float(target) - float(current.get(joint, 0.0))))
+            speed_scale = max(0.1, min(1.0, self.motion_speed_percent / 100.0))
+            max_speed_deg_s = float(self.config.get("motion", {}).get("max_smooth_speed_deg_s", 45.0)) * speed_scale
+            duration = max(0.4, max_delta / max(1.0, max_speed_deg_s))
+            return self._move_joints_interpolated(targets, duration_s=duration, update_hz=20.0, label=label)
+        except Exception as exc:
+            return self._exception("平滑移动失败", exc)
+
     def move_joint_delta(self, joint_key: str, delta_deg: float) -> dict[str, Any]:
+        with self.io_lock:
+            return self._move_joint_delta_unlocked(joint_key, delta_deg)
+
+    def _move_joint_delta_unlocked(self, joint_key: str, delta_deg: float) -> dict[str, Any]:
         try:
             joint_key = self._normalize_joint_key(joint_key)
             max_step = float(self.config.get("safety", {}).get("max_real_step_deg" if self.mode == "real" else "max_gui_step_deg", 5.0))
@@ -176,6 +225,10 @@ class ControllerBridge:
             return self._exception("关节微调失败", exc)
 
     def set_gripper(self, open_percent: float) -> dict[str, Any]:
+        with self.io_lock:
+            return self._set_gripper_unlocked(open_percent)
+
+    def _set_gripper_unlocked(self, open_percent: float) -> dict[str, Any]:
         try:
             self._ensure_controller()
             value = max(0.0, min(100.0, float(open_percent)))
@@ -192,8 +245,28 @@ class ControllerBridge:
             return self._exception("夹爪控制失败", exc)
 
     def home(self) -> dict[str, Any]:
+        with self.io_lock:
+            return self._home_unlocked()
+
+    def _home_unlocked(self) -> dict[str, Any]:
         try:
             self._ensure_controller()
+            if self.mode in {"dry_run", "real"} and hasattr(self.controller, "joint_config_by_key") and hasattr(self.controller, "move_joints"):
+                targets = {
+                    joint: float(self.controller.joint_config_by_key[joint].get("默认角度", 0.0))
+                    for joint in JOINT_ORDER
+                    if joint in self.controller.joint_config_by_key
+                }
+                speed_scale = max(0.1, min(1.0, self.motion_speed_percent / 100.0))
+                normalized = self._move_joints_interpolated(targets, duration_s=2.0 / speed_scale, update_hz=12.0, label="Home")
+                if normalized.get("ok") and hasattr(self.controller, "set_gripper"):
+                    try:
+                        gripper_default = float(self.controller.config.get("gripper", {}).get("默认开合", 50))
+                        self.controller.set_gripper(gripper_default)
+                    except Exception:
+                        pass
+                self._log("info" if normalized["ok"] else "error", "home", normalized["message"], slowed=True)
+                return normalized
             if hasattr(self.controller, "move_home"):
                 result = self.controller.move_home()
             elif hasattr(self.controller, "回到默认姿态"):
@@ -206,7 +279,42 @@ class ControllerBridge:
         except Exception as exc:
             return self._exception("Home 失败", exc)
 
+    def _move_joints_interpolated(
+        self,
+        targets: dict[str, float],
+        duration_s: float,
+        steps: int | None = None,
+        update_hz: float = 10.0,
+        label: str = "平滑移动",
+    ) -> dict[str, Any]:
+        state_result = self.get_state()
+        if not state_result.get("ok"):
+            return state_result
+        current = state_result.get("data", {}).get("joints_deg", {})
+        start = {joint: float(current.get(joint, 0.0)) for joint in JOINT_ORDER}
+        steps = max(1, int(steps if steps is not None else math.ceil(float(duration_s) * float(update_hz))))
+        sleep_s = max(0.0, float(duration_s)) / float(steps)
+        last = ok("Home 完成。", {"targets_deg": targets})
+        for index in range(1, steps + 1):
+            ratio = index / steps
+            middle = {
+                joint: start[joint] + (float(targets.get(joint, start[joint])) - start[joint]) * ratio
+                for joint in JOINT_ORDER
+                if joint in targets
+            }
+            result = self.controller.move_joints(middle)
+            last = self._normalize_result(result, f"{label}分段移动完成。", {"targets_deg": middle})
+            if not last.get("ok"):
+                return last
+            if index < steps and sleep_s > 0:
+                time.sleep(sleep_s)
+        return ok(f"{label}完成。", {"targets_deg": targets, "duration_s": float(duration_s), "steps": steps, "speed_percent": self.motion_speed_percent})
+
     def stop(self) -> dict[str, Any]:
+        with self.io_lock:
+            return self._stop_unlocked()
+
+    def _stop_unlocked(self) -> dict[str, Any]:
         try:
             if self.controller is not None and hasattr(self.controller, "stop"):
                 result = self.controller.stop()
@@ -223,6 +331,36 @@ class ControllerBridge:
             return normalized
         except Exception as exc:
             return self._exception("急停失败", exc)
+
+    def release_torque(self) -> dict[str, Any]:
+        with self.io_lock:
+            return self._release_torque_unlocked()
+
+    def _release_torque_unlocked(self) -> dict[str, Any]:
+        try:
+            self._ensure_controller()
+            if self.controller is None:
+                return fail("控制器未创建。")
+            if not self.is_connected():
+                return fail("尚未连接，不能释放力矩。")
+
+            if hasattr(self.controller, "release_torque"):
+                result = self.controller.release_torque()
+                normalized = self._normalize_result(result, "力矩已释放。")
+            elif hasattr(self.controller, "driver") and hasattr(self.controller.driver, "disable_torque"):
+                self.controller.driver.disable_torque()
+                normalized = ok("力矩已释放。请扶稳机械臂。")
+            elif hasattr(self.controller, "disable_torque"):
+                self.controller.disable_torque()
+                normalized = ok("力矩已释放。请扶稳机械臂。")
+            else:
+                return fail("当前控制器不支持释放力矩。")
+
+            self.action_status = "力矩已释放"
+            self._log("warning" if normalized["ok"] else "error", "release_torque", normalized["message"], mode=self.mode)
+            return normalized
+        except Exception as exc:
+            return self._exception("释放力矩失败", exc)
 
     def list_poses(self) -> dict[str, Any]:
         try:
@@ -251,9 +389,8 @@ class ControllerBridge:
             pose = self._get_pose_manager().获取姿态(name)
             if pose is None:
                 return fail(f"姿态不存在：{name}")
-            if self.mode in {"dry_run", "real"} and hasattr(self.controller, "apply_pose"):
-                result = self.controller.apply_pose(pose)
-                normalized = self._normalize_result(result, f"已前往姿态：{name}", {"pose": pose})
+            if self.mode in {"dry_run", "real"}:
+                normalized = self.move_joints_smooth(pose.get("关节角度", []), label=f"前往姿态 {name}")
             elif hasattr(self.controller, "应用姿态"):
                 normalized = self._normalize_result(self.controller.应用姿态(pose), f"已前往姿态：{name}", {"pose": pose})
             else:
@@ -291,7 +428,7 @@ class ControllerBridge:
             sequence = library.load_action(name)
             player = self._get_sequence_player()
             self.action_status = f"播放中：{name}"
-            result_bool = player.play(sequence, loop=False, speed=1.0)
+            result_bool = player.play(sequence, loop=False, speed=max(0.1, min(1.0, self.motion_speed_percent / 100.0)))
             self.action_status = "空闲" if result_bool else "已停止"
             message = f"动作播放完成：{name}" if result_bool else f"动作播放未完成：{name}"
             self._log("info" if result_bool else "warning", "play_action", message, name=name)
@@ -357,8 +494,9 @@ class ControllerBridge:
             model = self._get_kinematics_model()
             if model is None:
                 return fail("PyBullet 未安装，FK 不可用。")
-            q_rad = [math.radians(float(value)) for value in joints_deg[:5]]
-            return ok("FK 计算完成。", {"tcp_pose": model.forward(q_rad)})
+            targets = self._normalize_targets(list(joints_deg[:5]))
+            q_rad = [math.radians(float(targets[joint])) for joint in JOINT_ORDER]
+            return ok("FK 计算完成。", {"tcp_pose": model.forward(q_rad), "target_joints_deg": targets, "source": "fk"})
         except Exception as exc:
             return self._exception("FK 计算失败", exc)
 
@@ -371,7 +509,7 @@ class ControllerBridge:
             seed = [math.radians(float(current.get(joint, 0.0))) for joint in JOINT_ORDER]
             ik = model.inverse(xyz, rpy, seed_q_user=seed)
             joints_deg = {joint: math.degrees(float(ik["q_user_rad"][idx])) for idx, joint in enumerate(JOINT_ORDER)}
-            return ok("IK 计算完成。", {"ik": ik, "target_joints_deg": joints_deg})
+            return ok("IK 计算完成。", {"ik": ik, "target_joints_deg": joints_deg, "source": "ik"})
         except Exception as exc:
             return self._exception("IK 计算失败", exc)
 
@@ -382,18 +520,34 @@ class ControllerBridge:
         return self.move_joints(ik["data"]["target_joints_deg"])
 
     def move_delta(self, dx: float, dy: float, dz: float, frame: str = "base") -> dict[str, Any]:
+        computed = self.compute_delta(dx, dy, dz, frame)
+        if not computed.get("ok"):
+            return computed
+            result = self.move_joints_smooth(computed["data"]["target_joints_deg"], label="末端增量移动")
+        if result.get("ok"):
+            result.setdefault("data", {}).update(computed.get("data", {}))
+        return result
+
+    def compute_delta(self, dx: float, dy: float, dz: float, frame: str = "base") -> dict[str, Any]:
         try:
             model = self._get_kinematics_model()
             if model is None:
-                return fail("PyBullet 未安装，末端增量移动不可用。")
+                return fail("PyBullet 未安装，末端增量计算不可用。")
             tcp = self.get_tcp_pose()
             if not tcp.get("ok"):
                 return tcp
             pose = tcp["data"]["tcp_pose"]
             target_xyz, target_rpy = model.compose_delta_target(pose["xyz"], pose["rpy"], [dx, dy, dz], [0.0, 0.0, 0.0], frame)
-            return self.move_pose(target_xyz, None)
+            ik = self.compute_ik(target_xyz, None)
+            if not ik.get("ok"):
+                return ik
+            data = dict(ik.get("data", {}))
+            data["target_tcp_pose"] = {"xyz": target_xyz, "rpy": target_rpy, "frame": frame}
+            data["delta_m"] = {"dx": float(dx), "dy": float(dy), "dz": float(dz)}
+            data["source"] = f"{frame}_delta"
+            return ok(f"{frame} 末端增量计算完成。", data)
         except Exception as exc:
-            return self._exception("末端增量移动失败", exc)
+            return self._exception("末端增量计算失败", exc)
 
     def check_dependencies(self) -> dict[str, Any]:
         data: dict[str, Any] = {}
@@ -453,6 +607,7 @@ class ControllerBridge:
             config = load_config(self._resolve_config("action_config_path"))
             # GUI 已经在播放真实动作前做二次确认，避免后台线程里 input() 阻塞界面。
             config.setdefault("safety", {})["require_confirm_before_real_replay"] = False
+            config.setdefault("playback", {})["update_hz"] = float(self.config.get("motion", {}).get("playback_update_hz", 20.0))
             self.sequence_player = SequencePlayer(self.controller, config)
         return self.sequence_player
 

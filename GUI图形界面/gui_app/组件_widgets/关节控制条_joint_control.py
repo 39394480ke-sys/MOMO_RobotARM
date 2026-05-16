@@ -8,6 +8,8 @@ from PyQt5.QtWidgets import QHBoxLayout, QLabel, QPushButton, QWidget
 
 class JointControlRow(QWidget):
     delta_requested = pyqtSignal(str, float)
+    continuous_pressed = pyqtSignal(str, int)
+    continuous_released = pyqtSignal()
 
     def __init__(self, joint_key: str, title: str, parent=None):
         super().__init__(parent)
@@ -34,6 +36,10 @@ class JointControlRow(QWidget):
 
         self.minus_button.clicked.connect(lambda: self.delta_requested.emit(self.joint_key, -self.step_deg))
         self.plus_button.clicked.connect(lambda: self.delta_requested.emit(self.joint_key, self.step_deg))
+        self.minus_button.pressed.connect(lambda: self.continuous_pressed.emit(self.joint_key, -1))
+        self.plus_button.pressed.connect(lambda: self.continuous_pressed.emit(self.joint_key, 1))
+        self.minus_button.released.connect(self.continuous_released.emit)
+        self.plus_button.released.connect(self.continuous_released.emit)
 
     def set_step(self, step_deg: float) -> None:
         self.step_deg = float(step_deg)
@@ -41,4 +47,3 @@ class JointControlRow(QWidget):
     def set_angle(self, angle: float) -> None:
         self.angle = float(angle)
         self.angle_label.setText(f"{self.angle:.2f} deg")
-

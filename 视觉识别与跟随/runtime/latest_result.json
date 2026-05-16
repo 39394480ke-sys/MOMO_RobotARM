@@ -1,0 +1,53 @@
+{
+  "timestamp": 1778844204.714114,
+  "frame_id": 1,
+  "detected": false,
+  "target_face": null,
+  "faces": [],
+  "offset": {
+    "dx": 0.0,
+    "dy": 0.0,
+    "ndx": 0.0,
+    "ndy": 0.0,
+    "desired_center": [
+      320.0,
+      201.6
+    ],
+    "target_center": null,
+    "in_dead_zone": true,
+    "valid": false
+  },
+  "smoothed_offset": {
+    "ndx": 0.0,
+    "ndy": 0.0,
+    "valid": false,
+    "kept": false
+  },
+  "direction": {
+    "horizontal": "center",
+    "vertical": "center",
+    "combined": "center"
+  },
+  "gesture": {
+    "available": false,
+    "raw": "",
+    "stable": "",
+    "confidence": 0.0,
+    "stable_frames": 0,
+    "message": "mediapipe 未安装，手势识别不可用。请执行：pip install mediapipe。原始错误：No module named 'mediapipe'"
+  },
+  "fps": 0.0,
+  "camera": {
+    "source_type": "camera",
+    "camera_index": 0,
+    "available": true,
+    "width": 640,
+    "height": 480
+  },
+  "detector": {
+    "face_backend": "opencv_yunet",
+    "face_available": false,
+    "face_error": "YuNet 权重文件不存在：/Users/ke/Library/Mobile Documents/com~apple~CloudDocs/Code/机械臂/视觉识别与跟随/weights/face_detection_yunet_2023mar.onnx。请放入 face_detection_yunet_2023mar.onnx。"
+  },
+  "message": "没有检测到人脸。"
+}

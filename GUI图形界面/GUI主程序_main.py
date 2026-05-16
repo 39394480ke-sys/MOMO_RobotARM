@@ -29,7 +29,8 @@ def main() -> int:
         from PyQt5.QtWidgets import QApplication
     except Exception as exc:
         print(f"PyQt5 未安装，无法启动 GUI：{exc}")
-        print("请运行：pip install PyQt5 pyyaml numpy")
+        print("请在 momo_rebot 环境安装：mamba install -n momo_rebot pyqt")
+        print("如果 mamba 没找到包，可用：mamba run -n momo_rebot python -m pip install PyQt5")
         return 1
 
     from gui_app.主题_theme import build_stylesheet

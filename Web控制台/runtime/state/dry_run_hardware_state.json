@@ -1,0 +1,118 @@
+{
+  "connected": true,
+  "dry_run": true,
+  "startup_present_raw": {
+    "shoulder_pan": 2047,
+    "shoulder_lift": 2112,
+    "elbow_flex": 2643,
+    "wrist_flex": 2072,
+    "wrist_roll": 2415,
+    "gripper": 1504
+  },
+  "raw_present_position": {
+    "shoulder_pan": 2047,
+    "shoulder_lift": 2112,
+    "elbow_flex": 2643,
+    "wrist_flex": 2072,
+    "wrist_roll": 2415,
+    "gripper": 1504
+  },
+  "关节角度": {
+    "shoulder_pan": 0.0,
+    "shoulder_lift": -0.0,
+    "elbow_flex": 0.0,
+    "wrist_flex": -0.0,
+    "wrist_roll": 0.0
+  },
+  "multi_turn_state": {
+    "shoulder_lift": {
+      "show_name": "J2_肩部抬升",
+      "home_present_raw": 2112,
+      "current_raw": 2112,
+      "relative_raw": 0,
+      "joint_deg": -0.0,
+      "goal_raw": 2112
+    },
+    "elbow_flex": {
+      "show_name": "J3_肘部弯曲",
+      "home_present_raw": 2643,
+      "current_raw": 2643,
+      "relative_raw": 0,
+      "joint_deg": 0.0,
+      "goal_raw": 2643
+    },
+    "wrist_roll": {
+      "show_name": "J5_腕部旋转",
+      "home_present_raw": 2415,
+      "current_raw": 2415,
+      "relative_raw": 0,
+      "joint_deg": 0.0,
+      "goal_raw": 2415
+    }
+  },
+  "gripper": {
+    "present_raw": 1504,
+    "open_value": 0.0,
+    "range_min": 1504,
+    "range_max": 2888
+  },
+  "calibration_path": "/Users/ke/Library/Mobile Documents/com~apple~CloudDocs/Code/机械臂/真实舵机控制/标定文件.json",
+  "updated_at": "2026-05-15 19:22:04",
+  "mapping_details": {
+    "shoulder_pan": {
+      "joint_key": "shoulder_pan",
+      "show_name": "J1_底座旋转",
+      "模式": "单圈",
+      "joint_scale": 1.0,
+      "direction": 1,
+      "reference_raw": 2047,
+      "present_raw": 2047,
+      "relative_raw": 0,
+      "joint_deg": 0.0
+    },
+    "shoulder_lift": {
+      "joint_key": "shoulder_lift",
+      "show_name": "J2_肩部抬升",
+      "模式": "多圈",
+      "joint_scale": -5.3,
+      "direction": 1,
+      "reference_raw": 2112,
+      "present_raw": 2112,
+      "relative_raw": 0,
+      "joint_deg": -0.0
+    },
+    "elbow_flex": {
+      "joint_key": "elbow_flex",
+      "show_name": "J3_肘部弯曲",
+      "模式": "多圈",
+      "joint_scale": 5.6,
+      "direction": 1,
+      "reference_raw": 2643,
+      "present_raw": 2643,
+      "relative_raw": 0,
+      "joint_deg": 0.0
+    },
+    "wrist_flex": {
+      "joint_key": "wrist_flex",
+      "show_name": "J4_腕部俯仰",
+      "模式": "单圈",
+      "joint_scale": -1.0,
+      "direction": 1,
+      "reference_raw": 2072,
+      "present_raw": 2072,
+      "relative_raw": 0,
+      "joint_deg": -0.0
+    },
+    "wrist_roll": {
+      "joint_key": "wrist_roll",
+      "show_name": "J5_腕部旋转",
+      "模式": "多圈",
+      "joint_scale": 1.0,
+      "direction": 1,
+      "reference_raw": 2415,
+      "present_raw": 2415,
+      "relative_raw": 0,
+      "joint_deg": 0.0
+    }
+  }
+}

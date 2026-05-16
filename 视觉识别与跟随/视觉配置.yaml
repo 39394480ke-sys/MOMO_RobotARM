@@ -1,0 +1,73 @@
+camera:
+  source_type: camera
+  camera_index: 0
+  width: 640
+  height: 480
+  fps: 30
+  video_file: ""
+  rtsp_url: ""
+
+detector:
+  face_backend: opencv_yunet
+  face_model_path: weights/face_detection_yunet_2023mar.onnx
+  face_score_threshold: 0.75
+  face_nms_threshold: 0.3
+  face_top_k: 5000
+
+gesture:
+  enabled: true
+  backend: mediapipe
+  model_path: weights/gesture_recognizer.task
+  stable_frames: 4
+
+target:
+  selection_strategy: largest_face
+  center_x_norm: 0.50
+  center_y_norm: 0.42
+  dead_zone_x: 0.02
+  dead_zone_y: 0.025
+
+smoothing:
+  enabled: true
+  alpha: 0.35
+  lost_target_keep_sec: 0.8
+
+service:
+  host: 127.0.0.1
+  port: 8000
+  save_latest_frame: true
+  latest_frame_path: runtime/latest_frame.jpg
+  latest_result_path: runtime/latest_result.json
+
+follow:
+  enabled_by_default: false
+  robot_api_base: http://127.0.0.1:8010
+  poll_interval_sec: 0.08
+  http_timeout_sec: 1.0
+  move_duration_sec: 0.20
+  command_mode: stream
+
+  pan_joint: shoulder_pan
+  tilt_joint: elbow_flex
+
+  pan_sign: 1.0
+  tilt_sign: -1.0
+
+  pan_gain_deg_per_norm: 4.8
+  tilt_gain_deg_per_norm: 6.0
+
+  pan_dead_zone_norm: 0.02
+  tilt_dead_zone_norm: 0.025
+  pan_resume_zone_norm: 0.03
+  tilt_resume_zone_norm: 0.035
+
+  min_pan_step_deg: 0.35
+  min_tilt_step_deg: 0.7
+  pan_min_step_zone_norm: 0.08
+  tilt_min_step_zone_norm: 0.12
+
+  max_pan_step_deg: 1.6
+  max_tilt_step_deg: 1.8
+
+  real_mode_requires_confirm: true
+  dry_run_default: true

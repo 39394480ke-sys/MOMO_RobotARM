@@ -14,3 +14,5 @@
 {"time": "2026-05-14 15:32:52", "level": "info", "event": "home", "message": "移动命令已完成。"}
 {"time": "2026-05-14 15:32:52", "level": "warning", "event": "stop", "message": "已保持当前位置。"}
 {"time": "2026-05-14 15:32:52", "level": "info", "event": "disconnect", "message": "已断开。", "mode": "dry_run"}
+{"time": "2026-05-15 16:34:27", "level": "info", "event": "set_mode", "message": "已切换模式：dry_run", "mode": "dry_run"}
+{"time": "2026-05-15 16:35:06", "level": "error", "event": "move_joint_delta", "message": "尚未连接。请先输入：连接", "joint_key": "shoulder_pan", "delta_deg": 1.0}

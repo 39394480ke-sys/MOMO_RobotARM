@@ -24,8 +24,8 @@ class CalibrationPage(QWidget):
         self.command_text.setPlainText(
             "第一版 GUI 不直接运行标定程序。\n\n"
             "请在终端运行：\n"
-            "python ../真实舵机控制/标定程序_calibrate.py\n"
-            "python ../真实舵机控制/标定应用_apply_calibration.py"
+            "mamba run -n momo_rebot python ../真实舵机控制/标定程序_calibrate.py\n"
+            "mamba run -n momo_rebot python ../真实舵机控制/标定应用_apply_calibration.py"
         )
         layout.addWidget(self.path_label)
         layout.addWidget(self.status_label)
@@ -68,4 +68,3 @@ class CalibrationPage(QWidget):
             ]
             for col, value in enumerate(values):
                 self.table.setItem(row, col, QTableWidgetItem(str(value)))
-

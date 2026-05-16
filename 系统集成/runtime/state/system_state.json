@@ -1,0 +1,260 @@
+{
+  "mode": "dry_run",
+  "started_at": "2026-05-15T19:23:21+0800",
+  "services": {
+    "web_api": {
+      "pid": null,
+      "running": false,
+      "started_at": 1778844201.946948,
+      "log_file": "/Users/ke/Library/Mobile Documents/com~apple~CloudDocs/Code/机械臂/系统集成/runtime/logs/web.log",
+      "stopped_at": 1778844205.1224341
+    },
+    "vision": {
+      "pid": null,
+      "running": false,
+      "started_at": 1778844203.229384,
+      "log_file": "/Users/ke/Library/Mobile Documents/com~apple~CloudDocs/Code/机械臂/系统集成/runtime/logs/vision.log",
+      "stopped_at": 1778844204.910739
+    },
+    "gui": {
+      "pid": null,
+      "running": false,
+      "stopped_at": 1778844204.498674
+    },
+    "agent": {
+      "pid": null,
+      "running": false,
+      "stopped_at": 1778844204.49915
+    }
+  },
+  "last_health": {
+    "ok": true,
+    "services": {
+      "web_api": {
+        "enabled": true,
+        "running": true,
+        "healthy": true,
+        "pid": 40534,
+        "health": {
+          "ok": true,
+          "data": {
+            "service": "momoagent_web_control_api",
+            "status": "ok",
+            "title": "我的 MomoAgent Web 控制台",
+            "default_mode": "dry_run",
+            "uptime_sec": 2.178,
+            "time": 1778844204.260036
+          },
+          "error": null
+        }
+      },
+      "vision": {
+        "enabled": true,
+        "running": true,
+        "healthy": true,
+        "pid": 40545,
+        "health": {
+          "service": "momoagent_vision_api",
+          "status": "ok",
+          "time": 1778844204.263381,
+          "running": true,
+          "camera_available": true
+        }
+      },
+      "agent": {
+        "enabled": false,
+        "running": false,
+        "healthy": null,
+        "pid": null,
+        "health": null
+      },
+      "gui": {
+        "enabled": false,
+        "running": false,
+        "healthy": null,
+        "pid": null,
+        "health": null
+      }
+    },
+    "mode": "dry_run",
+    "errors": [],
+    "details": {
+      "web_session": {
+        "ok": true,
+        "data": {
+          "session_id": "3bcaeead-f5da-4d6d-892a-406c15e1d506",
+          "mode": "dry_run",
+          "connected": false,
+          "created_at": 1778839856.528936,
+          "updated_at": 1778844203.0179331,
+          "connected_at": 1778844124.021651,
+          "disconnected_at": null,
+          "action": {
+            "state": "idle",
+            "name": "",
+            "message": "空闲",
+            "started_at": null,
+            "finished_at": null,
+            "thread_alive": false
+          }
+        },
+        "error": null
+      },
+      "web_robot_state": {
+        "ok": true,
+        "data": {
+          "mode": "dry_run",
+          "connected": false,
+          "joints_deg": {
+            "shoulder_pan": 0.0,
+            "shoulder_lift": 0.0,
+            "elbow_flex": 0.0,
+            "wrist_flex": 0.0,
+            "wrist_roll": 0.0
+          },
+          "joint_labels": {
+            "shoulder_pan": "J1 底座旋转",
+            "shoulder_lift": "J2 肩部抬升",
+            "elbow_flex": "J3 肘部弯曲",
+            "wrist_flex": "J4 腕部俯仰",
+            "wrist_roll": "J5 腕部旋转"
+          },
+          "gripper": {
+            "open_percent": 50.0,
+            "open_ratio": 0.5
+          },
+          "raw_present_position": {},
+          "multi_turn_state": {},
+          "raw": {
+            "模式": "dry-run",
+            "已连接": false,
+            "关节角度": {
+              "shoulder_pan": 0.0,
+              "shoulder_lift": 0.0,
+              "elbow_flex": 0.0,
+              "wrist_flex": 0.0,
+              "wrist_roll": 0.0
+            },
+            "raw_present_position": {},
+            "multi_turn_state": {},
+            "夹爪": {
+              "open_value": 50.0
+            }
+          },
+          "tcp_pose": {
+            "xyz": [
+              -0.018863914534449577,
+              -0.07778584957122803,
+              0.22858183085918427
+            ],
+            "rpy": [
+              3.0000010658457387e-06,
+              -3.4641021085876976e-07,
+              0.028708999767394494
+            ],
+            "source": "stage5_fk"
+          },
+          "action": {
+            "state": "idle",
+            "name": "",
+            "message": "空闲",
+            "started_at": null,
+            "finished_at": null
+          },
+          "message": "状态已刷新。"
+        },
+        "error": null
+      },
+      "vision_latest": {
+        "timestamp": 1778844139.431124,
+        "frame_id": 1564,
+        "detected": false,
+        "target_face": null,
+        "faces": [],
+        "offset": {
+          "dx": 0.0,
+          "dy": 0.0,
+          "ndx": 0.0,
+          "ndy": 0.0,
+          "desired_center": [
+            320.0,
+            201.6
+          ],
+          "target_center": null,
+          "in_dead_zone": true,
+          "valid": false
+        },
+        "smoothed_offset": {
+          "ndx": 0.0,
+          "ndy": 0.0,
+          "valid": false,
+          "kept": false
+        },
+        "direction": {
+          "horizontal": "center",
+          "vertical": "center",
+          "combined": "center"
+        },
+        "gesture": {
+          "available": false,
+          "raw": "",
+          "stable": "",
+          "confidence": 0.0,
+          "stable_frames": 0,
+          "message": "mediapipe 未安装，手势识别不可用。请执行：pip install mediapipe。原始错误：No module named 'mediapipe'"
+        },
+        "fps": 27.345,
+        "camera": {
+          "source_type": "camera",
+          "camera_index": 0,
+          "available": true,
+          "width": 640,
+          "height": 480
+        },
+        "detector": {
+          "face_backend": "opencv_yunet",
+          "face_available": false,
+          "face_error": "YuNet 权重文件不存在：/Users/ke/Library/Mobile Documents/com~apple~CloudDocs/Code/机械臂/视觉识别与跟随/weights/face_detection_yunet_2023mar.onnx。请放入 face_detection_yunet_2023mar.onnx。"
+        },
+        "message": "没有检测到人脸。"
+      },
+      "agent_config_exists": true,
+      "gui_config_exists": true,
+      "calibration": {
+        "ok": true,
+        "path": "/Users/ke/Library/Mobile Documents/com~apple~CloudDocs/Code/机械臂/系统集成/../真实舵机控制/标定文件.json",
+        "exists": true,
+        "joints": {
+          "shoulder_pan": {
+            "ok": true,
+            "missing": []
+          },
+          "shoulder_lift": {
+            "ok": true,
+            "missing": []
+          },
+          "elbow_flex": {
+            "ok": true,
+            "missing": []
+          },
+          "wrist_flex": {
+            "ok": true,
+            "missing": []
+          },
+          "wrist_roll": {
+            "ok": true,
+            "missing": []
+          },
+          "gripper": {
+            "ok": true,
+            "missing": []
+          }
+        },
+        "errors": [],
+        "real_mode_allowed": true
+      }
+    }
+  },
+  "last_error": "",
+  "updated_at": 1778844205.1225998
+}

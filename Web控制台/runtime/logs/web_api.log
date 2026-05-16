@@ -1,0 +1,11 @@
+
+{"time": "2026-05-15 18:12:13", "level": "info", "event": "follow_started", "message": "视觉跟随已启动。", "dry_run": true, "latest_url": "http://127.0.0.1:18000/latest"}
+{"time": "2026-05-15 18:12:13", "level": "info", "event": "follow_stopped", "message": "视觉跟随已停止。"}
+{"time": "2026-05-15 18:13:19", "level": "info", "event": "follow_started", "message": "视觉跟随已启动。", "dry_run": true, "latest_url": "http://127.0.0.1:18000/latest"}
+{"time": "2026-05-15 18:13:19", "level": "info", "event": "follow_stopped", "message": "视觉跟随已停止。"}
+{"time": "2026-05-15 18:14:56", "level": "info", "event": "follow_started", "message": "视觉跟随已启动。", "dry_run": true, "latest_url": "http://127.0.0.1:18000/latest"}
+{"time": "2026-05-15 18:14:56", "level": "info", "event": "follow_stopped", "message": "视觉跟随已停止。"}
+{"time": "2026-05-15 19:21:07", "level": "info", "event": "set_mode", "message": "已切换模式：dry_run", "mode": "dry_run"}
+{"time": "2026-05-15 19:22:04", "level": "info", "event": "connect", "message": "连接成功，已加载标定文件并读取 dry-run 舵机状态。", "mode": "dry_run"}
+{"time": "2026-05-15 19:22:04", "level": "warning", "event": "stop", "message": "已保持当前位置。"}
+{"time": "2026-05-15 19:23:23", "level": "info", "event": "set_mode", "message": "已切换模式：dry_run", "mode": "dry_run"}

@@ -1,0 +1,8 @@
+关节编号,内部 key,中文名称,舵机 ID,模式,是否多圈,joint_scale,标定零点字段,备注
+J1,shoulder_pan,底座旋转,1,单圈,否,1.0,zero_present_raw,单圈目标 raw 包裹到 0-4095；受 range_min/range_max 约束
+J2,shoulder_lift,肩部抬升,2,多圈,是,-5.3,home_present_raw,多圈 absolute raw；phase=28
+J3,elbow_flex,肘部弯曲,3,多圈,是,5.6,home_present_raw,多圈 absolute raw；phase=28
+J4,wrist_flex,腕部俯仰,4,单圈,否,-1.0,zero_present_raw,单圈目标 raw 包裹到 0-4095；受 range_min/range_max 约束
+J5,wrist_roll,腕部旋转,5,多圈,是,1.0,home_present_raw,多圈 absolute raw；phase=28
+J6,gripper,夹爪,6,夹爪,否,-,range_min/range_max,夹爪不进入 5 轴 IK；按开合范围控制
+

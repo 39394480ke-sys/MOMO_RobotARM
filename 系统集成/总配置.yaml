@@ -1,0 +1,80 @@
+project:
+  name: 我的MomoAgent复刻
+  default_mode: dry_run
+  python_version: "3.11"
+
+paths:
+  stage03_sim: ../仿真控制系统
+  stage04_real: ../真实舵机控制
+  stage05_kinematics: ../URDF运动学仿真
+  stage06_actions: ../动作录制与回放增强
+  stage07_gui: ../GUI图形界面
+  stage08_web: ../Web控制台
+  stage09_vision: ../视觉识别与跟随
+  stage10_agent: ../语音Agent
+
+services:
+  web_api:
+    enabled: true
+    name: web_api
+    command: python 启动Web服务.py --host 127.0.0.1 --port 8010
+    cwd: ../Web控制台
+    health_url: http://127.0.0.1:8010/api/v1/health
+    log_file: runtime/logs/web.log
+
+  vision:
+    enabled: true
+    name: vision
+    command: python 视觉主程序_main.py service --host 127.0.0.1 --port 8000
+    cwd: ../视觉识别与跟随
+    health_url: http://127.0.0.1:8000/health
+    log_file: runtime/logs/vision.log
+
+  agent:
+    enabled: false
+    name: agent
+    command: python 语音Agent主程序_main.py shell
+    cwd: ../语音Agent
+    health_url: ""
+    log_file: runtime/logs/agent.log
+
+  gui:
+    enabled: false
+    name: gui
+    command: python GUI主程序_main.py
+    cwd: ../GUI图形界面
+    health_url: ""
+    log_file: runtime/logs/gui.log
+
+safety:
+  default_dry_run: true
+  real_mode_requires_confirm: true
+  confirm_text: 我确认机械臂周围安全
+  prevent_multiple_hardware_sessions: true
+
+dependencies:
+  required:
+    - fastapi
+    - uvicorn
+    - pydantic
+    - pyyaml
+    - numpy
+    - requests
+  optional:
+    - pybullet
+    - PyQt5
+    - opencv-contrib-python
+    - sounddevice
+    - mediapipe
+    - lerobot
+    - feetech-servo-sdk
+
+hardware:
+  require_calibration_for_real: true
+  calibration_path: ../真实舵机控制/标定文件.json
+  real_config_path: ../真实舵机控制/真实配置.yaml
+
+logging:
+  system_log: runtime/logs/system.log
+  state_file: runtime/state/system_state.json
+

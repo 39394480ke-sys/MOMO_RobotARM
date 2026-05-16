@@ -1,0 +1,68 @@
+agent:
+  backend: openai_compatible
+  system_prompt_path: prompts/system_prompt.md
+  max_turns: 20
+  timeout_sec: 60
+  warmup_prompt: 请只回复“就绪”。
+
+openai_compatible:
+  api_base: http://127.0.0.1:1234/v1
+  api_key: ""
+  model: qwen/qwen3.5-35b-a3b
+  temperature: 0.3
+  max_tokens: 800
+
+nanobot:
+  enabled: false
+  source_dir: ../external/nanobot
+  tool_mode: bridge_only
+  max_tool_iterations: 12
+
+openclaw:
+  enabled: false
+  command: openclaw
+  timeout_sec: 60
+
+robot_api:
+  base_url: http://127.0.0.1:8010
+  timeout_sec: 6
+  default_mode: dry_run
+
+audio:
+  sample_rate: 16000
+  channels: 1
+  max_record_sec: 20
+  save_last_wav: true
+  last_wav_path: runtime/audio/last_record.wav
+
+stt:
+  provider: http
+  url: http://127.0.0.1:9000/v1/audio/transcriptions
+  api_key: ""
+  model: whisper-1
+  timeout_sec: 30
+
+tts:
+  enabled: true
+  provider: http
+  url: http://127.0.0.1:9001/v1/audio/speech
+  api_key: ""
+  model: tts-1
+  voice: default
+  timeout_sec: 30
+  playback_backend: sounddevice
+
+safety:
+  allow_real_robot_tools: false
+  require_confirm_for_real: true
+  confirm_text: 我确认机械臂周围安全
+  max_rotate_joint_delta_deg: 5.0
+  allowed_tools:
+    - get_robot_state
+    - stop_robot
+    - set_gripper
+    - rotate_joint
+    - run_robot_behavior
+    - play_action
+    - start_face_follow
+    - stop_face_follow

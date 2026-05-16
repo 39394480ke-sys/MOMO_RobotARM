@@ -9,7 +9,7 @@ from typing import Any
 
 from PyQt5.QtCore import QPoint, Qt, QTimer
 from PyQt5.QtGui import QColor, QFont, QImage, QPainter, QPen, QPixmap
-from PyQt5.QtWidgets import QLabel, QVBoxLayout, QWidget
+from PyQt5.QtWidgets import QGridLayout, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
 from gui_app.控制器桥接_controller_bridge import JOINT_ORDER
 
@@ -54,13 +54,42 @@ class SimView(QWidget):
         super().__init__(parent)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(0)
+
+        viewport = QWidget()
+        viewport.setObjectName("SimViewport")
+        viewport_layout = QGridLayout(viewport)
+        viewport_layout.setContentsMargins(0, 0, 0, 0)
+        viewport_layout.setSpacing(0)
         self.label = _InteractiveRenderLabel(self)
         self.label.setAlignment(Qt.AlignCenter)
-        self.label.setMinimumSize(320, 240)
+        self.label.setMinimumSize(260, 220)
         self.label.setStyleSheet("background: #f4f7fb; border: 1px solid #cfd7e2; border-radius: 6px; padding: 0;")
         self.label.setScaledContents(True)
         self.label.setWordWrap(True)
-        layout.addWidget(self.label, 1)
+        viewport_layout.addWidget(self.label, 0, 0)
+
+        toolbar_widget = QWidget()
+        toolbar_widget.setObjectName("ViewportToolbar")
+        toolbar = QVBoxLayout(toolbar_widget)
+        toolbar.setContentsMargins(6, 6, 6, 6)
+        toolbar.setSpacing(5)
+        for text, slot in (
+            ("↻", self.reset_camera),
+            ("FRONT", self.front_camera),
+            ("TOP", self.top_camera),
+            ("SIDE", self.side_camera),
+            ("FIT", self.fit_camera),
+        ):
+            button = QPushButton(text)
+            button.setObjectName("ViewportToolButton")
+            button.setToolTip({"↻": "重置视角", "FRONT": "正视", "TOP": "俯视", "SIDE": "侧视", "FIT": "适配模型"}[text])
+            button.clicked.connect(slot)
+            toolbar.addWidget(button)
+        toolbar.addStretch(1)
+        viewport_layout.addWidget(toolbar_widget, 0, 0, Qt.AlignRight | Qt.AlignTop)
+        toolbar_widget.raise_()
+        layout.addWidget(viewport, 1)
 
         self.model = None
         self.pb = None
@@ -255,7 +284,44 @@ class SimView(QWidget):
             self._marker_body_ids.append(body)
             self._debug_ids.append(self.pb.addUserDebugText(self.target_label or "目标末端", target_xyz, [0.0, 0.85, 1.0], textSize=1.05, physicsClientId=cid))
             if current_xyz:
-                self._debug_ids.append(self.pb.addUserDebugLine(current_xyz, target_xyz, [1.0, 0.95, 0.05], 3, physicsClientId=cid))
+                self._add_dashed_line(current_xyz, target_xyz, [0.25, 0.95, 1.0])
+
+    def reset_camera(self) -> None:
+        self.camera_yaw_deg = -55.0
+        self.camera_pitch_deg = 28.0
+        self.camera_distance = 0.62
+        self.camera_target = [0.0, 0.0, 0.16]
+        self.schedule_render(10)
+
+    def front_camera(self) -> None:
+        self.camera_yaw_deg = -90.0
+        self.camera_pitch_deg = 8.0
+        self.schedule_render(10)
+
+    def top_camera(self) -> None:
+        self.camera_yaw_deg = -90.0
+        self.camera_pitch_deg = 75.0
+        self.schedule_render(10)
+
+    def side_camera(self) -> None:
+        self.camera_yaw_deg = 0.0
+        self.camera_pitch_deg = 10.0
+        self.schedule_render(10)
+
+    def fit_camera(self) -> None:
+        self.camera_distance = 0.78
+        self.camera_target = [0.0, 0.0, 0.18]
+        self.schedule_render(10)
+
+    def _add_dashed_line(self, start: list[float], end: list[float], color: list[float]) -> None:
+        cid = self.model._client_id
+        segments = 16
+        for index in range(0, segments, 2):
+            a = index / segments
+            b = (index + 1) / segments
+            p0 = [start[i] + (end[i] - start[i]) * a for i in range(3)]
+            p1 = [start[i] + (end[i] - start[i]) * b for i in range(3)]
+            self._debug_ids.append(self.pb.addUserDebugLine(p0, p1, color, 3, physicsClientId=cid))
 
     def _add_floor_grid(self) -> None:
         cid = self.model._client_id

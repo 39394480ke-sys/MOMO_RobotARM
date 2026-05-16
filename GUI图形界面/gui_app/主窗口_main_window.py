@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Callable
 
 from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtWidgets import QApplication, QFrame, QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QMainWindow, QPushButton, QSizePolicy, QSpinBox, QSplitter, QStackedWidget, QVBoxLayout, QWidget
+from PyQt5.QtWidgets import QApplication, QFrame, QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QMainWindow, QPushButton, QScrollArea, QSizePolicy, QSpinBox, QSplitter, QStackedWidget, QVBoxLayout, QWidget
 
 from gui_app.后台任务_worker import ActionPlayWorker, CalibrationStatusWorker, ConnectWorker, MoveWorker, StatePollWorker
 from gui_app.状态_store import AppStore
@@ -44,7 +44,7 @@ class MainWindow(QMainWindow):
         screen = QApplication.primaryScreen()
         if screen is None:
             self.resize(1180, 760)
-            self.setMinimumSize(860, 560)
+            self.setMinimumSize(760, 480)
             return
 
         available = screen.availableGeometry()
@@ -55,35 +55,43 @@ class MainWindow(QMainWindow):
         x = available.x() + max(20, (available.width() - width) // 2)
         y = available.y() + max(20, (available.height() - height) // 2)
 
-        self.setMinimumSize(min(860, width), min(560, height))
+        self.setMinimumSize(min(760, width), min(480, height))
         self.setGeometry(x, y, width, height)
 
     def _build_ui(self) -> None:
         root = QWidget()
         root_layout = QVBoxLayout(root)
         root_layout.setContentsMargins(0, 0, 0, 0)
+        root_layout.setSpacing(0)
 
         top = QFrame()
         top.setObjectName("TopBar")
         top_layout = QHBoxLayout(top)
-        self.title_label = QLabel(str(self.config.get("app", {}).get("title", "我的 MomoAgent GUI 控制台")))
+        top_layout.setContentsMargins(12, 8, 12, 8)
+        top_layout.setSpacing(8)
+        self.title_label = QLabel("MomoAgent GUI 控制台")
         self.title_label.setObjectName("TitleLabel")
-        self.mode_label = QLabel("模式：dry-run")
-        self.conn_label = QLabel("连接：未连接")
-        self.error_label = QLabel("")
+        self.mode_label = QLabel("● 模式: dry-run")
+        self.mode_label.setObjectName("StatusPill")
+        self.conn_label = QLabel("● 链路: 未连接")
+        self.conn_label.setObjectName("StatusPill")
+        self.error_label = QLabel("SYSTEM READY")
+        self.error_label.setObjectName("ReadyPill")
         self.speed_label = QLabel("速度")
+        self.speed_label.setObjectName("SpeedLabel")
         self.speed_spin = QSpinBox()
         self.speed_spin.setRange(10, 100)
         self.speed_spin.setSingleStep(5)
         self.speed_spin.setValue(int(float(self.config.get("motion", {}).get("default_speed_percent", 50))))
         self.speed_spin.setSuffix("%")
-        self.speed_spin.setFixedWidth(78)
+        self.speed_spin.setMinimumWidth(92)
+        self.speed_spin.setMinimumHeight(30)
         self.bridge.set_motion_speed_percent(self.speed_spin.value())
-        self.home_button = QPushButton("Home")
+        self.home_button = QPushButton("Home 回零")
         self.home_button.setObjectName("PrimaryButton")
         self.release_torque_button = QPushButton("释放力矩")
         self.release_torque_button.setObjectName("WarningButton")
-        self.stop_button = QPushButton("急停")
+        self.stop_button = QPushButton("EMERGENCY STOP")
         self.stop_button.setObjectName("DangerButton")
         top_layout.addWidget(self.title_label)
         top_layout.addStretch(1)
@@ -97,14 +105,16 @@ class MainWindow(QMainWindow):
         top_layout.addWidget(self.stop_button)
 
         body = QWidget()
+        body.setObjectName("MainBody")
         body_layout = QHBoxLayout(body)
         body_layout.setContentsMargins(0, 0, 0, 0)
+        body_layout.setSpacing(0)
         self.nav = QListWidget()
         self.nav.setObjectName("NavList")
         self.nav.setFixedWidth(150)
         self.stack = QStackedWidget()
         self.stack.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self.stack.setMinimumWidth(520)
+        self.stack.setMinimumWidth(280)
 
         self.settings_page = SettingsPage(self.bridge)
         self.quick_page = QuickControlPage()
@@ -114,22 +124,22 @@ class MainWindow(QMainWindow):
         self.calibration_page = CalibrationPage()
         self.log_page = LogPage(self.bridge.log_path)
         self.log_page.setObjectName("PersistentLogPanel")
-        self.log_page.setMinimumWidth(280)
+        self.log_page.setMinimumWidth(260)
         self.persistent_sim_view = SimView()
         self.persistent_sim_view.setObjectName("PersistentSimView")
         self.persistent_sim_view.setMinimumHeight(240)
 
         pages = [
-            ("设置", self.settings_page),
-            ("快速控制", self.quick_page),
-            ("姿态", self.pose_page),
-            ("动作", self.action_page),
-            ("运动学", self.kinematics_page),
-            ("标定", self.calibration_page),
+            ("⚙ 设置", self.settings_page, (560, 380)),
+            ("🕹 快速控制", self.quick_page, (620, 580)),
+            ("🔖 姿态", self.pose_page, (600, 420)),
+            ("▶ 动作", self.action_page, (600, 420)),
+            ("📐 运动学", self.kinematics_page, (620, 520)),
+            ("🎯 标定", self.calibration_page, (620, 500)),
         ]
-        for title, page in pages:
+        for title, page, minimum_size in pages:
             self.nav.addItem(QListWidgetItem(title))
-            self.stack.addWidget(page)
+            self.stack.addWidget(self._make_scroll_page(page, minimum_size[0], minimum_size[1]))
         self.nav.setCurrentRow(0)
 
         content_splitter = QSplitter()
@@ -140,19 +150,19 @@ class MainWindow(QMainWindow):
         right_splitter = QSplitter()
         right_splitter.setOrientation(Qt.Vertical)
         right_splitter.setObjectName("RightInspectorSplitter")
-        right_splitter.setMinimumWidth(360)
+        right_splitter.setMinimumWidth(280)
         right_splitter.setOpaqueResize(False)
         right_splitter.setHandleWidth(6)
         right_splitter.addWidget(self.log_page)
         right_splitter.addWidget(self.persistent_sim_view)
         right_splitter.setStretchFactor(0, 2)
-        right_splitter.setStretchFactor(1, 1)
-        right_splitter.setSizes([420, 280])
+        right_splitter.setStretchFactor(1, 3)
+        right_splitter.setSizes([300, 460])
         right_splitter.setChildrenCollapsible(False)
         content_splitter.addWidget(right_splitter)
-        content_splitter.setStretchFactor(0, 3)
-        content_splitter.setStretchFactor(1, 1)
-        content_splitter.setSizes([840, 360])
+        content_splitter.setStretchFactor(0, 4)
+        content_splitter.setStretchFactor(1, 2)
+        content_splitter.setSizes([1040, 520])
         content_splitter.setChildrenCollapsible(False)
 
         body_layout.addWidget(self.nav)
@@ -163,6 +173,18 @@ class MainWindow(QMainWindow):
 
         self.status_bar = GlobalStatusBar()
         self.setStatusBar(self.status_bar)
+
+    def _make_scroll_page(self, page: QWidget, minimum_width: int, minimum_height: int) -> QScrollArea:
+        page.setMinimumSize(minimum_width, minimum_height)
+        page.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        scroll = QScrollArea()
+        scroll.setObjectName("PageScrollArea")
+        scroll.setWidget(page)
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        return scroll
 
     def _connect_signals(self) -> None:
         self.nav.currentRowChanged.connect(self.stack.setCurrentIndex)
@@ -327,6 +349,7 @@ class MainWindow(QMainWindow):
         targets = result.get("data", {}).get("target_joints_deg")
         if targets:
             self.pending_kinematic_targets = targets
+            self.kinematics_page.set_execute_available(True)
         if target_pose:
             self.persistent_sim_view.set_target_pose(target_pose, label)
 
@@ -345,6 +368,7 @@ class MainWindow(QMainWindow):
         self.kinematics_page.show_result(result)
         if result.get("ok"):
             self.pending_kinematic_targets = None
+            self.kinematics_page.set_execute_available(False)
             self.persistent_sim_view.set_target_pose(None)
             self._poll_state_once()
 
@@ -401,7 +425,11 @@ class MainWindow(QMainWindow):
         state.connected = self.bridge.is_connected()
         state.action_status = self.bridge.action_status
         mode_text = {"simulation": "仿真", "dry_run": "dry-run", "real": "真实"}.get(mode, mode)
-        self.mode_label.setText(f"模式：{mode_text}")
-        self.conn_label.setText(f"连接：{'已连接' if state.connected else '未连接'}")
-        self.error_label.setText(f"错误：{state.last_error}" if state.last_error else "")
+        mode_dot = {"simulation": "●", "dry_run": "●", "real": "●"}.get(mode, "●")
+        self.mode_label.setText(f"{mode_dot} 模式: {mode_text}")
+        self.conn_label.setText(f"● 链路: {'已连接' if state.connected else '未连接'}")
+        self.error_label.setText(f"错误: {state.last_error}" if state.last_error else "SYSTEM READY")
+        self.error_label.setObjectName("ErrorPill" if state.last_error else "ReadyPill")
+        self.error_label.style().unpolish(self.error_label)
+        self.error_label.style().polish(self.error_label)
         self.status_bar.update_status(mode, state.connected, state.calibration_ok, state.action_status, state.last_error)

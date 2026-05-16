@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from PyQt5.QtCore import QTimer, pyqtSignal
-from PyQt5.QtWidgets import QComboBox, QDoubleSpinBox, QGroupBox, QHBoxLayout, QLabel, QPushButton, QRadioButton, QButtonGroup, QVBoxLayout, QWidget
+from PyQt5.QtWidgets import QButtonGroup, QComboBox, QDoubleSpinBox, QGroupBox, QHBoxLayout, QLabel, QPushButton, QSizePolicy, QVBoxLayout, QWidget
 
 from gui_app.控制器桥接_controller_bridge import JOINT_LABELS, JOINT_ORDER
 from gui_app.组件_widgets.TCP显示_tcp_display import TCPDisplay
@@ -27,10 +27,16 @@ class QuickControlPage(QWidget):
         self.active_direction = 0
         self.continuous_interval_ms = 90
         layout = QHBoxLayout(self)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(10)
 
         left = QVBoxLayout()
-        joint_box = QGroupBox("关节控制")
+        left.setSpacing(10)
+        joint_box = QGroupBox("关节控制阵列")
+        joint_box.setMinimumHeight(292)
         joint_layout = QVBoxLayout(joint_box)
+        joint_layout.setContentsMargins(12, 18, 12, 12)
+        joint_layout.setSpacing(6)
         for joint in JOINT_ORDER:
             row = JointControlRow(joint, JOINT_LABELS[joint])
             row.delta_requested.connect(self._step_delta_requested)
@@ -39,21 +45,34 @@ class QuickControlPage(QWidget):
             self.rows[joint] = row
             joint_layout.addWidget(row)
 
-        mode_row = QHBoxLayout()
-        self.step_mode_radio = QRadioButton("步进")
-        self.continuous_mode_radio = QRadioButton("连续")
+        mode_widget = QWidget()
+        mode_widget.setMinimumHeight(40)
+        mode_row = QHBoxLayout(mode_widget)
+        mode_row.setContentsMargins(0, 10, 0, 2)
+        mode_row.setSpacing(14)
+        self.step_mode_radio = QPushButton("步进模式 Step")
+        self.step_mode_radio.setObjectName("SegmentButton")
+        self.step_mode_radio.setCheckable(True)
+        self.continuous_mode_radio = QPushButton("连续模式 Continuous")
+        self.continuous_mode_radio.setObjectName("SegmentButton")
+        self.continuous_mode_radio.setCheckable(True)
         self.step_mode_radio.setChecked(True)
         self.mode_group = QButtonGroup(self)
+        self.mode_group.setExclusive(True)
         self.mode_group.addButton(self.step_mode_radio)
         self.mode_group.addButton(self.continuous_mode_radio)
         mode_row.addWidget(self.step_mode_radio)
         mode_row.addWidget(self.continuous_mode_radio)
         mode_row.addStretch(1)
-        joint_layout.addLayout(mode_row)
+        joint_layout.addWidget(mode_widget)
+        joint_layout.addSpacing(6)
 
         step_row = QHBoxLayout()
+        step_row.setContentsMargins(0, 6, 0, 0)
+        step_row.setSpacing(10)
         step_row.addWidget(QLabel("步进角度"))
         self.step_combo = QComboBox()
+        self.step_combo.setMinimumWidth(132)
         for value in (0.5, 1, 2, 3, 4, 5):
             self.step_combo.addItem(f"{value:g} 度", float(value))
         self.step_combo.setCurrentIndex(1)
@@ -62,13 +81,16 @@ class QuickControlPage(QWidget):
         joint_layout.addLayout(step_row)
 
         speed_row = QHBoxLayout()
+        speed_row.setContentsMargins(0, 2, 0, 0)
+        speed_row.setSpacing(10)
         speed_row.addWidget(QLabel("连续速度"))
         self.speed_input = QDoubleSpinBox()
         self.speed_input.setRange(0.2, 20.0)
         self.speed_input.setValue(6.0)
         self.speed_input.setSingleStep(0.5)
         self.speed_input.setSuffix(" deg/s")
-        self.speed_input.setMinimumWidth(120)
+        self.speed_input.setMinimumWidth(144)
+        self.speed_input.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
         speed_row.addWidget(self.speed_input)
         speed_row.addStretch(1)
         joint_layout.addLayout(speed_row)
@@ -81,23 +103,35 @@ class QuickControlPage(QWidget):
         self.gripper.value_requested.connect(self.gripper_requested.emit)
 
         button_row = QHBoxLayout()
+        button_row.setContentsMargins(0, 0, 0, 0)
+        button_row.setSpacing(8)
         self.home_button = QPushButton("Home")
+        self.home_button.setObjectName("PrimaryButton")
+        self.home_button.setMinimumWidth(120)
         self.refresh_button = QPushButton("刷新状态")
+        self.refresh_button.setObjectName("GhostButton")
+        self.refresh_button.setMinimumWidth(120)
         self.stop_button = QPushButton("急停")
         self.stop_button.setObjectName("DangerButton")
+        self.stop_button.setMinimumWidth(120)
         button_row.addWidget(self.home_button)
         button_row.addWidget(self.refresh_button)
         button_row.addWidget(self.stop_button)
 
         tcp_box = QGroupBox("TCP 末端位姿")
         tcp_layout = QVBoxLayout(tcp_box)
+        tcp_layout.setContentsMargins(12, 18, 12, 12)
+        tcp_layout.setSpacing(8)
         self.tcp_display = TCPDisplay()
         tcp_layout.addWidget(self.tcp_display)
 
         left.addWidget(joint_box)
-        left.addWidget(QGroupBox("夹爪控制"))
-        left.itemAt(1).widget().setLayout(QVBoxLayout())
-        left.itemAt(1).widget().layout().addWidget(self.gripper)
+        gripper_box = QGroupBox("夹爪控制")
+        gripper_layout = QVBoxLayout(gripper_box)
+        gripper_layout.setContentsMargins(12, 18, 12, 12)
+        gripper_layout.setSpacing(8)
+        gripper_layout.addWidget(self.gripper)
+        left.addWidget(gripper_box)
         left.addLayout(button_row)
         left.addWidget(tcp_box)
         left.addStretch(1)

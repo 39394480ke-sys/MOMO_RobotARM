@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtWidgets import QDoubleSpinBox, QFormLayout, QGroupBox, QHBoxLayout, QPushButton, QTextEdit, QVBoxLayout, QWidget
@@ -22,11 +23,11 @@ class KinematicsPage(QWidget):
         layout.setSpacing(10)
 
         columns = QHBoxLayout()
-        columns.setSpacing(12)
+        columns.setSpacing(10)
         left_column = QVBoxLayout()
-        left_column.setSpacing(12)
+        left_column.setSpacing(10)
         right_column = QVBoxLayout()
-        right_column.setSpacing(12)
+        right_column.setSpacing(10)
 
         fk_box = QGroupBox("FK 正运动学测试")
         fk_form = self._form(fk_box)
@@ -36,6 +37,7 @@ class KinematicsPage(QWidget):
             self.fk_inputs.append(spin)
             fk_form.addRow(f"J{idx + 1}", spin)
         self.fk_button = QPushButton("计算 FK")
+        self.fk_button.setObjectName("PrimaryButton")
         self.fk_button.setMinimumWidth(180)
         fk_form.addRow("", self.fk_button)
 
@@ -50,6 +52,7 @@ class KinematicsPage(QWidget):
         for label, widget in (("X m", self.x_input), ("Y m", self.y_input), ("Z m", self.z_input), ("Roll deg", self.roll_input), ("Pitch deg", self.pitch_input), ("Yaw deg", self.yaw_input)):
             ik_form.addRow(label, widget)
         self.ik_button = QPushButton("计算 IK")
+        self.ik_button.setObjectName("PrimaryButton")
         self.ik_button.setMinimumWidth(180)
         ik_form.addRow("", self.ik_button)
 
@@ -61,19 +64,24 @@ class KinematicsPage(QWidget):
         delta_form.addRow("dx m", self.dx_input)
         delta_form.addRow("dy m", self.dy_input)
         delta_form.addRow("dz m", self.dz_input)
-        self.base_delta_button = QPushButton("计算 base 增量")
-        self.tool_delta_button = QPushButton("计算 tool 增量")
+        self.base_delta_button = QPushButton("计算 Base 坐标系增量")
+        self.tool_delta_button = QPushButton("计算 Tool 坐标系增量")
+        self.base_delta_button.setObjectName("PrimaryButton")
+        self.tool_delta_button.setObjectName("PrimaryButton")
         self.base_delta_button.setMinimumWidth(180)
         self.tool_delta_button.setMinimumWidth(180)
         delta_form.addRow("", self.base_delta_button)
         delta_form.addRow("", self.tool_delta_button)
 
         self.refresh_tcp_button = QPushButton("刷新当前 TCP")
+        self.refresh_tcp_button.setObjectName("GhostButton")
         self.refresh_tcp_button.setToolTip("读取当前关节状态并计算当前末端 TCP 位姿；不会移动机械臂。")
         self.refresh_tcp_button.setMinimumHeight(36)
-        self.execute_result_button = QPushButton("执行结果")
+        self.execute_result_button = QPushButton("执行计算结果 EXECUTE TARGET")
+        self.execute_result_button.setObjectName("ExecuteButton")
         self.execute_result_button.setToolTip("执行最后一次 FK / IK / 末端增量计算出来的目标；没有计算结果时不会移动。")
-        self.execute_result_button.setMinimumHeight(36)
+        self.execute_result_button.setMinimumHeight(50)
+        self.execute_result_button.setEnabled(False)
         left_column.addWidget(fk_box)
         left_column.addWidget(ik_box)
         left_column.addStretch(1)
@@ -81,6 +89,7 @@ class KinematicsPage(QWidget):
         output_box = QGroupBox("计算结果")
         output_layout = QVBoxLayout(output_box)
         self.output = QTextEdit()
+        self.output.setObjectName("DetailText")
         self.output.setReadOnly(True)
         self.output.setMinimumHeight(180)
         output_layout.addWidget(self.output)
@@ -102,8 +111,8 @@ class KinematicsPage(QWidget):
 
     def _form(self, parent: QGroupBox) -> QFormLayout:
         form = QFormLayout(parent)
-        form.setContentsMargins(14, 18, 14, 14)
-        form.setSpacing(10)
+        form.setContentsMargins(12, 18, 12, 12)
+        form.setSpacing(8)
         form.setLabelAlignment(Qt.AlignRight | Qt.AlignVCenter)
         form.setFormAlignment(Qt.AlignTop)
         form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
@@ -125,4 +134,48 @@ class KinematicsPage(QWidget):
         self.ik_requested.emit(xyz, rpy_rad)
 
     def show_result(self, result: dict) -> None:
-        self.output.setPlainText(json.dumps(result, ensure_ascii=False, indent=2))
+        self.output.setPlainText(self._format_result(result))
+
+    def set_execute_available(self, available: bool) -> None:
+        self.execute_result_button.setEnabled(bool(available))
+
+    def _format_result(self, result: dict) -> str:
+        ok = bool(result.get("ok"))
+        lines = [f"状态: {'成功' if ok else '失败'}"]
+        message = result.get("message")
+        if message:
+            lines.append(f"消息: {message}")
+        data = result.get("data")
+        if isinstance(data, Mapping):
+            self._append_pose(lines, "TCP", data.get("tcp_pose") or data.get("target_tcp_pose"))
+            targets = data.get("target_joints_deg") or data.get("targets_deg")
+            if isinstance(targets, Mapping):
+                lines.append("")
+                lines.append("目标关节角度")
+                for key, value in targets.items():
+                    lines.append(f"  {key}: {float(value):.2f} deg")
+            ik = data.get("ik")
+            if isinstance(ik, Mapping):
+                self._append_pose(lines, "IK 目标位姿", {"xyz": ik.get("xyz"), "rpy": ik.get("rpy")})
+                joints = ik.get("joints_deg") or ik.get("target_joints_deg")
+                if isinstance(joints, Mapping):
+                    lines.append("")
+                    lines.append("IK 关节解")
+                    for key, value in joints.items():
+                        lines.append(f"  {key}: {float(value):.2f} deg")
+        if len(lines) <= 2 and data is not None:
+            lines.append("")
+            lines.append(json.dumps(data, ensure_ascii=False, indent=2))
+        return "\n".join(lines)
+
+    def _append_pose(self, lines: list[str], title: str, pose: object) -> None:
+        if not isinstance(pose, Mapping):
+            return
+        xyz = pose.get("xyz")
+        rpy = pose.get("rpy")
+        lines.append("")
+        lines.append(title)
+        if isinstance(xyz, (list, tuple)) and len(xyz) >= 3:
+            lines.append(f"  XYZ: {float(xyz[0]):.4f}, {float(xyz[1]):.4f}, {float(xyz[2]):.4f} m")
+        if isinstance(rpy, (list, tuple)) and len(rpy) >= 3:
+            lines.append(f"  RPY: {float(rpy[0]) * 57.2958:.2f}, {float(rpy[1]) * 57.2958:.2f}, {float(rpy[2]) * 57.2958:.2f} deg")

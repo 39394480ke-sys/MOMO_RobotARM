@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from PyQt5.QtCore import pyqtSignal
-from PyQt5.QtWidgets import QHBoxLayout, QLabel, QPushButton, QWidget
+from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtWidgets import QHBoxLayout, QLabel, QPushButton, QSizePolicy, QWidget
 
 
 class JointControlRow(QWidget):
@@ -19,14 +19,25 @@ class JointControlRow(QWidget):
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 2, 0, 2)
-        self.name_label = QLabel(title)
-        self.name_label.setMinimumWidth(110)
+        layout.setSpacing(8)
+        self.setMinimumWidth(470)
+        self.name_label = QLabel(f"{joint_key.upper()} / {title}")
+        self.name_label.setMinimumWidth(210)
+        self.name_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
         self.minus_button = QPushButton("-")
-        self.minus_button.setFixedWidth(42)
+        self.minus_button.setObjectName("JointStepButton")
+        self.minus_button.setMinimumWidth(42)
+        self.minus_button.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
         self.angle_label = QLabel("0.00 deg")
-        self.angle_label.setMinimumWidth(90)
+        self.angle_label.setObjectName("AngleReadout")
+        self.angle_label.setMinimumWidth(118)
+        self.angle_label.setMaximumWidth(150)
+        self.angle_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
+        self.angle_label.setAlignment(Qt.AlignCenter)
         self.plus_button = QPushButton("+")
-        self.plus_button.setFixedWidth(42)
+        self.plus_button.setObjectName("JointStepButton")
+        self.plus_button.setMinimumWidth(42)
+        self.plus_button.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
 
         layout.addWidget(self.name_label)
         layout.addWidget(self.minus_button)

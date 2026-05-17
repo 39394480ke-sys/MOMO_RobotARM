@@ -27,7 +27,7 @@ safety:
   real_mode_requires_confirm: true
   real_confirm_text: 我确认机械臂周围安全
   max_manual_step_deg: 5.0
-  max_real_step_deg: 2.0
+  max_real_step_deg: 3.0
 
 motion:
   default_speed_percent: 50
@@ -40,13 +40,14 @@ follow:
   robot_api_base: http://127.0.0.1:8010
   poll_interval_sec: 0.05
   move_duration_sec: 0.25
+  speed_percent: 60
   command_mode: stream
   pan_joint: shoulder_pan
   tilt_joint: elbow_flex
   pan_sign: 1.0
   tilt_sign: -1.0
-  pan_gain_deg_per_norm: 4
-  tilt_gain_deg_per_norm: 4
+  pan_gain_deg_per_norm: 4.8
+  tilt_gain_deg_per_norm: 4.8
   pan_dead_zone_norm: 0.03
   tilt_dead_zone_norm: 0.035
   pan_resume_zone_norm: 0.05
@@ -55,7 +56,7 @@ follow:
   min_tilt_step_deg: 0.5
   pan_min_step_zone_norm: 0.12
   tilt_min_step_zone_norm: 0.12
-  max_pan_step_deg: 5
-  max_tilt_step_deg: 5
+  max_pan_step_deg: 3.0
+  max_tilt_step_deg: 3.0
   real_mode_requires_confirm: true
   dry_run_default: true

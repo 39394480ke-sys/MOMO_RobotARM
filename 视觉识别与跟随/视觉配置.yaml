@@ -45,6 +45,7 @@ follow:
   poll_interval_sec: 0.05
   http_timeout_sec: 1.0
   move_duration_sec: 0.25
+  speed_percent: 60
 
   pan_joint: shoulder_pan
   tilt_joint: elbow_flex
@@ -52,8 +53,8 @@ follow:
   pan_sign: 1.0
   tilt_sign: -1.0
 
-  pan_gain_deg_per_norm: 4
-  tilt_gain_deg_per_norm: 4
+  pan_gain_deg_per_norm: 4.8
+  tilt_gain_deg_per_norm: 4.8
 
   pan_dead_zone_norm: 0.03
   tilt_dead_zone_norm: 0.035
@@ -65,8 +66,8 @@ follow:
   pan_min_step_zone_norm: 0.12
   tilt_min_step_zone_norm: 0.12
 
-  max_pan_step_deg: 5
-  max_tilt_step_deg: 5
+  max_pan_step_deg: 3.0
+  max_tilt_step_deg: 3.0
 
   real_mode_requires_confirm: true
   dry_run_default: true

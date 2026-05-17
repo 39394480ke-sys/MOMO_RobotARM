@@ -1,6 +1,6 @@
 {
   "_meta": {
-    "generated_at_unix_s": 1778997843.423386,
+    "generated_at_unix_s": 1779024064.30229,
     "script": "标定程序_calibrate.py",
     "bounded_single_turn_joints": [
       "shoulder_pan",
@@ -29,8 +29,8 @@
     "range_min": 0,
     "range_max": 0,
     "operating_mode": 0,
-    "home_present_raw": 2249,
-    "home_present_wrapped_raw": 2249
+    "home_present_raw": 2164,
+    "home_present_wrapped_raw": 2164
   },
   "elbow_flex": {
     "show_name": "J3_肘部弯曲",
@@ -43,8 +43,8 @@
     "range_min": 0,
     "range_max": 0,
     "operating_mode": 0,
-    "home_present_raw": 363,
-    "home_present_wrapped_raw": 363
+    "home_present_raw": 1324,
+    "home_present_wrapped_raw": 1324
   },
   "wrist_roll": {
     "show_name": "J5_腕部旋转",
@@ -57,8 +57,8 @@
     "range_min": 0,
     "range_max": 0,
     "operating_mode": 0,
-    "home_present_raw": 2367,
-    "home_present_wrapped_raw": 2367
+    "home_present_raw": 2365,
+    "home_present_wrapped_raw": 2365
   },
   "shoulder_pan": {
     "show_name": "J1_底座旋转",
@@ -66,9 +66,9 @@
     "direction": 1,
     "id": 1,
     "drive_mode": 0,
-    "homing_offset": 35,
-    "range_min": 799,
-    "range_max": 3367,
+    "homing_offset": 57,
+    "range_min": 761,
+    "range_max": 3326,
     "operating_mode": 0,
     "zero_present_raw": 2047
   },
@@ -79,10 +79,10 @@
     "id": 4,
     "drive_mode": 0,
     "homing_offset": -1805,
-    "range_min": 395,
-    "range_max": 2191,
+    "range_min": 415,
+    "range_max": 2195,
     "operating_mode": 0,
-    "zero_present_raw": 2056
+    "zero_present_raw": 2026
   },
   "gripper": {
     "show_name": "夹爪_ID6",
@@ -91,9 +91,9 @@
     "id": 6,
     "drive_mode": 0,
     "homing_offset": 2047,
-    "range_min": 1465,
-    "range_max": 2946,
+    "range_min": 1450,
+    "range_max": 2911,
     "operating_mode": 0,
-    "zero_present_raw": 1465
+    "zero_present_raw": 1450
   }
 }

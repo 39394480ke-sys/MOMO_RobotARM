@@ -155,16 +155,11 @@ class 机械臂模型:
         return self.设置夹爪(float(self.夹爪配置.get("闭合值", 0)))
 
     def 回到默认姿态(self) -> 操作结果:
-        """回到配置中的默认姿态。"""
+        """回到配置中的默认姿态，保持夹爪当前开合。"""
 
         角度结果 = self.移动到关节角度(list(self.默认角度))
         if not 角度结果.成功:
             return 角度结果
-
-        默认夹爪 = float(self.夹爪配置.get("默认开合", 50))
-        夹爪结果 = self.设置夹爪(默认夹爪)
-        if not 夹爪结果.成功:
-            return 夹爪结果
 
         return 操作结果(True, "已回到默认姿态。")
 

@@ -431,6 +431,10 @@ class WebControlService:
         follow_cfg["latest_url"] = request.latest_url
         follow_cfg["robot_api_base"] = request.robot_api_base or follow_cfg.get("robot_api_base") or self._local_api_base()
         follow_cfg["confirm_text"] = request.confirm_text
+        if not request.dry_run and self.bridge.mode == "real":
+            real_step_limit = self._manual_step_limit()
+            follow_cfg["max_pan_step_deg"] = min(float(follow_cfg.get("max_pan_step_deg", real_step_limit)), real_step_limit)
+            follow_cfg["max_tilt_step_deg"] = min(float(follow_cfg.get("max_tilt_step_deg", real_step_limit)), real_step_limit)
         if request.pan_joint is not None:
             follow_cfg["pan_joint"] = request.pan_joint
         if request.tilt_joint is not None:

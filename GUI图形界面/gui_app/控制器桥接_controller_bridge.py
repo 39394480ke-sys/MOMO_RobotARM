@@ -306,12 +306,6 @@ class ControllerBridge:
                 }
                 speed_scale = max(0.1, min(1.0, self.motion_speed_percent / 100.0))
                 normalized = self._move_joints_interpolated(targets, duration_s=2.0 / speed_scale, update_hz=12.0, label="Home")
-                if normalized.get("ok") and hasattr(self.controller, "set_gripper"):
-                    try:
-                        gripper_default = float(self.controller.config.get("gripper", {}).get("默认开合", 50))
-                        self.controller.set_gripper(gripper_default)
-                    except Exception:
-                        pass
                 if normalized.get("ok"):
                     now = time.monotonic()
                     for joint, target in targets.items():

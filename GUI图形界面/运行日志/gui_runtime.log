@@ -4169,3 +4169,142 @@
 {"time": "2026-05-17 15:51:31", "level": "info", "event": "goto_pose", "message": "前往姿态 完全伸直完成。", "name": "完全伸直"}
 {"time": "2026-05-17 15:51:35", "level": "info", "event": "home", "message": "Home完成。", "slowed": true}
 {"time": "2026-05-17 15:51:44", "level": "info", "event": "delete_action", "message": "已删除动作：我的第一个真实动作", "name": "我的第一个真实动作"}
+{"time": "2026-05-17 21:18:37", "level": "info", "event": "set_mode", "message": "已切换模式：dry_run", "mode": "dry_run"}
+{"time": "2026-05-17 21:18:37", "level": "info", "event": "set_motion_speed", "message": "全局速度已设置为 100%。", "speed_percent": 100.0}
+{"time": "2026-05-17 21:18:38", "level": "info", "event": "set_mode", "message": "已切换模式：real", "mode": "real"}
+{"time": "2026-05-17 21:18:44", "level": "info", "event": "connect", "message": "已连接真实机械臂。已加载标定文件：标定文件.json。当前状态已根据 zero_present_raw / home_present_raw 计算。如果机械零点不正确，请运行 标定程序_calibrate.py。", "mode": "real"}
+{"time": "2026-05-17 21:18:45", "level": "warning", "event": "release_torque", "message": "力矩已释放。请扶稳机械臂。", "mode": "real"}
+{"time": "2026-05-17 21:21:38", "level": "info", "event": "set_mode", "message": "已切换模式：dry_run", "mode": "dry_run"}
+{"time": "2026-05-17 21:21:38", "level": "info", "event": "set_motion_speed", "message": "全局速度已设置为 100%。", "speed_percent": 100.0}
+{"time": "2026-05-17 21:21:38", "level": "info", "event": "set_mode", "message": "已切换模式：real", "mode": "real"}
+{"time": "2026-05-17 21:21:45", "level": "info", "event": "connect", "message": "已连接真实机械臂。已加载标定文件：标定文件.json。当前状态已根据 zero_present_raw / home_present_raw 计算。如果机械零点不正确，请运行 标定程序_calibrate.py。", "mode": "real"}
+{"time": "2026-05-17 21:22:01", "level": "info", "event": "goto_pose", "message": "前往姿态 完全伸直完成。", "name": "完全伸直"}
+{"time": "2026-05-17 21:22:10", "level": "info", "event": "home", "message": "Home完成。", "slowed": true}
+{"time": "2026-05-17 21:22:17", "level": "info", "event": "set_gripper", "message": "夹爪已设置为 100.0%。", "open_percent": 100.0}
+{"time": "2026-05-17 21:22:18", "level": "info", "event": "set_gripper", "message": "夹爪已设置为 0.0%。", "open_percent": 0.0}
+{"time": "2026-05-17 21:22:19", "level": "info", "event": "set_gripper", "message": "夹爪已设置为 87.0%。", "open_percent": 87.0}
+{"time": "2026-05-17 21:22:21", "level": "info", "event": "set_gripper", "message": "夹爪已设置为 20.0%。", "open_percent": 20.0}
+{"time": "2026-05-17 21:22:22", "level": "info", "event": "set_gripper", "message": "夹爪已设置为 20.0%。", "open_percent": 20.0}
+{"time": "2026-05-17 21:22:23", "level": "info", "event": "set_gripper", "message": "夹爪已设置为 20.0%。", "open_percent": 20.0}
+{"time": "2026-05-17 21:24:01", "level": "info", "event": "set_gripper", "message": "夹爪已设置为 100.0%。", "open_percent": 100.0}
+{"time": "2026-05-17 21:24:16", "level": "info", "event": "move_joint_delta", "message": "真实移动命令已写入舵机。", "joint_key": "wrist_flex", "delta_deg": 1.0, "current_deg": -10.72265625, "base_deg": -11.602274017847648, "target_deg": -10.602274017847648}
+{"time": "2026-05-17 21:24:17", "level": "info", "event": "move_joint_delta", "message": "真实移动命令已写入舵机。", "joint_key": "wrist_flex", "delta_deg": -1.0, "current_deg": -10.634765625, "base_deg": -10.602274017847648, "target_deg": -11.602274017847648}
+{"time": "2026-05-17 21:24:18", "level": "info", "event": "move_joint_delta", "message": "真实移动命令已写入舵机。", "joint_key": "wrist_flex", "delta_deg": -1.0, "current_deg": -10.634765625, "base_deg": -11.602274017847648, "target_deg": -12.602274017847648}
+{"time": "2026-05-17 21:24:28", "level": "info", "event": "move_joint_delta", "message": "真实移动命令已写入舵机。", "joint_key": "wrist_flex", "delta_deg": 1.7999999999999998, "current_deg": -11.689453125, "base_deg": -12.602274017847648, "target_deg": -10.802274017847648}
+{"time": "2026-05-17 21:24:28", "level": "info", "event": "move_joint_delta", "message": "真实移动命令已写入舵机。", "joint_key": "wrist_flex", "delta_deg": 1.7999999999999998, "current_deg": -10.810546875, "base_deg": -10.802274017847648, "target_deg": -9.002274017847647}
+{"time": "2026-05-17 21:24:29", "level": "info", "event": "move_joint_delta", "message": "真实移动命令已写入舵机。", "joint_key": "wrist_flex", "delta_deg": 1.7999999999999998, "current_deg": -9.931640625, "base_deg": -9.002274017847647, "target_deg": -7.202274017847647}
+{"time": "2026-05-17 21:24:29", "level": "info", "event": "move_joint_delta", "message": "真实移动命令已写入舵机。", "joint_key": "wrist_flex", "delta_deg": 1.7999999999999998, "current_deg": -8.0859375, "base_deg": -7.202274017847647, "target_deg": -5.402274017847647}
+{"time": "2026-05-17 21:24:29", "level": "info", "event": "move_joint_delta", "message": "真实移动命令已写入舵机。", "joint_key": "wrist_flex", "delta_deg": 1.7999999999999998, "current_deg": -6.416015625, "base_deg": -5.402274017847647, "target_deg": -3.6022740178476473}
+{"time": "2026-05-17 21:24:29", "level": "info", "event": "move_joint_delta", "message": "真实移动命令已写入舵机。", "joint_key": "wrist_flex", "delta_deg": 1.7999999999999998, "current_deg": -4.306640625, "base_deg": -3.6022740178476473, "target_deg": -1.8022740178476475}
+{"time": "2026-05-17 21:24:29", "level": "info", "event": "move_joint_delta", "message": "真实移动命令已写入舵机。", "joint_key": "wrist_flex", "delta_deg": 1.7999999999999998, "current_deg": -2.548828125, "base_deg": -1.8022740178476475, "target_deg": -0.0022740178476476913}
+{"time": "2026-05-17 21:24:29", "level": "info", "event": "move_joint_delta", "message": "真实移动命令已写入舵机。", "joint_key": "wrist_flex", "delta_deg": 1.7999999999999998, "current_deg": -0.703125, "base_deg": -0.0022740178476476913, "target_deg": 1.7977259821523521}
+{"time": "2026-05-17 21:24:29", "level": "info", "event": "move_joint_delta", "message": "真实移动命令已写入舵机。", "joint_key": "wrist_flex", "delta_deg": 1.7999999999999998, "current_deg": 1.0546875, "base_deg": 1.7977259821523521, "target_deg": 3.597725982152352}
+{"time": "2026-05-17 21:24:29", "level": "info", "event": "move_joint_delta", "message": "真实移动命令已写入舵机。", "joint_key": "wrist_flex", "delta_deg": 1.7999999999999998, "current_deg": 3.251953125, "base_deg": 3.597725982152352, "target_deg": 5.397725982152352}
+{"time": "2026-05-17 21:24:56", "level": "info", "event": "move_joint_delta", "message": "真实移动命令已写入舵机。", "joint_key": "wrist_flex", "delta_deg": 1.7999999999999998, "current_deg": -13.18359375, "base_deg": -14.223616086713097, "target_deg": -12.423616086713096}
+{"time": "2026-05-17 21:24:56", "level": "info", "event": "move_joint_delta", "message": "真实移动命令已写入舵机。", "joint_key": "wrist_flex", "delta_deg": 1.7999999999999998, "current_deg": -12.83203125, "base_deg": -12.423616086713096, "target_deg": -10.623616086713096}
+{"time": "2026-05-17 21:24:56", "level": "info", "event": "move_joint_delta", "message": "真实移动命令已写入舵机。", "joint_key": "wrist_flex", "delta_deg": 1.7999999999999998, "current_deg": -10.72265625, "base_deg": -10.623616086713096, "target_deg": -8.823616086713095}
+{"time": "2026-05-17 21:24:56", "level": "info", "event": "move_joint_delta", "message": "真实移动命令已写入舵机。", "joint_key": "wrist_flex", "delta_deg": 1.7999999999999998, "current_deg": -9.66796875, "base_deg": -8.823616086713095, "target_deg": -7.023616086713095}
+{"time": "2026-05-17 21:24:57", "level": "info", "event": "move_joint_delta", "message": "真实移动命令已写入舵机。", "joint_key": "wrist_flex", "delta_deg": 1.7999999999999998, "current_deg": -7.91015625, "base_deg": -7.023616086713095, "target_deg": -5.223616086713095}
+{"time": "2026-05-17 21:24:57", "level": "info", "event": "move_joint_delta", "message": "真实移动命令已写入舵机。", "joint_key": "wrist_flex", "delta_deg": 1.7999999999999998, "current_deg": -6.064453125, "base_deg": -5.223616086713095, "target_deg": -3.4236160867130954}
+{"time": "2026-05-17 21:24:57", "level": "info", "event": "move_joint_delta", "message": "真实移动命令已写入舵机。", "joint_key": "wrist_flex", "delta_deg": 1.7999999999999998, "current_deg": -3.8671875, "base_deg": -3.4236160867130954, "target_deg": -1.6236160867130955}
+{"time": "2026-05-17 21:24:57", "level": "info", "event": "move_joint_delta", "message": "真实移动命令已写入舵机。", "joint_key": "wrist_flex", "delta_deg": 1.7999999999999998, "current_deg": -2.548828125, "base_deg": -1.6236160867130955, "target_deg": 0.17638391328690428}
+{"time": "2026-05-17 21:24:57", "level": "info", "event": "move_joint_delta", "message": "真实移动命令已写入舵机。", "joint_key": "wrist_flex", "delta_deg": 1.7999999999999998, "current_deg": -0.439453125, "base_deg": 0.17638391328690428, "target_deg": 1.976383913286904}
+{"time": "2026-05-17 21:25:16", "level": "info", "event": "move_joint_delta", "message": "真实移动命令已写入舵机。", "joint_key": "wrist_flex", "delta_deg": 1.7999999999999998, "current_deg": -13.18359375, "base_deg": -14.537652316635434, "target_deg": -12.737652316635433}
+{"time": "2026-05-17 21:25:16", "level": "info", "event": "move_joint_delta", "message": "真实移动命令已写入舵机。", "joint_key": "wrist_flex", "delta_deg": 1.7999999999999998, "current_deg": -12.83203125, "base_deg": -12.737652316635433, "target_deg": -10.937652316635432}
+{"time": "2026-05-17 21:25:16", "level": "info", "event": "move_joint_delta", "message": "真实移动命令已写入舵机。", "joint_key": "wrist_flex", "delta_deg": 1.7999999999999998, "current_deg": -11.6015625, "base_deg": -10.937652316635432, "target_deg": -9.137652316635432}
+{"time": "2026-05-17 21:25:16", "level": "info", "event": "move_joint_delta", "message": "真实移动命令已写入舵机。", "joint_key": "wrist_flex", "delta_deg": 1.7999999999999998, "current_deg": -9.052734375, "base_deg": -9.137652316635432, "target_deg": -7.337652316635432}
+{"time": "2026-05-17 21:25:16", "level": "info", "event": "move_joint_delta", "message": "真实移动命令已写入舵机。", "joint_key": "wrist_flex", "delta_deg": 1.7999999999999998, "current_deg": -8.173828125, "base_deg": -7.337652316635432, "target_deg": -5.537652316635432}
+{"time": "2026-05-17 21:25:16", "level": "info", "event": "move_joint_delta", "message": "真实移动命令已写入舵机。", "joint_key": "wrist_flex", "delta_deg": 1.7999999999999998, "current_deg": -6.328125, "base_deg": -5.537652316635432, "target_deg": -3.7376523166354323}
+{"time": "2026-05-17 21:25:16", "level": "info", "event": "move_joint_delta", "message": "真实移动命令已写入舵机。", "joint_key": "wrist_flex", "delta_deg": 1.7999999999999998, "current_deg": -4.39453125, "base_deg": -3.7376523166354323, "target_deg": -1.9376523166354325}
+{"time": "2026-05-17 21:25:16", "level": "info", "event": "move_joint_delta", "message": "真实移动命令已写入舵机。", "joint_key": "wrist_flex", "delta_deg": 1.7999999999999998, "current_deg": -2.548828125, "base_deg": -1.9376523166354325, "target_deg": -0.13765231663543265}
+{"time": "2026-05-17 21:25:16", "level": "info", "event": "move_joint_delta", "message": "真实移动命令已写入舵机。", "joint_key": "wrist_flex", "delta_deg": 1.7999999999999998, "current_deg": -0.3515625, "base_deg": -0.13765231663543265, "target_deg": 1.6623476833645672}
+{"time": "2026-05-17 21:25:17", "level": "info", "event": "move_joint_delta", "message": "真实移动命令已写入舵机。", "joint_key": "wrist_flex", "delta_deg": 1.7999999999999998, "current_deg": 0.87890625, "base_deg": 1.6623476833645672, "target_deg": 3.462347683364567}
+{"time": "2026-05-17 21:25:17", "level": "info", "event": "move_joint_delta", "message": "真实移动命令已写入舵机。", "joint_key": "wrist_flex", "delta_deg": 1.7999999999999998, "current_deg": 2.900390625, "base_deg": 3.462347683364567, "target_deg": 5.262347683364567}
+{"time": "2026-05-17 21:25:17", "level": "info", "event": "move_joint_delta", "message": "真实移动命令已写入舵机。", "joint_key": "wrist_flex", "delta_deg": 1.7999999999999998, "current_deg": 4.921875, "base_deg": 5.262347683364567, "target_deg": 7.062347683364567}
+{"time": "2026-05-17 21:25:17", "level": "info", "event": "move_joint_delta", "message": "真实移动命令已写入舵机。", "joint_key": "wrist_flex", "delta_deg": 1.7999999999999998, "current_deg": 6.943359375, "base_deg": 7.062347683364567, "target_deg": 8.862347683364566}
+{"time": "2026-05-17 21:25:17", "level": "info", "event": "move_joint_delta", "message": "真实移动命令已写入舵机。", "joint_key": "wrist_flex", "delta_deg": 1.7999999999999998, "current_deg": 7.998046875, "base_deg": 8.862347683364566, "target_deg": 10.662347683364565}
+{"time": "2026-05-17 21:25:17", "level": "info", "event": "move_joint_delta", "message": "真实移动命令已写入舵机。", "joint_key": "wrist_flex", "delta_deg": 1.7999999999999998, "current_deg": 10.107421875, "base_deg": 10.662347683364565, "target_deg": 12.462347683364566}
+{"time": "2026-05-17 21:25:17", "level": "info", "event": "move_joint_delta", "message": "真实移动命令已写入舵机。", "joint_key": "wrist_flex", "delta_deg": 1.7999999999999998, "current_deg": 12.216796875, "base_deg": 12.462347683364566, "target_deg": 14.262347683364567}
+{"time": "2026-05-17 21:25:17", "level": "info", "event": "move_joint_delta", "message": "真实移动命令已写入舵机。", "joint_key": "wrist_flex", "delta_deg": 1.7999999999999998, "current_deg": 14.23828125, "base_deg": 14.262347683364567, "target_deg": 16.062347683364568}
+{"time": "2026-05-17 21:25:17", "level": "info", "event": "move_joint_delta", "message": "真实移动命令已写入舵机。", "joint_key": "wrist_flex", "delta_deg": 1.7999999999999998, "current_deg": 15.99609375, "base_deg": 16.062347683364568, "target_deg": 17.86234768336457}
+{"time": "2026-05-17 21:25:20", "level": "info", "event": "move_joint_delta", "message": "真实移动命令已写入舵机。", "joint_key": "shoulder_pan", "delta_deg": -1.7999999999999998, "current_deg": -15.380859375, "base_deg": -16.030794571131274, "target_deg": -17.830794571131275}
+{"time": "2026-05-17 21:25:20", "level": "info", "event": "move_joint_delta", "message": "真实移动命令已写入舵机。", "joint_key": "shoulder_pan", "delta_deg": -1.7999999999999998, "current_deg": -15.64453125, "base_deg": -17.830794571131275, "target_deg": -19.630794571131275}
+{"time": "2026-05-17 21:25:21", "level": "info", "event": "move_joint_delta", "message": "真实移动命令已写入舵机。", "joint_key": "shoulder_pan", "delta_deg": 1.7999999999999998, "current_deg": -19.248046875, "base_deg": -19.630794571131275, "target_deg": -17.830794571131275}
+{"time": "2026-05-17 21:25:21", "level": "info", "event": "move_joint_delta", "message": "真实移动命令已写入舵机。", "joint_key": "shoulder_pan", "delta_deg": 1.7999999999999998, "current_deg": -19.16015625, "base_deg": -17.830794571131275, "target_deg": -16.030794571131274}
+{"time": "2026-05-17 21:25:21", "level": "info", "event": "move_joint_delta", "message": "真实移动命令已写入舵机。", "joint_key": "shoulder_pan", "delta_deg": 1.7999999999999998, "current_deg": -18.544921875, "base_deg": -16.030794571131274, "target_deg": -14.230794571131273}
+{"time": "2026-05-17 21:25:21", "level": "info", "event": "move_joint_delta", "message": "真实移动命令已写入舵机。", "joint_key": "shoulder_pan", "delta_deg": 1.7999999999999998, "current_deg": -17.2265625, "base_deg": -14.230794571131273, "target_deg": -12.430794571131273}
+{"time": "2026-05-17 21:25:21", "level": "info", "event": "move_joint_delta", "message": "真实移动命令已写入舵机。", "joint_key": "shoulder_pan", "delta_deg": 1.7999999999999998, "current_deg": -15.029296875, "base_deg": -12.430794571131273, "target_deg": -10.630794571131272}
+{"time": "2026-05-17 21:25:21", "level": "info", "event": "move_joint_delta", "message": "真实移动命令已写入舵机。", "joint_key": "shoulder_pan", "delta_deg": 1.7999999999999998, "current_deg": -12.744140625, "base_deg": -10.630794571131272, "target_deg": -8.830794571131271}
+{"time": "2026-05-17 21:25:22", "level": "info", "event": "move_joint_delta", "message": "真实移动命令已写入舵机。", "joint_key": "shoulder_pan", "delta_deg": 1.7999999999999998, "current_deg": -10.546875, "base_deg": -8.830794571131271, "target_deg": -7.030794571131271}
+{"time": "2026-05-17 21:25:23", "level": "info", "event": "move_joint_delta", "message": "真实移动命令已写入舵机。", "joint_key": "wrist_flex", "delta_deg": -1.7999999999999998, "current_deg": 18.10546875, "base_deg": 17.86234768336457, "target_deg": 16.062347683364568}
+{"time": "2026-05-17 21:25:23", "level": "info", "event": "move_joint_delta", "message": "真实移动命令已写入舵机。", "joint_key": "wrist_flex", "delta_deg": -1.7999999999999998, "current_deg": 18.10546875, "base_deg": 16.062347683364568, "target_deg": 14.262347683364567}
+{"time": "2026-05-17 21:25:23", "level": "info", "event": "move_joint_delta", "message": "真实移动命令已写入舵机。", "joint_key": "wrist_flex", "delta_deg": -1.7999999999999998, "current_deg": 18.017578125, "base_deg": 14.262347683364567, "target_deg": 12.462347683364566}
+{"time": "2026-05-17 21:25:24", "level": "info", "event": "move_joint_delta", "message": "真实移动命令已写入舵机。", "joint_key": "wrist_flex", "delta_deg": -1.7999999999999998, "current_deg": 14.501953125, "base_deg": 12.462347683364566, "target_deg": 10.662347683364565}
+{"time": "2026-05-17 21:25:24", "level": "info", "event": "move_joint_delta", "message": "真实移动命令已写入舵机。", "joint_key": "wrist_flex", "delta_deg": -1.7999999999999998, "current_deg": 13.798828125, "base_deg": 10.662347683364565, "target_deg": 8.862347683364565}
+{"time": "2026-05-17 21:25:25", "level": "info", "event": "move_joint_delta", "message": "真实移动命令已写入舵机。", "joint_key": "wrist_flex", "delta_deg": 1.7999999999999998, "current_deg": 10.72265625, "base_deg": 8.862347683364565, "target_deg": 10.662347683364565}
+{"time": "2026-05-17 21:25:25", "level": "info", "event": "move_joint_delta", "message": "真实移动命令已写入舵机。", "joint_key": "wrist_flex", "delta_deg": 1.7999999999999998, "current_deg": 10.986328125, "base_deg": 10.662347683364565, "target_deg": 12.462347683364566}
+{"time": "2026-05-17 21:25:25", "level": "info", "event": "move_joint_delta", "message": "真实移动命令已写入舵机。", "joint_key": "wrist_flex", "delta_deg": 1.7999999999999998, "current_deg": 12.392578125, "base_deg": 12.462347683364566, "target_deg": 14.262347683364567}
+{"time": "2026-05-17 21:25:25", "level": "info", "event": "move_joint_delta", "message": "真实移动命令已写入舵机。", "joint_key": "wrist_flex", "delta_deg": 1.7999999999999998, "current_deg": 13.88671875, "base_deg": 14.262347683364567, "target_deg": 16.062347683364568}
+{"time": "2026-05-17 21:25:25", "level": "info", "event": "move_joint_delta", "message": "真实移动命令已写入舵机。", "joint_key": "wrist_flex", "delta_deg": 1.7999999999999998, "current_deg": 16.171875, "base_deg": 16.062347683364568, "target_deg": 17.86234768336457}
+{"time": "2026-05-17 21:25:25", "level": "info", "event": "move_joint_delta", "message": "真实移动命令已写入舵机。", "joint_key": "wrist_flex", "delta_deg": 1.7999999999999998, "current_deg": 16.787109375, "base_deg": 17.86234768336457, "target_deg": 19.66234768336457}
+{"time": "2026-05-17 21:25:25", "level": "info", "event": "move_joint_delta", "message": "真实移动命令已写入舵机。", "joint_key": "wrist_flex", "delta_deg": 1.7999999999999998, "current_deg": 19.248046875, "base_deg": 19.66234768336457, "target_deg": 21.46234768336457}
+{"time": "2026-05-17 21:25:25", "level": "info", "event": "move_joint_delta", "message": "真实移动命令已写入舵机。", "joint_key": "wrist_flex", "delta_deg": 1.7999999999999998, "current_deg": 21.357421875, "base_deg": 21.46234768336457, "target_deg": 23.26234768336457}
+{"time": "2026-05-17 21:25:25", "level": "info", "event": "move_joint_delta", "message": "真实移动命令已写入舵机。", "joint_key": "wrist_flex", "delta_deg": 1.7999999999999998, "current_deg": 23.291015625, "base_deg": 23.26234768336457, "target_deg": 25.06234768336457}
+{"time": "2026-05-17 21:25:25", "level": "info", "event": "move_joint_delta", "message": "真实移动命令已写入舵机。", "joint_key": "wrist_flex", "delta_deg": 1.7999999999999998, "current_deg": 24.521484375, "base_deg": 25.06234768336457, "target_deg": 26.862347683364572}
+{"time": "2026-05-17 21:25:26", "level": "info", "event": "move_joint_delta", "message": "真实移动命令已写入舵机。", "joint_key": "wrist_flex", "delta_deg": 1.7999999999999998, "current_deg": 26.806640625, "base_deg": 26.862347683364572, "target_deg": 28.662347683364573}
+{"time": "2026-05-17 21:25:26", "level": "info", "event": "move_joint_delta", "message": "真实移动命令已写入舵机。", "joint_key": "wrist_flex", "delta_deg": 1.7999999999999998, "current_deg": 28.4765625, "base_deg": 28.662347683364573, "target_deg": 30.462347683364573}
+{"time": "2026-05-17 21:25:26", "level": "info", "event": "move_joint_delta", "message": "真实移动命令已写入舵机。", "joint_key": "wrist_flex", "delta_deg": 1.7999999999999998, "current_deg": 30.5859375, "base_deg": 30.462347683364573, "target_deg": 32.262347683364574}
+{"time": "2026-05-17 21:25:26", "level": "info", "event": "move_joint_delta", "message": "真实移动命令已写入舵机。", "joint_key": "wrist_flex", "delta_deg": 1.7999999999999998, "current_deg": 31.904296875, "base_deg": 32.262347683364574, "target_deg": 34.06234768336457}
+{"time": "2026-05-17 21:25:26", "level": "info", "event": "move_joint_delta", "message": "真实移动命令已写入舵机。", "joint_key": "wrist_flex", "delta_deg": 1.7999999999999998, "current_deg": 34.013671875, "base_deg": 34.06234768336457, "target_deg": 35.86234768336457}
+{"time": "2026-05-17 21:25:26", "level": "info", "event": "move_joint_delta", "message": "真实移动命令已写入舵机。", "joint_key": "wrist_flex", "delta_deg": 1.7999999999999998, "current_deg": 35.771484375, "base_deg": 35.86234768336457, "target_deg": 37.662347683364565}
+{"time": "2026-05-17 21:25:26", "level": "info", "event": "move_joint_delta", "message": "真实移动命令已写入舵机。", "joint_key": "wrist_flex", "delta_deg": 1.7999999999999998, "current_deg": 37.96875, "base_deg": 37.662347683364565, "target_deg": 39.46234768336456}
+{"time": "2026-05-17 21:25:27", "level": "info", "event": "move_joint_delta", "message": "真实移动命令已写入舵机。", "joint_key": "wrist_flex", "delta_deg": 1.7999999999999998, "current_deg": 39.287109375, "base_deg": 39.46234768336456, "target_deg": 41.26234768336456}
+{"time": "2026-05-17 21:25:29", "level": "info", "event": "set_gripper", "message": "夹爪已设置为 87.0%。", "open_percent": 87.0}
+{"time": "2026-05-17 21:25:30", "level": "info", "event": "set_gripper", "message": "夹爪已设置为 85.0%。", "open_percent": 85.0}
+{"time": "2026-05-17 21:25:31", "level": "info", "event": "set_gripper", "message": "夹爪已设置为 85.0%。", "open_percent": 85.0}
+{"time": "2026-05-17 21:25:31", "level": "info", "event": "set_gripper", "message": "夹爪已设置为 85.0%。", "open_percent": 85.0}
+{"time": "2026-05-17 21:25:32", "level": "info", "event": "set_gripper", "message": "夹爪已设置为 85.0%。", "open_percent": 85.0}
+{"time": "2026-05-17 21:25:32", "level": "info", "event": "set_gripper", "message": "夹爪已设置为 85.0%。", "open_percent": 85.0}
+{"time": "2026-05-17 21:25:37", "level": "info", "event": "set_gripper", "message": "夹爪已设置为 85.0%。", "open_percent": 85.0}
+{"time": "2026-05-17 21:25:38", "level": "info", "event": "set_gripper", "message": "夹爪已设置为 85.0%。", "open_percent": 85.0}
+{"time": "2026-05-17 21:25:39", "level": "info", "event": "set_gripper", "message": "夹爪已设置为 76.0%。", "open_percent": 76.0}
+{"time": "2026-05-17 21:25:39", "level": "info", "event": "set_gripper", "message": "夹爪已设置为 77.0%。", "open_percent": 77.0}
+{"time": "2026-05-17 21:25:40", "level": "info", "event": "set_gripper", "message": "夹爪已设置为 77.0%。", "open_percent": 77.0}
+{"time": "2026-05-17 21:25:40", "level": "info", "event": "set_gripper", "message": "夹爪已设置为 77.0%。", "open_percent": 77.0}
+{"time": "2026-05-17 21:25:41", "level": "info", "event": "set_gripper", "message": "夹爪已设置为 77.0%。", "open_percent": 77.0}
+{"time": "2026-05-17 21:25:41", "level": "info", "event": "set_gripper", "message": "夹爪已设置为 77.0%。", "open_percent": 77.0}
+{"time": "2026-05-17 21:25:42", "level": "info", "event": "set_gripper", "message": "夹爪已设置为 66.0%。", "open_percent": 66.0}
+{"time": "2026-05-17 21:25:42", "level": "info", "event": "set_gripper", "message": "夹爪已设置为 66.0%。", "open_percent": 66.0}
+{"time": "2026-05-17 21:25:42", "level": "info", "event": "set_gripper", "message": "夹爪已设置为 66.0%。", "open_percent": 66.0}
+{"time": "2026-05-17 21:25:43", "level": "info", "event": "set_gripper", "message": "夹爪已设置为 54.0%。", "open_percent": 54.0}
+{"time": "2026-05-17 21:26:21", "level": "info", "event": "home", "message": "Home完成。", "slowed": true}
+{"time": "2026-05-17 21:26:25", "level": "warning", "event": "stop", "message": "已保持当前位置。"}
+{"time": "2026-05-17 21:26:31", "level": "warning", "event": "release_torque", "message": "力矩已释放。请扶稳机械臂。", "mode": "real"}
+{"time": "2026-05-17 21:29:55", "level": "info", "event": "set_mode", "message": "已切换模式：dry_run", "mode": "dry_run"}
+{"time": "2026-05-17 21:29:55", "level": "info", "event": "connect", "message": "连接成功，已加载标定文件并读取 dry-run 舵机状态。", "mode": "dry_run"}
+{"time": "2026-05-17 21:29:59", "level": "info", "event": "home", "message": "Home完成。", "slowed": true}
+{"time": "2026-05-17 21:29:59", "level": "warning", "event": "stop", "message": "已保持当前位置。"}
+{"time": "2026-05-17 21:29:59", "level": "info", "event": "disconnect", "message": "已断开。", "mode": "dry_run"}
+{"time": "2026-05-17 21:32:59", "level": "info", "event": "set_mode", "message": "已切换模式：dry_run", "mode": "dry_run"}
+{"time": "2026-05-17 21:32:59", "level": "info", "event": "set_motion_speed", "message": "全局速度已设置为 100%。", "speed_percent": 100.0}
+{"time": "2026-05-17 21:33:00", "level": "info", "event": "set_mode", "message": "已切换模式：real", "mode": "real"}
+{"time": "2026-05-17 21:33:03", "level": "info", "event": "connect", "message": "已连接真实机械臂。已加载标定文件：标定文件.json。当前状态已根据 zero_present_raw / home_present_raw 计算。如果机械零点不正确，请运行 标定程序_calibrate.py。", "mode": "real"}
+{"time": "2026-05-17 21:33:04", "level": "warning", "event": "release_torque", "message": "力矩已释放。请扶稳机械臂。", "mode": "real"}
+{"time": "2026-05-17 21:34:08", "level": "info", "event": "set_gripper", "message": "夹爪已设置为 68.0%。", "open_percent": 68.0}
+{"time": "2026-05-17 21:34:08", "level": "info", "event": "set_gripper", "message": "夹爪已设置为 75.0%。", "open_percent": 75.0}
+{"time": "2026-05-17 21:34:09", "level": "info", "event": "set_gripper", "message": "夹爪已设置为 68.0%。", "open_percent": 68.0}
+{"time": "2026-05-17 21:34:10", "level": "info", "event": "set_gripper", "message": "夹爪已设置为 68.0%。", "open_percent": 68.0}
+{"time": "2026-05-17 21:34:14", "level": "info", "event": "set_gripper", "message": "夹爪已设置为 62.0%。", "open_percent": 62.0}
+{"time": "2026-05-17 21:34:26", "level": "info", "event": "home", "message": "Home完成。", "slowed": true}
+{"time": "2026-05-17 21:34:34", "level": "info", "event": "set_gripper", "message": "夹爪已设置为 0.0%。", "open_percent": 0.0}
+{"time": "2026-05-17 21:35:05", "level": "info", "event": "start_recording", "message": "已开始动作录制：夹取杯子", "name": "夹取杯子", "source": "gui_record"}
+{"time": "2026-05-17 21:35:08", "level": "info", "event": "capture_recording_pose", "message": "已采集录制帧 1。", "name": "夹取杯子", "pose_index": 1}
+{"time": "2026-05-17 21:35:13", "level": "warning", "event": "release_torque", "message": "力矩已释放。请扶稳机械臂。", "mode": "real"}
+{"time": "2026-05-17 21:35:48", "level": "info", "event": "capture_recording_pose", "message": "已采集录制帧 2。", "name": "夹取杯子", "pose_index": 2}
+{"time": "2026-05-17 21:36:11", "level": "info", "event": "capture_recording_pose", "message": "已采集录制帧 3。", "name": "夹取杯子", "pose_index": 3}
+{"time": "2026-05-17 21:36:30", "level": "info", "event": "capture_recording_pose", "message": "已采集录制帧 4。", "name": "夹取杯子", "pose_index": 4}
+{"time": "2026-05-17 21:36:43", "level": "info", "event": "home", "message": "Home完成。", "slowed": true}
+{"time": "2026-05-17 21:36:45", "level": "info", "event": "capture_recording_pose", "message": "已采集录制帧 5。", "name": "夹取杯子", "pose_index": 5}
+{"time": "2026-05-17 21:36:48", "level": "info", "event": "save_recording_action", "message": "动作录制已保存：夹取杯子", "name": "夹取杯子", "pose_count": 5, "path": "/Users/ke/Library/Mobile Documents/com~apple~CloudDocs/Code/机械臂/动作录制与回放增强/动作库/夹取杯子.json"}
+{"time": "2026-05-17 21:37:25", "level": "warning", "event": "play_action", "message": "动作播放未完成：夹取杯子", "name": "夹取杯子"}
+{"time": "2026-05-17 21:38:04", "level": "info", "event": "home", "message": "Home完成。", "slowed": true}

@@ -246,18 +246,13 @@ class RealArmController:
         return self.move_joint(joint_key, target_deg)
 
     def move_home(self) -> 操作结果:
-        """回到配置默认姿态。"""
+        """回到配置默认姿态，保持夹爪当前开合。"""
 
         targets = {
             joint_key: float(self.joint_config_by_key[joint_key].get("默认角度", 0))
             for joint_key in self.joint_order
         }
-        result = self.move_joints(targets)
-        if result.成功:
-            gripper_result = self.set_gripper(float(self.config.get("gripper", {}).get("默认开合", 50)))
-            if not gripper_result.成功:
-                return gripper_result
-        return result
+        return self.move_joints(targets)
 
     def set_gripper(self, open_value: float) -> 操作结果:
         """设置夹爪开合，0 到 100。"""

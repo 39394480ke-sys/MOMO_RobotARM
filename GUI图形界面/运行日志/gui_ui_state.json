@@ -2,7 +2,7 @@
   "mode": "real",
   "serial_port": "/dev/tty.usbmodem5B141127021",
   "speed_percent": 100,
-  "nav_index": 5,
+  "nav_index": 3,
   "geometry": [
     0,
     33,

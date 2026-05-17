@@ -17,7 +17,7 @@ from agent.语音播报_tts import speak_text
 def main() -> None:
     config = load_config(BASE_DIR / "Agent配置.yaml")
     try:
-        speak_text("你好，我是 MomoAgent 语音助手。", config)
+        speak_text("你好，我是机械臂语音助手。", config)
     except Exception as exc:
         print(f"TTS 不可用：{exc}")
 

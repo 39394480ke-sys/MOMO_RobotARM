@@ -91,7 +91,7 @@ def load_config(config_path: str | Path) -> dict[str, Any]:
         try:
             import yaml  # type: ignore
         except ImportError as error:
-            raise RuntimeError("读取 YAML 配置需要安装 pyyaml。请在 momo_rebot 环境内运行脚本。") from error
+            raise RuntimeError("读取 YAML 配置需要安装 pyyaml。请在 arm_rebot 环境内运行脚本。") from error
         data = yaml.safe_load(text)
     if not isinstance(data, dict):
         raise ValueError("配置文件最外层必须是对象。")
@@ -107,7 +107,7 @@ def import_feetech_classes():
     except ImportError as error:
         raise RuntimeError(
             "缺少真实舵机依赖。请先执行：\n"
-            "  mamba activate momo_rebot\n"
+            "  mamba activate arm_rebot\n"
             "  python -m pip install lerobot feetech-servo-sdk pyserial pyyaml\n"
             "dry-run 主程序不需要这些依赖，但标定程序和真实控制需要。"
         ) from error

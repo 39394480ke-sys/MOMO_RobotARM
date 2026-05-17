@@ -1,5 +1,5 @@
 {
-  "schema_version": "momo_replay_sequence_v1",
+  "schema_version": "arm_replay_sequence_v1",
   "name": "我的测试动作",
   "description": "通过示教模式录制的动作",
   "created_at": "2026-05-16 17:09:58",

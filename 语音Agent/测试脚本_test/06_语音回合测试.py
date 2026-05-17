@@ -1,4 +1,4 @@
-"""录音 -> STT -> ask -> TTS。可用 MOMO_MOCK_STT_TEXT 跳过真实 STT 服务。"""
+"""录音 -> STT -> ask -> TTS。可用 ARM_MOCK_STT_TEXT 跳过真实 STT 服务。"""
 
 from __future__ import annotations
 
@@ -18,8 +18,8 @@ from agent.配置_config import load_config
 def main() -> None:
     config = load_config(BASE_DIR / "Agent配置.yaml")
     app = AgentApp(config)
-    if os.environ.get("MOMO_MOCK_STT_TEXT"):
-        app.ask_text(os.environ["MOMO_MOCK_STT_TEXT"], speak=bool(config.get("tts", {}).get("enabled", True)))
+    if os.environ.get("ARM_MOCK_STT_TEXT"):
+        app.ask_text(os.environ["ARM_MOCK_STT_TEXT"], speak=bool(config.get("tts", {}).get("enabled", True)))
         return
     app.run_voice_turn(speak=bool(config.get("tts", {}).get("enabled", True)))
 

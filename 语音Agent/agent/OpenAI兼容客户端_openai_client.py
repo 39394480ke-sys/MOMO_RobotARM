@@ -148,7 +148,7 @@ class OpenAICompatibleAgentClient:
         path_value = str(self.agent_cfg.get("system_prompt_path", "prompts/system_prompt.md"))
         path = resolve_path(path_value, config_base_dir(self.config))
         if not path.exists():
-            return "你是我的 MomoAgent 机械臂语音助手，只能通过安全工具控制机械臂。"
+            return "你是我的机械臂语音助手，只能通过安全工具控制机械臂。"
         return path.read_text(encoding="utf-8")
 
 

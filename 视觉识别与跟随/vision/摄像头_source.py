@@ -90,6 +90,8 @@ class VideoSource:
         if not ok or frame is None:
             self.last_error = "读取摄像头画面失败，可能是摄像头被占用、断开或视频已结束。"
             return False, None, self.last_error
+        if bool(self.config.get("rotate_180", False)):
+            frame = cv2.rotate(frame, cv2.ROTATE_180)
         return True, frame, ""
 
     def close(self) -> None:

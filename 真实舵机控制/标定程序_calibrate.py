@@ -63,7 +63,7 @@ def main() -> None:
     print("真实舵机标定程序")
     print(f"串口：{port}")
     print(f"输出文件：{output_path}")
-    print("注意：dry-run 主程序不需要依赖；本标定程序需要真实硬件和 momo_rebot 环境。")
+    print("注意：dry-run 主程序不需要依赖；本标定程序需要真实硬件和 arm_rebot 环境。")
 
     if args.dry_run:
         print("当前为 --dry-run：不会连接舵机，也不会写寄存器，只生成基于旧标定的预览。")
@@ -111,7 +111,7 @@ def main() -> None:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="MomoAgent / SOARM MOCE 真实舵机标定程序")
+    parser = argparse.ArgumentParser(description="SOARM MOCE 真实舵机标定程序")
     parser.add_argument("--config", default=str(BASE_DIR / "真实配置.yaml"), help="真实配置文件路径")
     parser.add_argument("--port", default=None, help="串口，例如 /dev/tty.usbmodemXXXX")
     parser.add_argument("--output", default=None, help="输出标定文件。dry-run 默认写 标定文件_dry_run预览.json")

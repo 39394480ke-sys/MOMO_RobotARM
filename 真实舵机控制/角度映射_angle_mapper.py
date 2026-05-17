@@ -93,7 +93,7 @@ def joint_deg_to_relative_raw(
 ) -> int:
     """逻辑关节角度 deg 转成相对 raw。
 
-    公式沿用 MomoAgent 思路：
+    公式基于舵机 raw 计数、标定零点和关节减速比：
         motor_deg = joint_deg * joint_scale
         relative_raw = motor_deg / 360.0 * 4096
 
@@ -267,7 +267,7 @@ def 获取关节模式(
 
 
 def 获取关节比例(joint_key: str, joint_config: dict[str, Any]) -> float:
-    """读取 joint_scale，必须包含 MomoAgent 原始减速比和方向。"""
+    """读取 joint_scale，必须包含每个关节的减速比和方向。"""
 
     if "joint_scale" in joint_config:
         return float(joint_config["joint_scale"])

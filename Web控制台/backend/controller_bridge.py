@@ -722,7 +722,7 @@ class ControllerBridge:
             calibration["path"] = str((real_config_path.parent / calibration_path).resolve())
         runtime_name = "dry_run_hardware_state.json" if dry_run else "real_hardware_state.json"
         data.setdefault("files", {})["runtime_state"] = str(self.base_dir / "runtime" / "state" / runtime_name)
-        temp_dir = Path(tempfile.gettempdir()) / "momoagent_web_control"
+        temp_dir = Path(tempfile.gettempdir()) / "arm_web_control"
         temp_dir.mkdir(parents=True, exist_ok=True)
         target = temp_dir / ("dry_run_真实配置_runtime.json" if dry_run else "real_真实配置_runtime.json")
         self._write_json(target, data)

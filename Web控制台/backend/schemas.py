@@ -90,10 +90,10 @@ class FollowStartRequest(BaseModel):
     poll_interval: float | None = Field(None, gt=0.0)
     move_duration: float | None = Field(None, gt=0.0)
     robot_api_base: str | None = None
-    pan_joint: str = "shoulder_pan"
-    tilt_joint: str = "elbow_flex"
-    pan_gain: float = 4.8
-    tilt_gain: float = 6.0
+    pan_joint: str | None = None
+    tilt_joint: str | None = None
+    pan_gain: float | None = None
+    tilt_gain: float | None = None
     dry_run: bool = True
-    speed_percent: int = Field(50, ge=1, le=100)
+    speed_percent: int | None = Field(None, ge=1, le=100)
     confirm_text: str = ""

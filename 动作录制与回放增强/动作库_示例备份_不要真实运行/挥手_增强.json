@@ -1,5 +1,5 @@
 {
-  "schema_version": "momo_replay_sequence_v1",
+  "schema_version": "arm_replay_sequence_v1",
   "name": "挥手_增强",
   "description": "挥手_增强 示例动作",
   "created_at": "2026-05-14 22:20:31",

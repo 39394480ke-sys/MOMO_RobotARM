@@ -1,6 +1,6 @@
 # 阶段七：GUI 图形界面控制台
 
-本阶段新增一个桌面 GUI，目标是把前面阶段的连接、状态、关节控制、姿态、动作、运动学、标定和日志组织成一个类似 MomoAgent HMI 的操作台。
+本阶段新增一个桌面 GUI，目标是把前面阶段的连接、状态、关节控制、姿态、动作、运动学、标定和日志组织成一个面向真实硬件调试的操作台。
 
 GUI 不是新的控制内核。它只调用 `ControllerBridge`，再由桥接层调用阶段三仿真控制器、阶段四真实控制器、阶段五运动学控制器和阶段六动作回放器。
 
@@ -24,16 +24,16 @@ GUI 不是新的控制内核。它只调用 `ControllerBridge`，再由桥接层
 
 ## 安装依赖
 
-本项目统一使用 `momo_rebot` 环境里的 Python：
+本项目统一使用 `arm_rebot` 环境里的 Python：
 
 ```bash
-mamba run -n momo_rebot python -V
+mamba run -n arm_rebot python -V
 ```
 
 当前推荐先检查依赖：
 
 ```bash
-mamba run -n momo_rebot python - <<'PY'
+mamba run -n arm_rebot python - <<'PY'
 for name in ["PyQt5", "pybullet", "yaml", "numpy"]:
     try:
         __import__(name)
@@ -46,16 +46,16 @@ PY
 如果 `PyQt5` 缺失，请安装：
 
 ```bash
-mamba install -n momo_rebot pyqt
+mamba install -n arm_rebot pyqt
 ```
 
 如果 mamba 源里没有合适包，可改用：
 
 ```bash
-mamba run -n momo_rebot python -m pip install PyQt5
+mamba run -n arm_rebot python -m pip install PyQt5
 ```
 
-`pybullet` 在 `momo_rebot` 环境中可用时，阶段五 FK/IK 和 3D 视图能力会正常启用。`lerobot` 缺失时，dry-run 可以继续；真实模式可能不可用。
+`pybullet` 在 `arm_rebot` 环境中可用时，阶段五 FK/IK 和 3D 视图能力会正常启用。`lerobot` 缺失时，dry-run 可以继续；真实模式可能不可用。
 
 ## 启动 GUI
 
@@ -63,7 +63,7 @@ mamba run -n momo_rebot python -m pip install PyQt5
 
 ```bash
 cd GUI图形界面
-mamba run -n momo_rebot python GUI主程序_main.py
+mamba run -n arm_rebot python GUI主程序_main.py
 ```
 
 启动后默认是 dry-run，不会自动连接真实硬件。
@@ -84,7 +84,7 @@ mamba run -n momo_rebot python GUI主程序_main.py
 
 ## 快速控制页面
 
-快速控制页对应 MomoAgent 的 Quick Move 逻辑。
+快速控制页对应 快速移动逻辑。
 
 页面包含：
 
@@ -167,8 +167,8 @@ bridge.move_joint_delta(joint_key, delta_deg)
 第一版 GUI 不直接运行标定程序，只提示命令：
 
 ```bash
-mamba run -n momo_rebot python ../真实舵机控制/标定程序_calibrate.py
-mamba run -n momo_rebot python ../真实舵机控制/标定应用_apply_calibration.py
+mamba run -n arm_rebot python ../真实舵机控制/标定程序_calibrate.py
+mamba run -n arm_rebot python ../真实舵机控制/标定应用_apply_calibration.py
 ```
 
 ## 日志页面
@@ -190,13 +190,13 @@ GUI图形界面/运行日志/gui_runtime.log
 处理：
 
 ```bash
-mamba install -n momo_rebot pyqt
+mamba install -n arm_rebot pyqt
 ```
 
 如果 mamba 安装不成功：
 
 ```bash
-mamba run -n momo_rebot python -m pip install PyQt5
+mamba run -n arm_rebot python -m pip install PyQt5
 ```
 
 ### pybullet 未安装
@@ -206,7 +206,7 @@ mamba run -n momo_rebot python -m pip install PyQt5
 处理：
 
 ```bash
-mamba install -n momo_rebot pybullet
+mamba install -n arm_rebot pybullet
 ```
 
 不安装 pybullet 不会影响 GUI 主窗口启动。

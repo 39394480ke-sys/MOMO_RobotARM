@@ -1,9 +1,9 @@
 {
   "session_id": "3bcaeead-f5da-4d6d-892a-406c15e1d506",
-  "mode": "dry_run",
-  "connected": false,
+  "mode": "real",
+  "connected": true,
   "created_at": 1778839856.528936,
-  "updated_at": 1778844203.0179331,
-  "connected_at": 1778844124.021651,
+  "updated_at": 1779018564.104864,
+  "connected_at": 1779018564.104863,
   "disconnected_at": null
 }

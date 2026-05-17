@@ -25,6 +25,7 @@ class 姿态管理器:
         self.姿态库路径 = Path(姿态库路径)
         self.默认姿态 = 默认姿态 or {}
         self.姿态库: dict[str, dict[str, Any]] = {}
+        self.姿态库首次创建 = not self.姿态库路径.exists()
         self.加载全部姿态()
         self.补齐默认姿态()
 
@@ -56,7 +57,10 @@ class 姿态管理器:
             文件.write("\n")
 
     def 补齐默认姿态(self) -> None:
-        """首次运行时写入配置中的默认姿态。"""
+        """仅在姿态库文件首次创建时写入配置中的默认姿态。"""
+
+        if not self.姿态库首次创建:
+            return
 
         有新增 = False
         for 名称, 姿态 in self.默认姿态.items():

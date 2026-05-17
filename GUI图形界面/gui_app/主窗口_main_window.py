@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import json
 from typing import Callable
 
-from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtCore import Qt, QTimer, pyqtSignal
 from PyQt5.QtWidgets import QApplication, QFrame, QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QMainWindow, QPushButton, QScrollArea, QSizePolicy, QSpinBox, QSplitter, QStackedWidget, QVBoxLayout, QWidget
 
 from gui_app.后台任务_worker import ActionPlayWorker, CalibrationStatusWorker, ConnectWorker, MoveWorker, StatePollWorker
@@ -21,6 +22,8 @@ from gui_app.页面_pages.运动学页面_kinematics_page import KinematicsPage
 
 
 class MainWindow(QMainWindow):
+    motion_progress_received = pyqtSignal(dict)
+
     def __init__(self, bridge, config: dict, parent=None):
         super().__init__(parent)
         self.bridge = bridge
@@ -29,18 +32,32 @@ class MainWindow(QMainWindow):
         self.workers = []
         self.polling = False
         self.motion_busy = False
+        self.motion_queue: list[tuple[Callable[[], dict], str, Callable[[dict], None] | None, Callable[[], None] | None]] = []
         self.pending_kinematic_targets: dict | None = None
         self.continuous_move_busy = False
+        self.ui_state = self._load_ui_state()
 
-        self.setWindowTitle(str(config.get("app", {}).get("title", "我的 MomoAgent GUI 控制台")))
+        self.setWindowTitle(str(config.get("app", {}).get("title", "我的机械臂 GUI 控制台")))
         self._apply_initial_window_geometry()
         self._build_ui()
         self._connect_signals()
+        self.motion_progress_received.connect(self._motion_progress_received)
+        self.bridge.set_motion_update_callback(lambda payload: self.motion_progress_received.emit(payload))
+        self._apply_saved_ui_state()
         self._setup_timer()
         self._refresh_all_lists()
         self.update_header()
 
     def _apply_initial_window_geometry(self) -> None:
+        saved_geometry = self.ui_state.get("geometry")
+        if isinstance(saved_geometry, list) and len(saved_geometry) == 4:
+            try:
+                x, y, width, height = [int(value) for value in saved_geometry]
+                self.setMinimumSize(760, 480)
+                self.setGeometry(x, y, max(760, width), max(480, height))
+                return
+            except Exception:
+                pass
         screen = QApplication.primaryScreen()
         if screen is None:
             self.resize(1180, 760)
@@ -69,7 +86,7 @@ class MainWindow(QMainWindow):
         top_layout = QHBoxLayout(top)
         top_layout.setContentsMargins(12, 8, 12, 8)
         top_layout.setSpacing(8)
-        self.title_label = QLabel("MomoAgent GUI 控制台")
+        self.title_label = QLabel("机械臂 GUI 控制台")
         self.title_label.setObjectName("TitleLabel")
         self.mode_label = QLabel("● 模式: dry-run")
         self.mode_label.setObjectName("StatusPill")
@@ -82,7 +99,7 @@ class MainWindow(QMainWindow):
         self.speed_spin = QSpinBox()
         self.speed_spin.setRange(10, 100)
         self.speed_spin.setSingleStep(5)
-        self.speed_spin.setValue(int(float(self.config.get("motion", {}).get("default_speed_percent", 50))))
+        self.speed_spin.setValue(int(float(self.ui_state.get("speed_percent", self.config.get("motion", {}).get("default_speed_percent", 50)))))
         self.speed_spin.setSuffix("%")
         self.speed_spin.setMinimumWidth(92)
         self.speed_spin.setMinimumHeight(30)
@@ -140,33 +157,33 @@ class MainWindow(QMainWindow):
         for title, page, minimum_size in pages:
             self.nav.addItem(QListWidgetItem(title))
             self.stack.addWidget(self._make_scroll_page(page, minimum_size[0], minimum_size[1]))
-        self.nav.setCurrentRow(0)
+        self.nav.setCurrentRow(int(self.ui_state.get("nav_index", 0)))
 
-        content_splitter = QSplitter()
-        content_splitter.setObjectName("ContentSplitter")
-        content_splitter.setOpaqueResize(False)
-        content_splitter.setHandleWidth(6)
-        content_splitter.addWidget(self.stack)
-        right_splitter = QSplitter()
-        right_splitter.setOrientation(Qt.Vertical)
-        right_splitter.setObjectName("RightInspectorSplitter")
-        right_splitter.setMinimumWidth(280)
-        right_splitter.setOpaqueResize(False)
-        right_splitter.setHandleWidth(6)
-        right_splitter.addWidget(self.log_page)
-        right_splitter.addWidget(self.persistent_sim_view)
-        right_splitter.setStretchFactor(0, 2)
-        right_splitter.setStretchFactor(1, 3)
-        right_splitter.setSizes([300, 460])
-        right_splitter.setChildrenCollapsible(False)
-        content_splitter.addWidget(right_splitter)
-        content_splitter.setStretchFactor(0, 4)
-        content_splitter.setStretchFactor(1, 2)
-        content_splitter.setSizes([1040, 520])
-        content_splitter.setChildrenCollapsible(False)
+        self.content_splitter = QSplitter()
+        self.content_splitter.setObjectName("ContentSplitter")
+        self.content_splitter.setOpaqueResize(False)
+        self.content_splitter.setHandleWidth(6)
+        self.content_splitter.addWidget(self.stack)
+        self.right_splitter = QSplitter()
+        self.right_splitter.setOrientation(Qt.Vertical)
+        self.right_splitter.setObjectName("RightInspectorSplitter")
+        self.right_splitter.setMinimumWidth(280)
+        self.right_splitter.setOpaqueResize(False)
+        self.right_splitter.setHandleWidth(6)
+        self.right_splitter.addWidget(self.log_page)
+        self.right_splitter.addWidget(self.persistent_sim_view)
+        self.right_splitter.setStretchFactor(0, 2)
+        self.right_splitter.setStretchFactor(1, 3)
+        self.right_splitter.setSizes(self.ui_state.get("right_splitter_sizes", [300, 460]))
+        self.right_splitter.setChildrenCollapsible(False)
+        self.content_splitter.addWidget(self.right_splitter)
+        self.content_splitter.setStretchFactor(0, 4)
+        self.content_splitter.setStretchFactor(1, 2)
+        self.content_splitter.setSizes(self.ui_state.get("content_splitter_sizes", [1040, 520]))
+        self.content_splitter.setChildrenCollapsible(False)
 
         body_layout.addWidget(self.nav)
-        body_layout.addWidget(content_splitter, 1)
+        body_layout.addWidget(self.content_splitter, 1)
         root_layout.addWidget(top)
         root_layout.addWidget(body, 1)
         self.setCentralWidget(root)
@@ -185,6 +202,46 @@ class MainWindow(QMainWindow):
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         return scroll
+
+    def _ui_state_path(self):
+        return self.bridge.base_dir / "运行日志" / "gui_ui_state.json"
+
+    def _load_ui_state(self) -> dict:
+        path = self.config.get("app", {}).get("ui_state_path")
+        state_path = self.bridge._resolve_gui_path(path) if path else self.bridge.base_dir / "运行日志" / "gui_ui_state.json"
+        try:
+            data = json.loads(state_path.read_text(encoding="utf-8"))
+            return data if isinstance(data, dict) else {}
+        except Exception:
+            return {}
+
+    def _apply_saved_ui_state(self) -> None:
+        port = self.ui_state.get("serial_port")
+        if port:
+            self.settings_page.port_input.setText(str(port))
+        mode = self.ui_state.get("mode")
+        if mode in {"simulation", "dry_run", "real"}:
+            self.settings_page.set_mode(str(mode))
+            self.bridge.set_mode(str(mode))
+            self.quick_page.set_real_mode(mode == "real", float(self.config.get("safety", {}).get("max_real_step_deg", 2.0)))
+
+    def _save_ui_state(self) -> None:
+        payload = {
+            "mode": self.bridge.get_mode(),
+            "serial_port": self.settings_page.port_input.text(),
+            "speed_percent": self.speed_spin.value(),
+            "nav_index": self.nav.currentRow(),
+            "geometry": [self.x(), self.y(), self.width(), self.height()],
+            "content_splitter_sizes": self.content_splitter.sizes(),
+            "right_splitter_sizes": self.right_splitter.sizes(),
+        }
+        path = self._ui_state_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+    def closeEvent(self, event) -> None:
+        self._save_ui_state()
+        super().closeEvent(event)
 
     def _connect_signals(self) -> None:
         self.nav.currentRowChanged.connect(self.stack.setCurrentIndex)
@@ -218,6 +275,11 @@ class MainWindow(QMainWindow):
         self.action_page.resume_requested.connect(lambda: self._handle_result(self.bridge.resume_action()))
         self.action_page.stop_requested.connect(lambda: self._handle_result(self.bridge.stop_action()))
         self.action_page.delete_requested.connect(lambda name: self._handle_result_and_refresh(self.bridge.delete_action(name), self._refresh_actions))
+        self.action_page.record_start_requested.connect(self._start_action_recording)
+        self.action_page.teach_start_requested.connect(self._start_teach_recording)
+        self.action_page.capture_pose_requested.connect(self._capture_action_recording_pose)
+        self.action_page.save_recording_requested.connect(self._save_action_recording)
+        self.action_page.cancel_recording_requested.connect(self._cancel_action_recording)
 
         self.kinematics_page.fk_requested.connect(self._compute_fk)
         self.kinematics_page.ik_requested.connect(self._compute_ik)
@@ -259,6 +321,7 @@ class MainWindow(QMainWindow):
             lambda: self.bridge.move_joint_delta(joint, delta),
             "真实模式连续移动",
             on_finished=lambda: setattr(self, "continuous_move_busy", False),
+            queue_if_busy=False,
         )
 
     def _run_dangerous(
@@ -267,16 +330,36 @@ class MainWindow(QMainWindow):
         title: str,
         on_result: Callable[[dict], None] | None = None,
         on_finished: Callable[[], None] | None = None,
+        queue_if_busy: bool = True,
     ) -> None:
         if self.motion_busy:
             if on_finished is not None:
                 on_finished()
-            self._handle_result({"ok": False, "message": "上一个运动命令还在执行，请稍后再试。"})
+            if queue_if_busy and len(self.motion_queue) < 10:
+                self.motion_queue.append((task, title, on_result, None))
+                self._handle_result({"ok": True, "message": f"运动命令已排队：{title}", "data": {"queue_size": len(self.motion_queue)}})
+            elif queue_if_busy:
+                self._handle_result({"ok": False, "message": "运动队列已满，请稍后再试。"})
             return
         self._run_worker(MoveWorker(task), on_result=on_result, on_finished=on_finished)
 
     def _run_action(self, name: str) -> None:
         self._run_worker(ActionPlayWorker(self.bridge.play_action, name), disable=[self.action_page.play_button, self.action_page.delete_button])
+
+    def _start_action_recording(self, name: str) -> None:
+        self._handle_result(self.bridge.start_action_recording(name))
+
+    def _start_teach_recording(self, name: str) -> None:
+        self._run_worker(MoveWorker(lambda: self.bridge.start_teach_recording(name)))
+
+    def _capture_action_recording_pose(self) -> None:
+        self._run_worker(MoveWorker(self.bridge.capture_recording_pose), disable=[self.action_page.capture_button])
+
+    def _save_action_recording(self) -> None:
+        self._handle_result_and_refresh(self.bridge.save_recording_action(), self._refresh_actions)
+
+    def _cancel_action_recording(self) -> None:
+        self._handle_result(self.bridge.cancel_recording_action())
 
     def _refresh_calibration(self) -> None:
         self._run_worker(CalibrationStatusWorker(self.bridge.get_calibration_status))
@@ -302,6 +385,13 @@ class MainWindow(QMainWindow):
     def _state_error(self, result: dict) -> None:
         self.store.update_from_result(result)
         self.update_header()
+
+    def _motion_progress_received(self, payload: dict) -> None:
+        targets = payload.get("targets_deg", {})
+        if not isinstance(targets, dict):
+            return
+        self.quick_page.update_state({"joints_deg": targets})
+        self.persistent_sim_view.update_state(targets)
 
     def _refresh_poses(self) -> None:
         result = self.bridge.list_poses()
@@ -394,11 +484,18 @@ class MainWindow(QMainWindow):
         if on_finished is not None:
             worker.finished.connect(on_finished)
         if is_move_worker:
-            worker.finished.connect(lambda: setattr(self, "motion_busy", False))
-            worker.finished.connect(lambda: QTimer.singleShot(80, self._poll_state_once))
+            worker.finished.connect(self._motion_worker_finished)
         worker.finished.connect(self.update_header)
         self.workers.append(worker)
         worker.start()
+
+    def _motion_worker_finished(self) -> None:
+        self.motion_busy = False
+        QTimer.singleShot(80, self._poll_state_once)
+        if not self.motion_queue:
+            return
+        task, title, on_result, on_finished = self.motion_queue.pop(0)
+        QTimer.singleShot(30, lambda: self._run_dangerous(task, title, on_result=on_result, on_finished=on_finished, queue_if_busy=False))
 
     def _handle_result_and_refresh(self, result: dict, refresh: Callable[[], None]) -> None:
         self._handle_result(result)
@@ -415,6 +512,9 @@ class MainWindow(QMainWindow):
         if result.get("data", {}).get("calibration"):
             self.calibration_page.set_status(result["data"])
             self.store.gui_state.calibration_ok = bool(result["data"]["calibration"].get("允许真机移动"))
+        recording = result.get("data", {}).get("recording")
+        if isinstance(recording, dict):
+            self.action_page.set_recording_status(recording)
         self.log_page.refresh()
         self.update_header()
 

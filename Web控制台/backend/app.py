@@ -58,7 +58,7 @@ CONFIG = load_web_config()
 websocket_manager = WebSocketManager()
 service = WebControlService(CONFIG, BASE_DIR, websocket_manager)
 
-app = FastAPI(title=CONFIG.get("app", {}).get("title", "我的 MomoAgent Web 控制台"))
+app = FastAPI(title=CONFIG.get("app", {}).get("title", "我的机械臂 Web 控制台"))
 
 server_cfg = CONFIG.get("server", {})
 if server_cfg.get("cors_enabled", True):

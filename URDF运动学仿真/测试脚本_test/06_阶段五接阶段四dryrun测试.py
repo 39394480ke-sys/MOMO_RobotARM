@@ -6,7 +6,7 @@
 3. 强制阶段四保持 dry-run，不写真实舵机。
 
 运行位置建议在项目根目录：
-    mamba activate momo_rebot
+    mamba activate arm_rebot
     python URDF运动学仿真/测试脚本_test/06_阶段五接阶段四dryrun测试.py
 """
 

@@ -6,9 +6,11 @@ server:
   allowed_origins:
     - http://127.0.0.1:8010
     - http://localhost:8010
+    - http://127.0.0.1:8000
+    - http://localhost:8000
 
 app:
-  title: 我的 MomoAgent Web 控制台
+  title: 我的机械臂 Web 控制台
   default_mode: dry_run
   state_poll_interval_ms: 500
   log_path: runtime/logs/web_api.log
@@ -36,24 +38,24 @@ motion:
 follow:
   latest_url: http://127.0.0.1:8000/latest
   robot_api_base: http://127.0.0.1:8010
-  poll_interval_sec: 0.08
-  move_duration_sec: 0.20
+  poll_interval_sec: 0.05
+  move_duration_sec: 0.25
   command_mode: stream
   pan_joint: shoulder_pan
   tilt_joint: elbow_flex
   pan_sign: 1.0
   tilt_sign: -1.0
-  pan_gain_deg_per_norm: 4.8
-  tilt_gain_deg_per_norm: 6.0
-  pan_dead_zone_norm: 0.02
-  tilt_dead_zone_norm: 0.025
-  pan_resume_zone_norm: 0.03
-  tilt_resume_zone_norm: 0.035
-  min_pan_step_deg: 0.35
-  min_tilt_step_deg: 0.7
-  pan_min_step_zone_norm: 0.08
+  pan_gain_deg_per_norm: 4
+  tilt_gain_deg_per_norm: 4
+  pan_dead_zone_norm: 0.03
+  tilt_dead_zone_norm: 0.035
+  pan_resume_zone_norm: 0.05
+  tilt_resume_zone_norm: 0.055
+  min_pan_step_deg: 0.5
+  min_tilt_step_deg: 0.5
+  pan_min_step_zone_norm: 0.12
   tilt_min_step_zone_norm: 0.12
-  max_pan_step_deg: 1.6
-  max_tilt_step_deg: 1.8
+  max_pan_step_deg: 5
+  max_tilt_step_deg: 5
   real_mode_requires_confirm: true
   dry_run_default: true

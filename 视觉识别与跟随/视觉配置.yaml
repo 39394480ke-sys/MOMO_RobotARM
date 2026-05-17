@@ -4,6 +4,7 @@ camera:
   width: 640
   height: 480
   fps: 30
+  rotate_180: true
   video_file: ""
   rtsp_url: ""
 
@@ -40,12 +41,10 @@ service:
   latest_result_path: runtime/latest_result.json
 
 follow:
-  enabled_by_default: false
   robot_api_base: http://127.0.0.1:8010
-  poll_interval_sec: 0.08
+  poll_interval_sec: 0.05
   http_timeout_sec: 1.0
-  move_duration_sec: 0.20
-  command_mode: stream
+  move_duration_sec: 0.25
 
   pan_joint: shoulder_pan
   tilt_joint: elbow_flex
@@ -53,21 +52,21 @@ follow:
   pan_sign: 1.0
   tilt_sign: -1.0
 
-  pan_gain_deg_per_norm: 4.8
-  tilt_gain_deg_per_norm: 6.0
+  pan_gain_deg_per_norm: 4
+  tilt_gain_deg_per_norm: 4
 
-  pan_dead_zone_norm: 0.02
-  tilt_dead_zone_norm: 0.025
-  pan_resume_zone_norm: 0.03
-  tilt_resume_zone_norm: 0.035
+  pan_dead_zone_norm: 0.03
+  tilt_dead_zone_norm: 0.035
+  pan_resume_zone_norm: 0.05
+  tilt_resume_zone_norm: 0.055
 
-  min_pan_step_deg: 0.35
-  min_tilt_step_deg: 0.7
-  pan_min_step_zone_norm: 0.08
+  min_pan_step_deg: 0.5
+  min_tilt_step_deg: 0.5
+  pan_min_step_zone_norm: 0.12
   tilt_min_step_zone_norm: 0.12
 
-  max_pan_step_deg: 1.6
-  max_tilt_step_deg: 1.8
+  max_pan_step_deg: 5
+  max_tilt_step_deg: 5
 
   real_mode_requires_confirm: true
   dry_run_default: true

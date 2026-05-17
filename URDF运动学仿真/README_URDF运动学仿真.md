@@ -25,7 +25,7 @@ URDF 是机器人描述文件。它描述：
 - 每个关节的父子关系、位置、旋转轴和角度范围。
 - 每个 link 对应的 STL mesh 模型。
 
-本阶段使用的是 MomoAgent 提供的 `soarmoce_urdf.urdf` 和 STL 文件，没有重新编写 URDF。
+本阶段使用第三方来源的 `soarmoce_urdf.urdf` 和 STL 文件，没有重新编写 URDF。发布前需要核验这些模型文件的许可证、署名要求和再分发限制；如果要做完全自有版本，需要重新建模并替换 URDF/STL。
 
 ## FK 正运动学是什么
 
@@ -63,7 +63,7 @@ python3 逆运动学_ik.py --xyz 0.20 0.05 0.18 --rpy 0 0 0
 
 `target_frame` 是 FK/IK 计算时使用的末端坐标系。
 
-本项目仿照 MomoAgent，使用：
+本项目基于通用运动学流程，使用：
 
 ```yaml
 target_frame: wrist_roll
@@ -258,7 +258,7 @@ python3 测试脚本_test/07_真实移动前检查与执行.py --xyz -0.01829269
 先激活项目环境，并站在项目根目录：
 
 ```bash
-mamba activate momo_rebot
+mamba activate arm_rebot
 cd "/Users/ke/Library/Mobile Documents/com~apple~CloudDocs/Code/机械臂"
 ```
 

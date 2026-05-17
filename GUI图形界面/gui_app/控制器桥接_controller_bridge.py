@@ -58,7 +58,18 @@ class ControllerBridge:
         self.log_path = self._resolve_gui_path(config.get("app", {}).get("log_path", "运行日志/gui_runtime.log"))
         self.log_path.parent.mkdir(parents=True, exist_ok=True)
         self.motion_speed_percent = float(config.get("motion", {}).get("default_speed_percent", 50.0))
+        self.recording_sequence: dict[str, Any] | None = None
+        self.recording_name = ""
+        self.recording_source = "gui_record"
+        self._joint_command_targets: dict[str, float] = {}
+        self._joint_command_updated_at: dict[str, float] = {}
+        self.motion_update_callback = None
         self._install_stage_paths()
+
+    def set_motion_update_callback(self, callback: Any | None) -> None:
+        self.motion_update_callback = callback
+        if self.sequence_player is not None:
+            self.sequence_player.progress_callback = callback
 
     def set_motion_speed_percent(self, percent: float) -> dict[str, Any]:
         self.motion_speed_percent = max(10.0, min(100.0, float(percent)))
@@ -80,6 +91,9 @@ class ControllerBridge:
             else:
                 normalized = ok("仿真控制器已就绪。")
             self.connected = bool(normalized["ok"])
+            if self.connected:
+                self._joint_command_targets.clear()
+                self._joint_command_updated_at.clear()
             self._log("info", "connect", normalized["message"], mode=self.mode)
             return normalized
         except Exception as exc:
@@ -97,6 +111,8 @@ class ControllerBridge:
             else:
                 normalized = ok("已断开。")
             self.connected = False
+            self._joint_command_targets.clear()
+            self._joint_command_updated_at.clear()
             self._log("info", "disconnect", normalized["message"], mode=self.mode)
             return normalized
         except Exception as exc:
@@ -172,6 +188,11 @@ class ControllerBridge:
             else:
                 return fail("当前控制器不支持关节移动。")
             normalized = self._normalize_result(result, "关节移动完成。", {"targets_deg": targets})
+            if normalized.get("ok"):
+                now = time.monotonic()
+                for joint, target in targets.items():
+                    self._joint_command_targets[joint] = float(target)
+                    self._joint_command_updated_at[joint] = now
             self._log("info" if normalized["ok"] else "error", "move_joints", normalized["message"], targets_deg=targets)
             return normalized
         except Exception as exc:
@@ -208,18 +229,44 @@ class ControllerBridge:
             max_step = float(self.config.get("safety", {}).get("max_real_step_deg" if self.mode == "real" else "max_gui_step_deg", 5.0))
             delta = max(-max_step, min(max_step, float(delta_deg)))
             self._ensure_controller()
-            if self.mode in {"dry_run", "real"} and hasattr(self.controller, "jog_joint"):
-                result = self.controller.jog_joint(joint_key, delta)
-                normalized = self._normalize_result(result, "关节微调完成。", {"joint_key": joint_key, "delta_deg": delta})
+            state_result = self.get_state()
+            if not state_result.get("ok"):
+                return state_result
+            current = state_result.get("data", {}).get("joints_deg", {})
+            current_deg = float(current.get(joint_key, 0.0))
+            base_deg = self._joint_delta_base_deg(joint_key, current_deg, state_result.get("data", {}))
+            target_deg = current_deg + delta
+            if base_deg != current_deg:
+                target_deg = base_deg + delta
+            precheck = self._precheck_single_joint_target(joint_key, target_deg, current_deg, delta)
+            if precheck is not None:
+                self._log("warning", "move_joint_delta_blocked", precheck["message"], **precheck.get("data", {}))
+                return precheck
+            if self.mode in {"dry_run", "real"} and hasattr(self.controller, "move_joints"):
+                result = self.controller.move_joints({joint_key: target_deg})
+                normalized = self._normalize_result(
+                    result,
+                    "关节微调完成。",
+                    {"joint_key": joint_key, "delta_deg": delta, "current_deg": current_deg, "base_deg": base_deg, "target_deg": target_deg},
+                )
             else:
-                state_result = self.get_state()
-                if not state_result.get("ok"):
-                    return state_result
-                current = state_result.get("data", {}).get("joints_deg", {})
                 targets = {joint: float(current.get(joint, 0.0)) for joint in JOINT_ORDER}
-                targets[joint_key] = targets[joint_key] + delta
+                targets[joint_key] = target_deg
                 normalized = self.move_joints(targets)
-            self._log("info" if normalized["ok"] else "error", "move_joint_delta", normalized["message"], joint_key=joint_key, delta_deg=delta)
+                normalized.setdefault("data", {}).update({"joint_key": joint_key, "delta_deg": delta, "current_deg": current_deg, "base_deg": base_deg, "target_deg": target_deg})
+            if normalized.get("ok"):
+                self._joint_command_targets[joint_key] = float(target_deg)
+                self._joint_command_updated_at[joint_key] = time.monotonic()
+            self._log(
+                "info" if normalized["ok"] else "error",
+                "move_joint_delta",
+                normalized["message"],
+                joint_key=joint_key,
+                delta_deg=delta,
+                current_deg=current_deg,
+                base_deg=base_deg,
+                target_deg=target_deg,
+            )
             return normalized
         except Exception as exc:
             return self._exception("关节微调失败", exc)
@@ -265,6 +312,11 @@ class ControllerBridge:
                         self.controller.set_gripper(gripper_default)
                     except Exception:
                         pass
+                if normalized.get("ok"):
+                    now = time.monotonic()
+                    for joint, target in targets.items():
+                        self._joint_command_targets[joint] = float(target)
+                        self._joint_command_updated_at[joint] = now
                 self._log("info" if normalized["ok"] else "error", "home", normalized["message"], slowed=True)
                 return normalized
             if hasattr(self.controller, "move_home"):
@@ -306,6 +358,7 @@ class ControllerBridge:
             last = self._normalize_result(result, f"{label}分段移动完成。", {"targets_deg": middle})
             if not last.get("ok"):
                 return last
+            self._emit_motion_update(middle, "interpolated_move", label=label, frame_index=index, frame_count=steps)
             if index < steps and sleep_s > 0:
                 time.sleep(sleep_s)
         return ok(f"{label}完成。", {"targets_deg": targets, "duration_s": float(duration_s), "steps": steps, "speed_percent": self.motion_speed_percent})
@@ -463,6 +516,102 @@ class ControllerBridge:
         except Exception as exc:
             return self._exception("删除动作失败", exc)
 
+    def start_action_recording(self, name: str, source: str = "gui_record") -> dict[str, Any]:
+        with self.io_lock:
+            try:
+                from 动作工具_common import build_empty_sequence, load_config
+
+                action_name = self._sanitize_action_name(name)
+                action_config = load_config(self._resolve_config("action_config_path"))
+                self.recording_sequence = build_empty_sequence(name=action_name, source=source, config=action_config)
+                self.recording_name = action_name
+                self.recording_source = source
+                self.action_status = f"录制中：{action_name}"
+                self._ensure_controller()
+                self._log("info", "start_recording", f"已开始动作录制：{action_name}", name=action_name, source=source)
+                return ok(
+                    f"已开始动作录制：{action_name}",
+                    {"recording": self._recording_summary()},
+                )
+            except Exception as exc:
+                return self._exception("开始动作录制失败", exc)
+
+    def start_teach_recording(self, name: str) -> dict[str, Any]:
+        with self.io_lock:
+            result = self.start_action_recording(name, source="gui_teach_mode")
+            if not result.get("ok"):
+                return result
+            if self.mode == "real" and self.is_connected():
+                release = self._release_torque_unlocked()
+                result.setdefault("data", {})["release_torque"] = release
+                if not release.get("ok"):
+                    return release
+            self.action_status = f"示教录制中：{self.recording_name}"
+            self._log("warning", "start_teach_recording", "示教录制已开始。真实模式下请扶稳机械臂。", name=self.recording_name)
+            return result
+
+    def capture_recording_pose(self) -> dict[str, Any]:
+        with self.io_lock:
+            try:
+                if self.recording_sequence is None:
+                    return fail("没有正在进行的动作录制。")
+                self._ensure_controller()
+                from 动作录制器_action_recorder import ActionRecorder
+                from 动作工具_common import load_config
+
+                action_config = load_config(self._resolve_config("action_config_path"))
+                recorder = ActionRecorder(self.controller, action_config)
+                index = len(self.recording_sequence.get("poses", [])) + 1
+                pose = recorder.capture_current_pose(index=index, name=f"pose_{index}")
+                self.recording_sequence.setdefault("poses", []).append(pose)
+                self.recording_sequence["pose_count"] = len(self.recording_sequence["poses"])
+                self._log(
+                    "info",
+                    "capture_recording_pose",
+                    f"已采集录制帧 {index}。",
+                    name=self.recording_name,
+                    pose_index=index,
+                )
+                return ok(f"已采集第 {index} 帧。", {"recording": self._recording_summary(), "pose": pose})
+            except Exception as exc:
+                return self._exception("采集动作帧失败", exc)
+
+    def save_recording_action(self) -> dict[str, Any]:
+        with self.io_lock:
+            try:
+                if self.recording_sequence is None:
+                    return fail("没有正在进行的动作录制。")
+                if not self.recording_sequence.get("poses"):
+                    return fail("当前录制没有任何姿态帧，不能保存。")
+                name = self.recording_name
+                library = self._get_action_library()
+                path = library.save_action(name, self.recording_sequence)
+                count = int(self.recording_sequence.get("pose_count", 0))
+                self.recording_sequence = None
+                self.recording_name = ""
+                self.recording_source = "gui_record"
+                self.action_status = "空闲"
+                self._log("info", "save_recording_action", f"动作录制已保存：{name}", name=name, pose_count=count, path=str(path))
+                return ok(
+                    f"动作录制已保存：{name}（{count} 帧）",
+                    {"action_name": name, "path": str(path), "pose_count": count, "recording": self._recording_summary()},
+                )
+            except Exception as exc:
+                return self._exception("保存录制动作失败", exc)
+
+    def cancel_recording_action(self) -> dict[str, Any]:
+        with self.io_lock:
+            name = self.recording_name
+            self.recording_sequence = None
+            self.recording_name = ""
+            self.recording_source = "gui_record"
+            self.action_status = "空闲"
+            self._log("warning", "cancel_recording_action", "已取消动作录制。", name=name)
+            return ok("已取消动作录制。", {"recording": self._recording_summary()})
+
+    def get_recording_status(self) -> dict[str, Any]:
+        return ok("录制状态已读取。", {"recording": self._recording_summary()})
+
     def get_calibration_status(self) -> dict[str, Any]:
         try:
             if self.mode in {"dry_run", "real"}:
@@ -523,7 +672,7 @@ class ControllerBridge:
         computed = self.compute_delta(dx, dy, dz, frame)
         if not computed.get("ok"):
             return computed
-            result = self.move_joints_smooth(computed["data"]["target_joints_deg"], label="末端增量移动")
+        result = self.move_joints_smooth(computed["data"]["target_joints_deg"], label="末端增量移动")
         if result.get("ok"):
             result.setdefault("data", {}).update(computed.get("data", {}))
         return result
@@ -609,6 +758,7 @@ class ControllerBridge:
             config.setdefault("safety", {})["require_confirm_before_real_replay"] = False
             config.setdefault("playback", {})["update_hz"] = float(self.config.get("motion", {}).get("playback_update_hz", 20.0))
             self.sequence_player = SequencePlayer(self.controller, config)
+            self.sequence_player.progress_callback = self.motion_update_callback
         return self.sequence_player
 
     def _get_kinematics_model(self) -> Any | None:
@@ -667,6 +817,8 @@ class ControllerBridge:
             "mode": self.mode,
             "connected": self.is_connected(),
             "joints_deg": joints,
+            "goal_joints_deg": self._normalize_goal_joints(state),
+            "goal_raw_by_joint": dict(state.get("goal_raw_by_joint", {})) if isinstance(state.get("goal_raw_by_joint", {}), dict) else {},
             "joint_labels": dict(JOINT_LABELS),
             "gripper": {"open_percent": float(grip)},
             "raw": state,
@@ -686,6 +838,107 @@ class ControllerBridge:
         if upper in mapping:
             return mapping[upper]
         raise ValueError(f"未知关节：{value}")
+
+    def _precheck_single_joint_target(self, joint_key: str, target_deg: float, current_deg: float, delta_deg: float) -> dict[str, Any] | None:
+        """在 GUI 桥接层提前拦截单圈 raw 限位。
+
+        真实控制器本身也会做安全检查；这里额外做一次，是为了让快速控制里
+        “按了按钮但机械臂没动”的场景显示成明确的限位提示，而不是泛泛的写入成功。
+        """
+
+        if self.controller is None:
+            return None
+        if not all(hasattr(self.controller, attr) for attr in ("joint_config_by_key", "calibration_manager", "safety_checker")):
+            return None
+        try:
+            if joint_key not in self.controller.joint_config_by_key or not self.controller.calibration_manager.has(joint_key):
+                return None
+            from 角度映射_angle_mapper import joint_deg_to_goal_detail, joint_label
+
+            joint_config = self.controller.joint_config_by_key[joint_key]
+            entry = self.controller.calibration_manager.get(joint_key)
+            detail = joint_deg_to_goal_detail(joint_key, target_deg, joint_config, entry, self.controller.runtime_state)
+            raw_check = self.controller.safety_checker.check_goal_raw(joint_key, int(detail["goal_raw"]), entry)
+            if raw_check.成功:
+                return None
+            direction_text = "负方向" if float(delta_deg) < 0 else "正方向"
+            message = (
+                f"{joint_label(joint_key)} 已接近或到达{direction_text}标定限位，"
+                f"本次目标 {target_deg:.2f}° 对应 raw={int(detail['goal_raw'])}，"
+                f"允许 raw 范围 [{int(entry.get('range_min', 0))}, {int(entry.get('range_max', 0))}]。"
+                "如果实际机械结构还能继续运动，请重新标定该关节的单圈范围。"
+            )
+            return fail(
+                message,
+                data={
+                    "joint_key": joint_key,
+                    "current_deg": float(current_deg),
+                    "target_deg": float(target_deg),
+                    "delta_deg": float(delta_deg),
+                    "goal_detail": detail,
+                    "range_min": int(entry.get("range_min", 0)),
+                    "range_max": int(entry.get("range_max", 0)),
+                },
+            )
+        except Exception:
+            return None
+
+    def _joint_delta_base_deg(self, joint_key: str, current_deg: float, state_data: dict[str, Any]) -> float:
+        recent_target = self._joint_command_targets.get(joint_key)
+        updated_at = self._joint_command_updated_at.get(joint_key, 0.0)
+        if recent_target is not None and time.monotonic() - updated_at <= 2.0:
+            return float(recent_target)
+
+        goal_joints = state_data.get("goal_joints_deg", {})
+        if isinstance(goal_joints, dict) and joint_key in goal_joints:
+            goal_deg = float(goal_joints[joint_key])
+            if abs(goal_deg - float(current_deg)) > 0.05:
+                return goal_deg
+        return float(current_deg)
+
+    def _normalize_goal_joints(self, state: dict[str, Any]) -> dict[str, float]:
+        raw = state.get("goal_joint_targets_deg", state.get("goal_joints_deg", {}))
+        if not isinstance(raw, dict):
+            return {}
+        goals: dict[str, float] = {}
+        for joint in JOINT_ORDER:
+            if joint in raw:
+                try:
+                    goals[joint] = float(raw[joint])
+                except (TypeError, ValueError):
+                    pass
+        return goals
+
+    def _emit_motion_update(self, targets_deg: dict[str, float], source: str, **extra: Any) -> None:
+        callback = self.motion_update_callback
+        if not callable(callback):
+            return
+        payload = {
+            "source": source,
+            "targets_deg": {joint: float(value) for joint, value in targets_deg.items()},
+        }
+        payload.update(extra)
+        try:
+            callback(payload)
+        except Exception:
+            pass
+
+    def _sanitize_action_name(self, name: str) -> str:
+        text = str(name).strip()
+        if not text:
+            text = f"GUI录制_{time.strftime('%Y%m%d_%H%M%S')}"
+        for char in '/\\:*?"<>|':
+            text = text.replace(char, "_")
+        return text[:80]
+
+    def _recording_summary(self) -> dict[str, Any]:
+        sequence = self.recording_sequence or {}
+        return {
+            "active": self.recording_sequence is not None,
+            "name": self.recording_name,
+            "source": self.recording_source,
+            "pose_count": len(sequence.get("poses", [])) if isinstance(sequence, dict) else 0,
+        }
 
     def _normalize_result(self, result: Any, default_message: str, data: Any | None = None) -> dict[str, Any]:
         if isinstance(result, dict) and "ok" in result:
@@ -743,7 +996,7 @@ class ControllerBridge:
         if not calibration_path.is_absolute():
             calibration["path"] = str((real_config_path.parent / calibration_path).resolve())
         data.setdefault("files", {})["runtime_state"] = str(self.base_dir / "运行日志" / "dry_run_runtime_state.json")
-        temp_dir = Path(tempfile.gettempdir()) / "momoagent_gui"
+        temp_dir = Path(tempfile.gettempdir()) / "arm_gui"
         temp_dir.mkdir(parents=True, exist_ok=True)
         target = temp_dir / ("dry_run_真实配置_runtime.json" if dry_run else "real_真实配置_runtime.json")
         self._write_json(target, data)

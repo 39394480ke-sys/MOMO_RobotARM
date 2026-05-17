@@ -1,6 +1,6 @@
 """阶段五：URDF / PyBullet 运动学模型。
 
-这个模块仿照 MomoAgent 的 PybulletKinematicsModel：
+这个模块封装 PyBullet 正逆运动学流程：
 - URDF 负责机器人结构和 FK / IK。
 - SDK 上层仍使用固定的 5 个逻辑关节顺序。
 - joint_name_aliases 负责把 SDK 关节名映射到 URDF 关节名。

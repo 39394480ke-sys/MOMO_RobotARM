@@ -11,7 +11,7 @@ from integration.config_loader import load_config, resolve_path
 
 def main() -> int:
     config = load_config()
-    assert config["project"]["name"] == "我的MomoAgent复刻"
+    assert config["project"]["name"] == "我的机械臂控制项目"
     missing = []
     for key, path in config.get("paths", {}).items():
         resolved = resolve_path(path, BASE_DIR)

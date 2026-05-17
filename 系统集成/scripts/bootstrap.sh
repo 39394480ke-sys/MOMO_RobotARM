@@ -3,7 +3,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-ENV_NAME="${MOMO_ENV_NAME:-momo_rebot}"
+ENV_NAME="${ARM_ENV_NAME:-arm_rebot}"
 PYTHON=(mamba run -n "$ENV_NAME" python)
 
 mkdir -p .venv runtime/pids runtime/logs runtime/state

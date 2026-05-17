@@ -38,9 +38,9 @@
         "health": {
           "ok": true,
           "data": {
-            "service": "momoagent_web_control_api",
+            "service": "arm_web_control_api",
             "status": "ok",
-            "title": "我的 MomoAgent Web 控制台",
+            "title": "我的机械臂 Web 控制台",
             "default_mode": "dry_run",
             "uptime_sec": 2.178,
             "time": 1778844204.260036
@@ -54,7 +54,7 @@
         "healthy": true,
         "pid": 40545,
         "health": {
-          "service": "momoagent_vision_api",
+          "service": "arm_vision_api",
           "status": "ok",
           "time": 1778844204.263381,
           "running": true,

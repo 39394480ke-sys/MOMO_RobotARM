@@ -18,7 +18,7 @@ STAGE3_DIR = PROJECT_ROOT / "仿真控制系统"
 STAGE4_DIR = PROJECT_ROOT / "真实舵机控制"
 STAGE5_DIR = PROJECT_ROOT / "URDF运动学仿真"
 
-SCHEMA_VERSION = "momo_replay_sequence_v1"
+SCHEMA_VERSION = "arm_replay_sequence_v1"
 JOINT_ORDER = ["shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll"]
 MULTI_TURN_JOINTS = ["shoulder_lift", "elbow_flex", "wrist_roll"]
 CHINESE_JOINT_NAMES = {
@@ -455,7 +455,7 @@ def create_stage4_controller(dry_run: bool = True) -> Any:
     config = deepcopy(original_config)
     config.setdefault("transport", {})["dry_run"] = bool(dry_run)
     mode_name = "dry_run" if dry_run else "real"
-    runtime_config = Path(tempfile.gettempdir()) / f"momo_stage6_{mode_name}_真实配置_runtime.yaml"
+    runtime_config = Path(tempfile.gettempdir()) / f"arm_stage6_{mode_name}_真实配置_runtime.yaml"
     write_json(runtime_config, config)
     controller = RealArmController(runtime_config)
     return controller

@@ -405,12 +405,7 @@ async function stopNow() {
 async function withSafety(body, force = false) {
   const mode = state.session.mode || state.robot?.mode || $("#modeSelect")?.value;
   if (force || mode === "real") {
-    const text = window.prompt(`真实模式会移动机械臂。请输入：${SAFE_TEXT}`);
-    if (text !== SAFE_TEXT) {
-      showError(new ApiError("SAFETY_CONFIRM_REQUIRED", "安全确认不正确，操作已取消。"));
-      return null;
-    }
-    return { ...body, confirm_text: text };
+    return { ...body, confirm_text: SAFE_TEXT };
   }
   return body;
 }

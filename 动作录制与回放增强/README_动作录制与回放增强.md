@@ -4,10 +4,10 @@
 
 ## 运行环境
 
-本项目统一使用你的 `momo_rebot` 环境里的 `python`。先激活环境，再进入阶段六目录：
+本项目统一使用你的 `arm_rebot` 环境里的 `python`。先激活环境，再进入阶段六目录：
 
 ```bash
-mamba activate momo_rebot
+mamba activate arm_rebot
 cd "/Users/ke/Library/Mobile Documents/com~apple~CloudDocs/Code/机械臂/动作录制与回放增强"
 python -V
 ```
@@ -122,7 +122,7 @@ python 示教模式_teach_mode.py --pose-count 3 --output 动作库/我的动作
 
 ## 动作文件格式
 
-动作文件 schema 是 `momo_replay_sequence_v1`。关键字段：
+动作文件 schema 是 `arm_replay_sequence_v1`。关键字段：
 
 - `joint_targets_deg`：录制到的主要关节角度。
 - `tcp_pose`：阶段五 FK 或控制器提供的末端位姿。

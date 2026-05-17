@@ -63,9 +63,9 @@ class WebControlService:
     # ------------------------------------------------------------------
     def health(self) -> dict[str, Any]:
         return {
-            "service": "momoagent_web_control_api",
+            "service": "arm_web_control_api",
             "status": "ok",
-            "title": self.config.get("app", {}).get("title", "我的 MomoAgent Web 控制台"),
+            "title": self.config.get("app", {}).get("title", "我的机械臂 Web 控制台"),
             "default_mode": self.default_mode,
             "uptime_sec": round(time.time() - self.started_at, 3),
             "time": time.time(),
@@ -240,6 +240,8 @@ class WebControlService:
 
     def start_follow(self, request: FollowStartRequest) -> dict[str, Any]:
         with self._lock:
+            if not request.dry_run and (self.bridge.mode != "real" or not self.bridge.is_connected()):
+                raise WebAPIError("REAL_SESSION_REQUIRED", "启动真实视觉跟随前，请先连接 real 模式。")
             if self.bridge.mode == "real" and not request.dry_run:
                 self._require_real_confirm(request.confirm_text, action="启动真实视觉跟随")
             if self._follow_controller is not None:
@@ -425,23 +427,38 @@ class WebControlService:
         from vision.视觉跟随_controller import VisionFollowController
 
         follow_cfg = dict(self.config.get("follow", {}))
-        follow_cfg.update(
-            {
-                "latest_url": request.latest_url,
-                "robot_api_base": request.robot_api_base or self._local_api_base(),
-                "pan_joint": request.pan_joint,
-                "tilt_joint": request.tilt_joint,
-                "pan_gain_deg_per_norm": float(request.pan_gain),
-                "tilt_gain_deg_per_norm": float(request.tilt_gain),
-                "speed_percent": int(request.speed_percent),
-                "confirm_text": request.confirm_text,
-            }
-        )
+        follow_cfg.update(self._load_vision_follow_config(vision_root))
+        follow_cfg["latest_url"] = request.latest_url
+        follow_cfg["robot_api_base"] = request.robot_api_base or follow_cfg.get("robot_api_base") or self._local_api_base()
+        follow_cfg["confirm_text"] = request.confirm_text
+        if request.pan_joint is not None:
+            follow_cfg["pan_joint"] = request.pan_joint
+        if request.tilt_joint is not None:
+            follow_cfg["tilt_joint"] = request.tilt_joint
+        if request.pan_gain is not None:
+            follow_cfg["pan_gain_deg_per_norm"] = float(request.pan_gain)
+        if request.tilt_gain is not None:
+            follow_cfg["tilt_gain_deg_per_norm"] = float(request.tilt_gain)
+        if request.speed_percent is not None:
+            follow_cfg["speed_percent"] = int(request.speed_percent)
         if request.poll_interval is not None:
             follow_cfg["poll_interval_sec"] = float(request.poll_interval)
         if request.move_duration is not None:
             follow_cfg["move_duration_sec"] = float(request.move_duration)
         return VisionFollowController({"follow": follow_cfg}, latest_url=request.latest_url, dry_run=request.dry_run)
+
+    def _load_vision_follow_config(self, vision_root: Path) -> dict[str, Any]:
+        config_path = vision_root / "视觉配置.yaml"
+        try:
+            import yaml  # type: ignore
+
+            data = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+        except Exception:
+            return {}
+        if not isinstance(data, dict):
+            return {}
+        follow = data.get("follow", {})
+        return dict(follow) if isinstance(follow, dict) else {}
 
     def _local_api_base(self) -> str:
         server = self.config.get("server", {})

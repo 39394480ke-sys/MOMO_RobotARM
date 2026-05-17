@@ -4,60 +4,60 @@
   "startup_present_raw": {
     "shoulder_pan": 2047,
     "shoulder_lift": 2249,
-    "elbow_flex": 3737,
+    "elbow_flex": 363,
     "wrist_flex": 2056,
-    "wrist_roll": 2368,
-    "gripper": 1445
+    "wrist_roll": 2367,
+    "gripper": 1465
   },
   "raw_present_position": {
-    "shoulder_pan": 2040,
-    "shoulder_lift": 2249,
-    "elbow_flex": 4455,
-    "wrist_flex": 2055,
-    "wrist_roll": 2367,
-    "gripper": 2160
+    "shoulder_pan": 2052,
+    "shoulder_lift": 2248,
+    "elbow_flex": 362,
+    "wrist_flex": 2058,
+    "wrist_roll": 2369,
+    "gripper": 2211
   },
   "关节角度": {
-    "shoulder_pan": -0.615234375,
-    "shoulder_lift": -0.0,
-    "elbow_flex": 11.268833705357144,
-    "wrist_flex": 0.087890625,
-    "wrist_roll": -0.087890625
+    "shoulder_pan": 0.439453125,
+    "shoulder_lift": 0.01658313679245283,
+    "elbow_flex": -0.015694754464285716,
+    "wrist_flex": -0.17578125,
+    "wrist_roll": 0.17578125
   },
   "multi_turn_state": {
     "shoulder_lift": {
       "show_name": "J2_肩部抬升",
       "home_present_raw": 2249,
-      "current_raw": 2249,
-      "relative_raw": 0,
-      "joint_deg": -0.0,
-      "goal_raw": 2249
+      "current_raw": 2248,
+      "relative_raw": -1,
+      "joint_deg": 0.01658313679245283,
+      "goal_raw": 2248
     },
     "elbow_flex": {
       "show_name": "J3_肘部弯曲",
-      "home_present_raw": 3737,
-      "current_raw": 4455,
-      "relative_raw": 718,
-      "joint_deg": 11.268833705357144,
-      "goal_raw": 4455
+      "home_present_raw": 363,
+      "current_raw": 362,
+      "relative_raw": -1,
+      "joint_deg": -0.015694754464285716,
+      "goal_raw": 362
     },
     "wrist_roll": {
       "show_name": "J5_腕部旋转",
-      "home_present_raw": 2368,
-      "current_raw": 2367,
-      "relative_raw": -1,
-      "joint_deg": -0.087890625,
-      "goal_raw": 2367
+      "home_present_raw": 2367,
+      "current_raw": 2369,
+      "relative_raw": 2,
+      "joint_deg": 0.17578125,
+      "goal_raw": 2369
     }
   },
   "gripper": {
-    "present_raw": 2160,
-    "open_value": 49.61832061068702,
-    "range_min": 1445,
-    "range_max": 2886
+    "present_raw": 2211,
+    "open_value": 50.37137069547603,
+    "range_min": 1465,
+    "range_max": 2946
   },
   "calibration_path": "/Users/ke/Library/Mobile Documents/com~apple~CloudDocs/Code/机械臂/真实舵机控制/标定文件.json",
-  "updated_at": "2026-05-16 21:12:27",
+  "updated_at": "2026-05-17 15:51:51",
   "mapping_details": {
     "shoulder_pan": {
       "joint_key": "shoulder_pan",
@@ -66,9 +66,9 @@
       "joint_scale": 1.0,
       "direction": 1,
       "reference_raw": 2047,
-      "present_raw": 2040,
-      "relative_raw": -7,
-      "joint_deg": -0.615234375
+      "present_raw": 2052,
+      "relative_raw": 5,
+      "joint_deg": 0.439453125
     },
     "shoulder_lift": {
       "joint_key": "shoulder_lift",
@@ -77,9 +77,9 @@
       "joint_scale": -5.3,
       "direction": 1,
       "reference_raw": 2249,
-      "present_raw": 2249,
-      "relative_raw": 0,
-      "joint_deg": -0.0
+      "present_raw": 2248,
+      "relative_raw": -1,
+      "joint_deg": 0.01658313679245283
     },
     "elbow_flex": {
       "joint_key": "elbow_flex",
@@ -87,10 +87,10 @@
       "模式": "多圈",
       "joint_scale": 5.6,
       "direction": 1,
-      "reference_raw": 3737,
-      "present_raw": 4455,
-      "relative_raw": 718,
-      "joint_deg": 11.268833705357144
+      "reference_raw": 363,
+      "present_raw": 362,
+      "relative_raw": -1,
+      "joint_deg": -0.015694754464285716
     },
     "wrist_flex": {
       "joint_key": "wrist_flex",
@@ -99,9 +99,9 @@
       "joint_scale": -1.0,
       "direction": 1,
       "reference_raw": 2056,
-      "present_raw": 2055,
-      "relative_raw": -1,
-      "joint_deg": 0.087890625
+      "present_raw": 2058,
+      "relative_raw": 2,
+      "joint_deg": -0.17578125
     },
     "wrist_roll": {
       "joint_key": "wrist_roll",
@@ -109,10 +109,24 @@
       "模式": "多圈",
       "joint_scale": 1.0,
       "direction": 1,
-      "reference_raw": 2368,
-      "present_raw": 2367,
-      "relative_raw": -1,
-      "joint_deg": -0.087890625
+      "reference_raw": 2367,
+      "present_raw": 2369,
+      "relative_raw": 2,
+      "joint_deg": 0.17578125
     }
+  },
+  "goal_joint_targets_deg": {
+    "shoulder_pan": 0.0,
+    "shoulder_lift": 0.0,
+    "elbow_flex": 0.0,
+    "wrist_flex": 0.0,
+    "wrist_roll": 0.0
+  },
+  "goal_raw_by_joint": {
+    "shoulder_pan": 2047,
+    "shoulder_lift": 2249,
+    "elbow_flex": 363,
+    "wrist_flex": 2056,
+    "wrist_roll": 2367
   }
 }

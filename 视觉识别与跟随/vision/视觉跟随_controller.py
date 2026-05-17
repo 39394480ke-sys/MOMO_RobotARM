@@ -146,16 +146,53 @@ class VisionFollowController:
         )
 
     def get_status(self) -> dict[str, Any]:
+        latest = self._last_result or {}
+        offset = latest.get("offset") or {}
+        smoothed = latest.get("smoothed_offset") or {}
         return {
             "running": bool(self._running),
             "thread_alive": bool(self._thread and self._thread.is_alive()),
             "dry_run": self.dry_run,
             "latest_url": self.latest_url,
             "robot_api_base": self.robot_client.base_url,
+            "effective_config": {
+                "poll_interval_sec": self.poll_interval_sec,
+                "move_duration_sec": self.move_duration_sec,
+                "speed_percent": self.speed_percent,
+                "pan_joint": self.follow_cfg.get("pan_joint", "shoulder_pan"),
+                "tilt_joint": self.follow_cfg.get("tilt_joint", "elbow_flex"),
+                "pan_sign": self.follow_cfg.get("pan_sign", 1.0),
+                "tilt_sign": self.follow_cfg.get("tilt_sign", -1.0),
+                "pan_gain_deg_per_norm": self.follow_cfg.get("pan_gain_deg_per_norm", self.follow_cfg.get("pan_gain", 1.0)),
+                "tilt_gain_deg_per_norm": self.follow_cfg.get("tilt_gain_deg_per_norm", self.follow_cfg.get("tilt_gain", 1.0)),
+                "pan_dead_zone_norm": self.follow_cfg.get("pan_dead_zone_norm", 0.02),
+                "tilt_dead_zone_norm": self.follow_cfg.get("tilt_dead_zone_norm", 0.025),
+                "pan_resume_zone_norm": self.follow_cfg.get("pan_resume_zone_norm", self.follow_cfg.get("pan_dead_zone_norm", 0.02)),
+                "tilt_resume_zone_norm": self.follow_cfg.get("tilt_resume_zone_norm", self.follow_cfg.get("tilt_dead_zone_norm", 0.025)),
+                "max_pan_step_deg": self.follow_cfg.get("max_pan_step_deg", 1.0),
+                "max_tilt_step_deg": self.follow_cfg.get("max_tilt_step_deg", 1.0),
+            },
             "pan_active": self._pan_active,
             "tilt_active": self._tilt_active,
             "step_count": self._step_count,
             "last_command": self._last_command,
+            "last_vision": {
+                "detected": latest.get("detected", False),
+                "direction": (latest.get("direction") or {}).get("combined"),
+                "offset": {
+                    "ndx": offset.get("ndx", 0.0),
+                    "ndy": offset.get("ndy", 0.0),
+                    "in_dead_zone": offset.get("in_dead_zone", True),
+                    "target_center": offset.get("target_center"),
+                    "desired_center": offset.get("desired_center"),
+                },
+                "smoothed_offset": {
+                    "ndx": smoothed.get("ndx", 0.0),
+                    "ndy": smoothed.get("ndy", 0.0),
+                    "valid": smoothed.get("valid", False),
+                },
+                "message": latest.get("message", ""),
+            },
             "last_error": self._last_error,
         }
 

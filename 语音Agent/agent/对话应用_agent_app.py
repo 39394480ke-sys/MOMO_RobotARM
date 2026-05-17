@@ -66,10 +66,10 @@ class AgentApp:
         print("会话已重置。")
 
     def run_shell(self) -> None:
-        print("MomoAgent 语音助手 shell。输入 /quit 退出，/tools 查看工具。")
+        print("机械臂语音助手 shell。输入 /quit 退出，/tools 查看工具。")
         while True:
             try:
-                text = input("momo> ").strip()
+                text = input("arm> ").strip()
             except (EOFError, KeyboardInterrupt):
                 print()
                 break

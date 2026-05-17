@@ -1,5 +1,5 @@
 app:
-  title: 我的 MomoAgent GUI 控制台
+  title: 我的机械臂 GUI 控制台
   language: zh
   default_mode: dry_run
   refresh_interval_ms: 200

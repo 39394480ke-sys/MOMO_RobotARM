@@ -38,6 +38,7 @@ class SequencePlayer:
         self.current_sequence_name = ""
         self.logger = MotionLogger(Path(__file__).resolve().parent / self.config["files"]["runtime_log"])
         self._warned_multi_turn_fallback = False
+        self.progress_callback = None
 
     def load_sequence(self, path: str | Path) -> dict[str, Any]:
         sequence = read_json(path)
@@ -92,22 +93,40 @@ class SequencePlayer:
                 print("未确认安全，已取消回放。")
                 return False
 
+        poses = list(sequence["poses"])
+        start_index = 0
         if self.config.get("playback", {}).get("return_to_first_pose_before_replay", True):
-            first_pose = sequence["poses"][0]
+            first_pose = poses[0]
             first_duration = self._duration(first_pose, speed)
+            self.logger.log(
+                "return_to_first_pose",
+                mode=self._mode_name(),
+                action_name=self.current_sequence_name,
+                pose_index=first_pose.get("index"),
+                duration_sec=first_duration,
+            )
             if not self.play_pose(first_pose, first_duration):
                 return False
+            self._sleep_with_controls(self._hold_duration(first_pose, sequence, speed))
+            start_index = 1
 
+        first_pass = True
         while True:
-            for pose in sequence["poses"]:
+            replay_poses = poses[start_index:] if first_pass else poses
+            first_pass = False
+            if not replay_poses:
+                if not loop:
+                    break
+                replay_poses = poses
+
+            for pose in replay_poses:
                 if self.stopped:
                     self.logger.log("play_stopped", action_name=self.current_sequence_name, pose_index=pose.get("index"))
                     return False
                 duration = self._duration(pose, speed)
                 if not self.play_pose(pose, duration):
                     return False
-                hold = max(0.0, float(pose.get("hold_sec", sequence.get("playback", {}).get("default_interval_sec", 0.3))) / max(0.01, speed))
-                self._sleep_with_controls(hold)
+                self._sleep_with_controls(self._hold_duration(pose, sequence, speed))
             if not loop or self.stopped:
                 break
         self.logger.log("play_complete", action_name=self.current_sequence_name)
@@ -173,6 +192,7 @@ class SequencePlayer:
                 self.logger.log("limit_or_move_error", pose_index=pose.get("index"), error=message)
                 print(f"动作停止：{message}")
                 return False
+            self._emit_progress(frame, "action_playback", pose=pose, frame_index=frame_index, frame_count=len(frames))
             self._sleep_with_controls(per_frame_sleep)
 
         gripper = pose.get("gripper")
@@ -204,6 +224,24 @@ class SequencePlayer:
         if is_real_mode_controller(self.controller):
             duration = max(duration, float(self.config.get("playback", {}).get("real_mode_min_duration_sec", 2.0)))
         return duration
+
+    def _hold_duration(self, pose: Mapping[str, Any], sequence: Mapping[str, Any], speed: float) -> float:
+        hold = pose.get("hold_sec", sequence.get("playback", {}).get("default_interval_sec", 0.3))
+        return max(0.0, float(hold) / max(0.01, float(speed)))
+
+    def _emit_progress(self, targets_deg: Mapping[str, float], source: str, **extra: Any) -> None:
+        callback = self.progress_callback
+        if not callable(callback):
+            return
+        payload = {
+            "source": source,
+            "targets_deg": {joint: float(value) for joint, value in targets_deg.items()},
+        }
+        payload.update(extra)
+        try:
+            callback(payload)
+        except Exception:
+            pass
 
     def _wait_if_paused(self) -> None:
         while self.paused and not self.stopped:

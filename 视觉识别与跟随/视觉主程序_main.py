@@ -50,7 +50,7 @@ def run_preview(config: dict[str, Any]) -> None:
             if not ok:
                 print(f"读取画面失败：{error}")
                 break
-            cv2.imshow("MomoAgent Vision Preview", frame)
+            cv2.imshow("Arm Vision Preview", frame)
             if cv2.waitKey(1) & 0xFF == ord("q"):
                 break
     finally:
@@ -75,7 +75,7 @@ def run_detect(config: dict[str, Any]) -> None:
             result = engine.process_once()
             frame = engine.get_latest_frame()
             if frame is not None:
-                cv2.imshow("MomoAgent Face Detect", frame)
+                cv2.imshow("Arm Face Detect", frame)
             if result.get("detector", {}).get("face_error"):
                 print(result["detector"]["face_error"])
                 time.sleep(1.0)
@@ -166,7 +166,7 @@ def run_gesture(config: dict[str, Any]) -> None:
             gesture = detector.detect(frame)
             text = f"raw={gesture.get('raw') or '-'} stable={gesture.get('stable') or '-'}"
             cv2.putText(frame, text, (16, 32), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-            cv2.imshow("MomoAgent Gesture", frame)
+            cv2.imshow("Arm Gesture", frame)
             if cv2.waitKey(1) & 0xFF == ord("q"):
                 break
     finally:

@@ -1,0 +1,20 @@
+{
+  "mode": "real",
+  "serial_port": "/dev/tty.usbmodem5B141127021",
+  "speed_percent": 100,
+  "nav_index": 5,
+  "geometry": [
+    0,
+    33,
+    1470,
+    825
+  ],
+  "content_splitter_sizes": [
+    876,
+    438
+  ],
+  "right_splitter_sizes": [
+    292,
+    447
+  ]
+}

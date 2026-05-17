@@ -13,7 +13,7 @@ if str(BASE_DIR) not in sys.path:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="启动 MomoAgent Web 控制台")
+    parser = argparse.ArgumentParser(description="启动 机械臂 Web 控制台")
     parser.add_argument("--host", default=None, help="监听地址，默认读取 Web配置.yaml")
     parser.add_argument("--port", type=int, default=None, help="监听端口，默认读取 Web配置.yaml")
     args = parser.parse_args()

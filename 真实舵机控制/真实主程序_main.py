@@ -1,4 +1,4 @@
-"""我的MomoAgent真实舵机控制系统入口。"""
+"""我的真实舵机控制系统入口。"""
 
 from __future__ import annotations
 
@@ -500,12 +500,12 @@ def 打印标定说明() -> None:
         """
 标定说明：
   重新标定请退出当前程序后运行：
-    mamba activate momo_rebot
+    mamba activate arm_rebot
     cd 真实舵机控制
     python 标定程序_calibrate.py
 
   只应用已有标定请运行：
-    mamba activate momo_rebot
+    mamba activate arm_rebot
     cd 真实舵机控制
     python 标定应用_apply_calibration.py
 
@@ -523,7 +523,7 @@ def 打印应用标定提示() -> None:
     print(
         """
 应用标定需要退出当前交互控制程序后单独运行：
-  mamba activate momo_rebot
+  mamba activate arm_rebot
   cd 真实舵机控制
   python 标定应用_apply_calibration.py
 
@@ -553,7 +553,7 @@ def 打印结果(result: 操作结果) -> None:
 def 打印欢迎信息(控制器: RealArmController) -> None:
     """打印启动信息。"""
 
-    print("欢迎使用 我的MomoAgent真实舵机控制系统")
+    print("欢迎使用 我的真实舵机控制系统")
     print(f"当前模式：{'dry-run' if 控制器.is_dry_run() else '真实模式'}")
     print("警告：真实模式会控制机械臂，请确认机械臂周围安全")
     print("输入 帮助 查看命令")

@@ -1,5 +1,5 @@
 project:
-  name: 我的MomoAgent复刻
+  name: 我的机械臂控制项目
   default_mode: dry_run
   python_version: "3.11"
 

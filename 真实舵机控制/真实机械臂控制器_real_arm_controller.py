@@ -1,7 +1,7 @@
 """真实机械臂控制器。
 
 这个控制器把配置、标定、安全检查、角度映射和舵机驱动串起来。
-它仿照 MomoAgent / SoArmMoceController 的核心思想，但保留小白可读结构。
+它按 Feetech 舵机控制、标定和安全检查流程组织，保留小白可读结构。
 """
 
 from __future__ import annotations
@@ -153,6 +153,8 @@ class RealArmController:
             "模式": "dry-run" if self.is_dry_run() else "真实模式",
             "已连接": self.connected,
             "关节角度": dict(self.current_joint_deg),
+            "goal_joint_targets_deg": dict(self.runtime_state.get("goal_joint_targets_deg", {})),
+            "goal_raw_by_joint": dict(self.runtime_state.get("goal_raw_by_joint", {})),
             "raw_present_position": dict(self.current_raw),
             "multi_turn_state": dict(self.runtime_state.get("multi_turn_state", {})) if self.current_raw else {},
             "夹爪": dict(self.runtime_state.get("gripper", {"开合": self.current_gripper}))
@@ -197,10 +199,20 @@ class RealArmController:
                 return 操作结果(False, raw_check.消息)
 
             self._print_goal_raw_plan(detail_by_joint)
+            if not self.is_dry_run():
+                self.driver.enable_torque()
             self.driver.write_many_goal_positions(goal_raw_by_joint)
             self.current_raw.update(goal_raw_by_joint)
             for joint_key, target_deg in target_deg_by_joint.items():
                 self.current_joint_deg[joint_key] = float(target_deg)
+            self.runtime_state["goal_joint_targets_deg"] = {
+                **dict(self.runtime_state.get("goal_joint_targets_deg", {})),
+                **{joint_key: float(target_deg) for joint_key, target_deg in target_deg_by_joint.items()},
+            }
+            self.runtime_state["goal_raw_by_joint"] = {
+                **dict(self.runtime_state.get("goal_raw_by_joint", {})),
+                **{joint_key: int(goal_raw) for joint_key, goal_raw in goal_raw_by_joint.items()},
+            }
             self._refresh_state_from_raw(self.driver.read_all_present_positions())
             self._save_runtime_state()
             return 操作结果(True, "移动命令已完成。" if self.is_dry_run() else "真实移动命令已写入舵机。")
@@ -536,6 +548,8 @@ class RealArmController:
                 "startup_present_raw": {},
                 "raw_present_position": {},
                 "关节角度": {},
+                "goal_joint_targets_deg": {},
+                "goal_raw_by_joint": {},
                 "multi_turn_state": {},
                 "gripper": {},
             }

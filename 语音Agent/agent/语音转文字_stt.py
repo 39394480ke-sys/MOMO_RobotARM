@@ -14,7 +14,7 @@ def transcribe_audio(wav_bytes: bytes, config: dict[str, Any]) -> str:
     stt_cfg = config.get("stt", {})
     provider = str(stt_cfg.get("provider", "http")).lower()
     if provider == "mock":
-        text = str(stt_cfg.get("mock_text") or os.environ.get("MOMO_MOCK_STT_TEXT") or "").strip()
+        text = str(stt_cfg.get("mock_text") or os.environ.get("ARM_MOCK_STT_TEXT") or "").strip()
         if not text:
             text = input("mock STT，请输入模拟识别文本：").strip()
         return text or "没有识别到有效语音"

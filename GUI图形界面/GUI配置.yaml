@@ -15,7 +15,7 @@ safety:
   real_mode_requires_confirm: false
   default_dry_run: true
   max_gui_step_deg: 5.0
-  max_real_step_deg: 2.0
+  max_real_step_deg: 3.0
 
 ui:
   show_3d_view: true

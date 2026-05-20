@@ -18,6 +18,7 @@ from gui_app.页面_pages.快速控制页面_quick_control_page import QuickCont
 from gui_app.页面_pages.日志页面_log_page import LogPage
 from gui_app.页面_pages.标定页面_calibration_page import CalibrationPage
 from gui_app.页面_pages.设置页面_settings_page import SettingsPage
+from gui_app.页面_pages.视觉跟随页面_vision_follow_page import VisionFollowPage
 from gui_app.页面_pages.运动学页面_kinematics_page import KinematicsPage
 
 
@@ -139,6 +140,7 @@ class MainWindow(QMainWindow):
         self.action_page = ActionPage()
         self.kinematics_page = KinematicsPage()
         self.calibration_page = CalibrationPage()
+        self.vision_follow_page = VisionFollowPage(self.bridge.project_root)
         self.log_page = LogPage(self.bridge.log_path)
         self.log_page.setObjectName("PersistentLogPanel")
         self.log_page.setMinimumWidth(260)
@@ -153,6 +155,7 @@ class MainWindow(QMainWindow):
             ("▶ 动作", self.action_page, (600, 420)),
             ("📐 运动学", self.kinematics_page, (620, 520)),
             ("🎯 标定", self.calibration_page, (620, 500)),
+            ("👁 视觉跟随", self.vision_follow_page, (860, 620)),
         ]
         for title, page, minimum_size in pages:
             self.nav.addItem(QListWidgetItem(title))
@@ -288,6 +291,7 @@ class MainWindow(QMainWindow):
         self.kinematics_page.execute_result_requested.connect(self._execute_kinematic_result)
 
         self.calibration_page.refresh_requested.connect(self._refresh_calibration)
+        self.vision_follow_page.follow_commands_requested.connect(self._run_vision_follow_commands)
 
     def _setup_timer(self) -> None:
         self.timer = QTimer(self)
@@ -323,6 +327,19 @@ class MainWindow(QMainWindow):
             on_finished=lambda: setattr(self, "continuous_move_busy", False),
             queue_if_busy=False,
         )
+
+    def _run_vision_follow_commands(self, commands: list) -> None:
+        if not commands:
+            self.vision_follow_page.set_follow_result({"ok": True, "message": "无视觉跟随命令。"})
+            return
+        if self.vision_follow_page.is_real_execute_enabled() and (self.bridge.get_mode() != "real" or not self.bridge.is_connected()):
+            self.vision_follow_page.set_follow_result({"ok": False, "message": "真实视觉跟随需要先在设置页连接真实模式。", "data": {"commands": commands}})
+            return
+        if self.motion_busy:
+            self.vision_follow_page.set_follow_result({"ok": False, "message": "上一条运动尚未完成，本次视觉跟随命令已跳过。", "data": {"commands": commands}})
+            return
+        task = lambda: self.bridge.move_follow_steps(commands) if self.vision_follow_page.is_real_execute_enabled() else {"ok": True, "message": "视觉跟随 dry-run。", "data": {"commands": commands}}
+        self._run_dangerous(task, "视觉跟随步进", on_result=self.vision_follow_page.set_follow_result, queue_if_busy=False)
 
     def _run_dangerous(
         self,

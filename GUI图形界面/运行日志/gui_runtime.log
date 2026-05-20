@@ -4308,3 +4308,26 @@
 {"time": "2026-05-17 21:36:48", "level": "info", "event": "save_recording_action", "message": "动作录制已保存：夹取杯子", "name": "夹取杯子", "pose_count": 5, "path": "/Users/ke/Library/Mobile Documents/com~apple~CloudDocs/Code/机械臂/动作录制与回放增强/动作库/夹取杯子.json"}
 {"time": "2026-05-17 21:37:25", "level": "warning", "event": "play_action", "message": "动作播放未完成：夹取杯子", "name": "夹取杯子"}
 {"time": "2026-05-17 21:38:04", "level": "info", "event": "home", "message": "Home完成。", "slowed": true}
+{"time": "2026-05-18 12:37:09", "level": "info", "event": "set_mode", "message": "已切换模式：dry_run", "mode": "dry_run"}
+{"time": "2026-05-18 12:37:09", "level": "info", "event": "set_motion_speed", "message": "全局速度已设置为 100%。", "speed_percent": 100.0}
+{"time": "2026-05-18 12:37:10", "level": "info", "event": "set_mode", "message": "已切换模式：real", "mode": "real"}
+{"time": "2026-05-18 12:44:10", "level": "info", "event": "set_motion_speed", "message": "全局速度已设置为 100%。", "speed_percent": 100.0}
+{"time": "2026-05-18 12:44:11", "level": "info", "event": "set_mode", "message": "已切换模式：real", "mode": "real"}
+{"time": "2026-05-18 13:05:01", "level": "info", "event": "set_motion_speed", "message": "全局速度已设置为 100%。", "speed_percent": 100.0}
+{"time": "2026-05-18 13:05:01", "level": "info", "event": "set_mode", "message": "已切换模式：real", "mode": "real"}
+{"time": "2026-05-18 13:14:55", "level": "info", "event": "set_mode", "message": "已切换模式：dry_run", "mode": "dry_run"}
+{"time": "2026-05-18 13:14:55", "level": "info", "event": "set_motion_speed", "message": "全局速度已设置为 100%。", "speed_percent": 100.0}
+{"time": "2026-05-18 13:14:56", "level": "info", "event": "set_mode", "message": "已切换模式：real", "mode": "real"}
+{"time": "2026-05-18 13:16:41", "level": "info", "event": "set_mode", "message": "已切换模式：dry_run", "mode": "dry_run"}
+{"time": "2026-05-18 13:16:41", "level": "info", "event": "set_motion_speed", "message": "全局速度已设置为 100%。", "speed_percent": 100.0}
+{"time": "2026-05-18 13:16:41", "level": "info", "event": "set_mode", "message": "已切换模式：real", "mode": "real"}
+{"time": "2026-05-18 13:24:58", "level": "info", "event": "set_motion_speed", "message": "全局速度已设置为 100%。", "speed_percent": 100.0}
+{"time": "2026-05-18 13:24:58", "level": "info", "event": "set_mode", "message": "已切换模式：real", "mode": "real"}
+{"time": "2026-05-18 13:26:15", "level": "info", "event": "set_motion_speed", "message": "全局速度已设置为 100%。", "speed_percent": 100.0}
+{"time": "2026-05-18 13:26:16", "level": "info", "event": "set_mode", "message": "已切换模式：real", "mode": "real"}
+{"time": "2026-05-18 13:32:44", "level": "info", "event": "set_mode", "message": "已切换模式：dry_run", "mode": "dry_run"}
+{"time": "2026-05-18 13:32:44", "level": "info", "event": "set_motion_speed", "message": "全局速度已设置为 100%。", "speed_percent": 100.0}
+{"time": "2026-05-18 13:32:45", "level": "info", "event": "set_mode", "message": "已切换模式：real", "mode": "real"}
+{"time": "2026-05-18 13:44:15", "level": "info", "event": "set_mode", "message": "已切换模式：dry_run", "mode": "dry_run"}
+{"time": "2026-05-18 13:44:15", "level": "info", "event": "set_motion_speed", "message": "全局速度已设置为 100%。", "speed_percent": 100.0}
+{"time": "2026-05-18 13:44:17", "level": "info", "event": "set_mode", "message": "已切换模式：real", "mode": "real"}

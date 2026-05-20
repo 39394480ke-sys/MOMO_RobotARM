@@ -223,6 +223,17 @@ class ControllerBridge:
         with self.io_lock:
             return self._move_joint_delta_unlocked(joint_key, delta_deg)
 
+    def move_follow_steps(self, commands: list[dict[str, Any]]) -> dict[str, Any]:
+        with self.io_lock:
+            responses: list[dict[str, Any]] = []
+            for command in commands:
+                joint_key = str(command.get("joint_key", ""))
+                delta_deg = float(command.get("delta_deg", 0.0))
+                responses.append(self._move_joint_delta_unlocked(joint_key, delta_deg))
+            ok_all = all(bool(item.get("ok")) for item in responses)
+            message = "视觉跟随步进已执行。" if ok_all else "视觉跟随步进部分失败。"
+            return ok(message, {"commands": commands, "responses": responses}) if ok_all else fail(message, data={"commands": commands, "responses": responses})
+
     def _move_joint_delta_unlocked(self, joint_key: str, delta_deg: float) -> dict[str, Any]:
         try:
             joint_key = self._normalize_joint_key(joint_key)

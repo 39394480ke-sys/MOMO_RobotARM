@@ -1,65 +1,65 @@
 {
-  "timestamp": 1779023869.605392,
-  "frame_id": 18118,
+  "timestamp": 1779081324.413845,
+  "frame_id": 257,
   "detected": true,
   "target_face": {
     "bbox": [
-      397.86,
-      163.05,
-      68.47,
-      97.19
+      187.57,
+      22.19,
+      149.6,
+      206.36
     ],
     "center": [
-      432.1,
-      211.64
+      262.37,
+      125.36
     ],
-    "score": 0.8843,
-    "area": 6654.64,
-    "area_ratio": 0.021662
+    "score": 0.8033,
+    "area": 30871.87,
+    "area_ratio": 0.100494
   },
   "faces": [
     {
       "bbox": [
-        397.86,
-        163.05,
-        68.47,
-        97.19
+        187.57,
+        22.19,
+        149.6,
+        206.36
       ],
       "center": [
-        432.1,
-        211.64
+        262.37,
+        125.36
       ],
-      "score": 0.8843,
-      "area": 6654.64,
-      "area_ratio": 0.021662
+      "score": 0.8033,
+      "area": 30871.87,
+      "area_ratio": 0.100494
     }
   ],
   "offset": {
-    "dx": 112.1,
-    "dy": 10.04,
-    "ndx": 0.350313,
-    "ndy": 0.041833,
+    "dx": -57.63,
+    "dy": -76.24,
+    "ndx": -0.180094,
+    "ndy": -0.317667,
     "desired_center": [
       320.0,
       201.6
     ],
     "target_center": [
-      432.1,
-      211.64
+      262.37,
+      125.36
     ],
     "in_dead_zone": false,
     "valid": true
   },
   "smoothed_offset": {
-    "ndx": 0.352886,
-    "ndy": 0.038671,
+    "ndx": -0.178687,
+    "ndy": -0.320799,
     "valid": true,
     "kept": false
   },
   "direction": {
-    "horizontal": "right",
-    "vertical": "down",
-    "combined": "right_down"
+    "horizontal": "left",
+    "vertical": "up",
+    "combined": "left_up"
   },
   "gesture": {
     "available": false,
@@ -69,7 +69,7 @@
     "stable_frames": 0,
     "message": "mediapipe 未安装，手势识别不可用。请执行：pip install mediapipe。原始错误：No module named 'mediapipe'"
   },
-  "fps": 29.355,
+  "fps": 25.077,
   "camera": {
     "source_type": "camera",
     "camera_index": 0,

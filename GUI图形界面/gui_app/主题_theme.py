@@ -494,4 +494,25 @@ def build_stylesheet() -> str:
         border: none;
         background: none;
     }
+    QSlider::groove:horizontal {
+        height: 8px;
+        background: #dbe3ec;
+        border-radius: 4px;
+    }
+    QSlider::sub-page:horizontal {
+        background: #1769aa;
+        border-radius: 4px;
+    }
+    QSlider::handle:horizontal {
+        background: #ffffff;
+        border: 2px solid #1769aa;
+        width: 24px;
+        height: 24px;
+        margin: -9px 0;
+        border-radius: 12px;
+    }
+    QSlider::handle:horizontal:hover {
+        background: #eff6ff;
+        border-color: #0d5f9a;
+    }
     """

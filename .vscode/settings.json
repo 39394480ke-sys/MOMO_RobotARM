@@ -1,0 +1,13 @@
+{
+  "terminal.integrated.profiles.osx": {
+    "momo_rebot": {
+      "path": "/bin/zsh",
+      "args": [
+        "-l",
+        "-c",
+        "eval \"$(/opt/homebrew/bin/mamba shell hook --shell zsh)\" && mamba activate momo_rebot && exec /bin/zsh -i"
+      ]
+    }
+  },
+  "terminal.integrated.defaultProfile.osx": "momo_rebot"
+}

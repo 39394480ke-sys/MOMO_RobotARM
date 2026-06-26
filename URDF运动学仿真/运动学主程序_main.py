@@ -11,11 +11,19 @@ from URDF检查_urdf_inspector import 检查URDF
 from 运动学模型_kinematics_model import SDK_JOINT_NAMES, 创建运动学模型, 打印_json
 
 
+def targets_to_model_q(values: list[float]) -> list[float]:
+    return [float(value) / 1000.0 if SDK_JOINT_NAMES[idx] == "j10" else math.radians(float(value)) for idx, value in enumerate(values)]
+
+
+def model_q_to_targets(values: list[float]) -> list[float]:
+    return [float(value) * 1000.0 if SDK_JOINT_NAMES[idx] == "j10" else math.degrees(float(value)) for idx, value in enumerate(values)]
+
+
 def print_help() -> None:
     print("命令：")
     print("  帮助")
     print("  检查URDF")
-    print("  正解 0 20 30 10 0")
+    print("  正解 0 0 20 30 10 0")
     print("  逆解 0.20 0.05 0.18")
     print("  逆解带姿态 0.20 0.05 0.18 0 0 0")
     print("  末端")
@@ -52,12 +60,12 @@ def main() -> int:
                 subprocess.Popen([sys.executable, str(script)])
                 print("已启动 3D 仿真进程。")
             elif command == "正解":
-                if len(parts) != 6:
-                    print("正解需要 5 个角度，单位是度。")
+                if len(parts) != 7:
+                    print("正解需要 6 个目标值：J10 单位 mm，其余单位 deg。")
                     continue
-                current_joints_deg = [float(value) for value in parts[1:6]]
+                current_joints_deg = [float(value) for value in parts[1:7]]
                 model = model or 创建运动学模型(use_gui=False)
-                pose = model.forward([math.radians(value) for value in current_joints_deg])
+                pose = model.forward(targets_to_model_q(current_joints_deg))
                 打印_json({"ok": True, "joints_deg": dict(zip(SDK_JOINT_NAMES, current_joints_deg)), "tcp_pose": pose})
             elif command == "逆解":
                 if len(parts) != 4:
@@ -67,9 +75,9 @@ def main() -> int:
                 result = model.inverse(
                     target_xyz=[float(value) for value in parts[1:4]],
                     target_rpy=None,
-                    seed_q_user=[math.radians(value) for value in current_joints_deg],
+                    seed_q_user=targets_to_model_q(current_joints_deg),
                 )
-                current_joints_deg = [math.degrees(float(value)) for value in result["q_user_rad"]]
+                current_joints_deg = model_q_to_targets(result["q_user_rad"])
                 打印_json({"ok": True, "solution_joints_deg": dict(zip(SDK_JOINT_NAMES, current_joints_deg)), "ik": result})
             elif command == "逆解带姿态":
                 if len(parts) != 7:
@@ -79,13 +87,13 @@ def main() -> int:
                 result = model.inverse(
                     target_xyz=[float(value) for value in parts[1:4]],
                     target_rpy=[float(value) for value in parts[4:7]],
-                    seed_q_user=[math.radians(value) for value in current_joints_deg],
+                    seed_q_user=targets_to_model_q(current_joints_deg),
                 )
-                current_joints_deg = [math.degrees(float(value)) for value in result["q_user_rad"]]
+                current_joints_deg = model_q_to_targets(result["q_user_rad"])
                 打印_json({"ok": True, "solution_joints_deg": dict(zip(SDK_JOINT_NAMES, current_joints_deg)), "ik": result})
             elif command == "末端":
                 model = model or 创建运动学模型(use_gui=False)
-                打印_json(model.forward([math.radians(value) for value in current_joints_deg]))
+                打印_json(model.forward(targets_to_model_q(current_joints_deg)))
             elif command == "增量":
                 if len(parts) not in {5, 8}:
                     print("增量格式：增量 base 0.01 0 0 或 增量 tool 0.01 0 0 0 0 0")
@@ -94,7 +102,7 @@ def main() -> int:
                 delta_xyz = [float(value) for value in parts[2:5]]
                 delta_rpy = [0.0, 0.0, 0.0] if len(parts) == 5 else [float(value) for value in parts[5:8]]
                 model = model or 创建运动学模型(use_gui=False)
-                current_pose = model.forward([math.radians(value) for value in current_joints_deg])
+                current_pose = model.forward(targets_to_model_q(current_joints_deg))
                 target_xyz, target_rpy = model.compose_delta_target(
                     current_xyz=current_pose["xyz"],
                     current_rpy=current_pose["rpy"],
@@ -105,9 +113,9 @@ def main() -> int:
                 ik = model.inverse(
                     target_xyz=target_xyz,
                     target_rpy=target_rpy if any(abs(value) > 1e-12 for value in delta_rpy) else None,
-                    seed_q_user=[math.radians(value) for value in current_joints_deg],
+                    seed_q_user=targets_to_model_q(current_joints_deg),
                 )
-                current_joints_deg = [math.degrees(float(value)) for value in ik["q_user_rad"]]
+                current_joints_deg = model_q_to_targets(ik["q_user_rad"])
                 打印_json(
                     {
                         "ok": True,

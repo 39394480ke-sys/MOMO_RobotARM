@@ -6,6 +6,7 @@ __all__ = [
     "摄像头_source",
     "人脸检测_face_detector",
     "手势识别_gesture_detector",
+    "主体跟踪_object_tracker",
     "目标选择_target_selector",
     "偏移计算_offset_calculator",
     "平滑滤波_smoothing",
@@ -15,4 +16,5 @@ __all__ = [
     "结果存储_result_store",
     "可视化_visualizer",
     "WebAPI客户端_robot_api_client",
+    "路径工具_path_utils",
 ]

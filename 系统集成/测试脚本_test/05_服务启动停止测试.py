@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-import sys
 import time
 from pathlib import Path
 
-BASE_DIR = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(BASE_DIR))
+import 系统测试路径_test_paths  # noqa: F401
 
 from integration.config_loader import load_config
 from integration.process_manager import ProcessManager
@@ -30,4 +28,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

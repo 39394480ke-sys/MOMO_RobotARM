@@ -2,20 +2,14 @@
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
-
-BASE_DIR = Path(__file__).resolve().parents[1]
-if str(BASE_DIR) not in sys.path:
-    sys.path.insert(0, str(BASE_DIR))
+from Agent测试路径_test_paths import agent_config_path
 
 from agent.对话应用_agent_app import AgentApp
 from agent.配置_config import load_config
 
 
 def main() -> None:
-    config = load_config(BASE_DIR / "Agent配置.yaml")
+    config = load_config(agent_config_path())
     config.setdefault("tts", {})["enabled"] = False
     app = AgentApp(config)
     app.ask_text("请查询机械臂状态", speak=False)
@@ -23,4 +17,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

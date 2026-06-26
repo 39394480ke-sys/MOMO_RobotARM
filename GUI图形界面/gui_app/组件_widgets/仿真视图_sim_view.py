@@ -3,15 +3,14 @@
 from __future__ import annotations
 
 import math
-import sys
-from pathlib import Path
 from typing import Any
 
 from PyQt5.QtCore import QPoint, Qt, QTimer
 from PyQt5.QtGui import QColor, QFont, QImage, QPainter, QPen, QPixmap
-from PyQt5.QtWidgets import QGridLayout, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
+from PyQt5.QtWidgets import QGridLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
-from gui_app.控制器桥接_controller_bridge import JOINT_ORDER
+from 控制桥接_common import JOINT_ORDER
+from gui_app.path_utils import PROJECT_ROOT
 
 
 class _InteractiveRenderLabel(QLabel):
@@ -108,16 +107,15 @@ class SimView(QWidget):
         self._render_pending = False
         self._render_in_progress = False
         self.visual_warning = ""
-        self._init_model()
-        self.schedule_render(0)
+        self._model_init_attempted = False
+        self.label.setText("3D 视图待加载")
 
     def _init_model(self) -> None:
         try:
             import pybullet as pybullet
-            project_root = Path(__file__).resolve().parents[3]
-            kinematics_path = str(project_root / "URDF运动学仿真")
-            if kinematics_path not in sys.path:
-                sys.path.insert(0, kinematics_path)
+            from 控制桥接_common import ensure_import_paths
+
+            ensure_import_paths([PROJECT_ROOT / "URDF运动学仿真"])
             from 运动学模型_kinematics_model import 创建运动学模型
 
             self.pb = pybullet
@@ -152,11 +150,23 @@ class SimView(QWidget):
 
     def schedule_render(self, delay_ms: int = 60) -> None:
         if self.model is None or self.pb is None:
+            if not self._model_init_attempted and not self._render_pending:
+                self._render_pending = True
+                QTimer.singleShot(max(0, int(delay_ms)), self._init_then_render)
             return
         if self._render_pending:
             return
         self._render_pending = True
         QTimer.singleShot(max(0, int(delay_ms)), self._render_scheduled)
+
+    def _init_then_render(self) -> None:
+        self._render_pending = False
+        if not self._model_init_attempted:
+            self._model_init_attempted = True
+            self.label.setText("正在加载 3D 视图...")
+            self._init_model()
+        if self.model is not None and self.pb is not None:
+            self.schedule_render(0)
 
     def _render_scheduled(self) -> None:
         self._render_pending = False
@@ -215,7 +225,11 @@ class SimView(QWidget):
             self._render_in_progress = False
 
     def _visual_q_rad(self) -> list[float]:
-        q_rad = [math.radians(float(self.current_joints_deg.get(joint, 0.0))) for joint in JOINT_ORDER]
+        q_rad = [
+            float(self.current_joints_deg.get(joint, 0.0)) / 1000.0 if joint == "j10"
+            else math.radians(float(self.current_joints_deg.get(joint, 0.0)))
+            for joint in JOINT_ORDER
+        ]
         limits = getattr(self.model, "ordered_joint_user_limits", None)
         names = getattr(self.model, "sdk_joint_names", JOINT_ORDER)
         if not limits:
@@ -227,11 +241,15 @@ class SimView(QWidget):
             lower, upper = limits[index]
             safe_value = max(float(lower), min(float(upper), float(value)))
             clipped.append(safe_value)
-            if abs(safe_value - float(value)) > math.radians(0.001):
-                name = names[index] if index < len(names) else f"J{index + 1}"
+            name = names[index] if index < len(names) else f"J{index + 1}"
+            tolerance = 0.001 if name == "j10" else math.radians(0.001)
+            if abs(safe_value - float(value)) > tolerance:
+                unit = "mm" if name == "j10" else "deg"
+                shown_safe = safe_value * 1000.0 if name == "j10" else math.degrees(safe_value)
+                shown_value = float(value) * 1000.0 if name == "j10" else math.degrees(float(value))
                 warnings.append(
                     f"{name} 显示值已夹到 URDF 范围 "
-                    f"{math.degrees(safe_value):.2f} deg，实际 {math.degrees(float(value)):.2f} deg"
+                    f"{shown_safe:.2f} {unit}，实际 {shown_value:.2f} {unit}"
                 )
         self.visual_warning = "；".join(warnings[:2])
         return clipped

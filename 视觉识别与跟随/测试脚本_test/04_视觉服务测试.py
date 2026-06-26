@@ -3,15 +3,16 @@
 from __future__ import annotations
 
 import json
-import urllib.request
+import os
 
+import 视觉测试路径_test_paths  # noqa: F401
+from 通用_http import request_json_object
 
-BASE_URL = "http://127.0.0.1:8000"
+BASE_URL = os.environ.get("VISION_API_URL", "http://127.0.0.1:8000").rstrip("/")
 
 
 def get_json(path: str) -> dict:
-    with urllib.request.urlopen(BASE_URL + path, timeout=2.0) as response:
-        return json.loads(response.read().decode("utf-8"))
+    return request_json_object(BASE_URL + path, timeout=2.0)
 
 
 def main() -> None:

@@ -72,7 +72,7 @@ class MovePoseRequest(BaseModel):
 
 
 class FKRequest(BaseModel):
-    joints_deg: list[float] = Field(..., min_items=5)
+    joints_deg: list[float] = Field(..., min_items=6)
 
 
 class IKRequest(BaseModel):
@@ -97,3 +97,9 @@ class FollowStartRequest(BaseModel):
     dry_run: bool = True
     speed_percent: int | None = Field(None, ge=1, le=100)
     confirm_text: str = ""
+    rail_enabled: bool | None = None
+    rail_start_mm: float | None = None
+    rail_end_mm: float | None = None
+    rail_speed_mm_s: float | None = Field(None, gt=0.0)
+    rail_step_mm: float | None = Field(None, gt=0.0)
+    rail_interval_sec: float | None = Field(None, gt=0.0)

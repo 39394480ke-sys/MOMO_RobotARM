@@ -5,13 +5,23 @@
 
 from __future__ import annotations
 
-import json
 import threading
 import time
-import urllib.request
 from typing import Any, Callable
 
-from .WebAPI客户端_robot_api_client import RobotAPIClient
+from .路径工具_path_utils import ensure_project_root_on_path
+
+ensure_project_root_on_path()
+
+from 控制桥接_common import (  # noqa: E402
+    RailSweepPlanner,
+    compute_axis_step,
+    read_smoothed_offset,
+    unwrap_vision_payload,
+    vision_target_guard,
+)
+
+from .WebAPI客户端_robot_api_client import RobotAPIClient, fetch_json_url
 
 
 class VisionFollowController:
@@ -48,6 +58,15 @@ class VisionFollowController:
         self._last_result: dict[str, Any] | None = None
         self._last_error = ""
         self._step_count = 0
+        self._last_ndx: float | None = None
+        self._last_ndy: float | None = None
+        self.rail_cfg = self._load_rail_config()
+        self._rail = RailSweepPlanner(
+            self.rail_cfg,
+            virtual_pos_mm=float(self.rail_cfg.get("start_mm", -140.0)),
+            running=bool(self.rail_cfg.get("enabled", False)),
+            phase="seek_start",
+        )
 
     def start(self) -> dict[str, Any]:
         with self._lock:
@@ -65,22 +84,32 @@ class VisionFollowController:
             self._thread.join(timeout=1.0)
         self._pan_active = False
         self._tilt_active = False
+        self._rail.stop("idle")
         return self.get_status()
 
     def step_once(self) -> dict[str, Any]:
         latest = self._read_latest()
         self._last_result = latest
-        if not latest.get("detected", False):
+        target_safety = self._target_safety_check(latest)
+        if target_safety is not None:
             self._pan_active = False
             self._tilt_active = False
-            return self._remember_command({"ok": True, "action": "no_target", "commands": [], "message": "目标丢失，不下发动作。"})
+            return self._remember_command(target_safety)
 
-        smoothed = latest.get("smoothed_offset") or {}
-        if not smoothed.get("valid", False):
-            return self._remember_command({"ok": True, "action": "invalid_offset", "commands": [], "message": "平滑偏移无效，不下发动作。"})
-
-        ndx = float(smoothed.get("ndx", 0.0))
-        ndy = float(smoothed.get("ndy", 0.0))
+        offset = read_smoothed_offset(latest)
+        if offset is None:
+            return self._remember_noop("invalid_offset", "平滑偏移无效，不下发动作。")
+        ndx, ndy = offset
+        jump_limit = float(self.follow_cfg.get("target_jump_limit_norm", 0.6))
+        if self._last_ndx is not None and self._last_ndy is not None:
+            if abs(ndx - self._last_ndx) > jump_limit or abs(ndy - self._last_ndy) > jump_limit:
+                self._last_ndx = ndx
+                self._last_ndy = ndy
+                self._pan_active = False
+                self._tilt_active = False
+                return self._remember_noop("target_jump_guard", "目标偏移突然跳变，本帧不下发动作。")
+        self._last_ndx = ndx
+        self._last_ndy = ndy
         commands: list[dict[str, Any]] = []
 
         pan_step = self._axis_step(
@@ -115,9 +144,27 @@ class VisionFollowController:
         if tilt_step is not None:
             commands.append({"joint_key": str(self.follow_cfg.get("tilt_joint", "elbow_flex")), "delta_deg": tilt_step})
 
-        if not commands:
-            return self._remember_command({"ok": True, "action": "dead_zone", "commands": [], "message": "目标在死区内，不下发动作。"})
+        commands.extend(self._rail_commands())
 
+        if not commands:
+            return self._remember_noop("dead_zone", "目标在死区内，不下发动作。")
+
+        return self._execute_commands(commands, action="joint_step", ndx=ndx, ndy=ndy)
+
+    def _target_safety_check(self, latest: dict[str, Any]) -> dict[str, Any] | None:
+        guard = vision_target_guard(
+            latest,
+            min_width=float(self.follow_cfg.get("min_target_box_width", 20.0)),
+            min_height=float(self.follow_cfg.get("min_target_box_height", 20.0)),
+        )
+        if guard is None:
+            return None
+        if guard.get("action") in {"no_target", "target_lost"}:
+            self._last_ndx = None
+            self._last_ndy = None
+        return self._command_result(str(guard.get("action", "target_guard")), str(guard.get("message", "目标不可跟随，不下发动作。")))
+
+    def _execute_commands(self, commands: list[dict[str, Any]], action: str, ndx: float, ndy: float) -> dict[str, Any]:
         responses = []
         if self.dry_run:
             responses = [{"ok": True, "dry_run": True, "message": "dry-run：未调用阶段八 API。", **cmd} for cmd in commands]
@@ -134,13 +181,14 @@ class VisionFollowController:
         return self._remember_command(
             {
                 "ok": ok,
-                "action": "joint_step",
+                "action": action,
                 "dry_run": self.dry_run,
                 "commands": commands,
                 "responses": responses,
                 "ndx": ndx,
                 "ndy": ndy,
                 "move_duration_sec": self.move_duration_sec,
+                "rail": self._rail_status(),
                 "message": "已生成视觉跟随小步进命令。",
             }
         )
@@ -171,7 +219,9 @@ class VisionFollowController:
                 "tilt_resume_zone_norm": self.follow_cfg.get("tilt_resume_zone_norm", self.follow_cfg.get("tilt_dead_zone_norm", 0.025)),
                 "max_pan_step_deg": self.follow_cfg.get("max_pan_step_deg", 1.0),
                 "max_tilt_step_deg": self.follow_cfg.get("max_tilt_step_deg", 1.0),
+                "rail_cinematic": dict(self.rail_cfg),
             },
+            "rail": self._rail_status(),
             "pan_active": self._pan_active,
             "tilt_active": self._tilt_active,
             "step_count": self._step_count,
@@ -202,25 +252,15 @@ class VisionFollowController:
                 self.step_once()
             except Exception as exc:
                 self._last_error = str(exc)
-                self._remember_command({"ok": False, "action": "error", "commands": [], "message": f"视觉跟随异常：{exc}"})
+                self._remember_command(self._command_result("error", f"视觉跟随异常：{exc}", ok=False))
             time.sleep(max(0.02, self.poll_interval_sec))
 
     def _read_latest(self) -> dict[str, Any]:
         if self.latest_provider is not None:
-            return self._unwrap_latest(dict(self.latest_provider()))
+            return unwrap_vision_payload(dict(self.latest_provider()))
         if self.engine is not None:
-            return self._unwrap_latest(dict(self.engine.get_latest_result()))
-        request = urllib.request.Request(self.latest_url, method="GET")
-        with urllib.request.urlopen(request, timeout=self.http_timeout_sec) as response:
-            return self._unwrap_latest(json.loads(response.read().decode("utf-8")))
-
-    @staticmethod
-    def _unwrap_latest(payload: dict[str, Any]) -> dict[str, Any]:
-        if "detected" in payload:
-            return payload
-        if payload.get("ok") is True and isinstance(payload.get("data"), dict):
-            return dict(payload["data"])
-        return payload
+            return unwrap_vision_payload(dict(self.engine.get_latest_result()))
+        return unwrap_vision_payload(fetch_json_url(self.latest_url, self.http_timeout_sec))
 
     def _axis_step(
         self,
@@ -236,36 +276,63 @@ class VisionFollowController:
         min_zone_key: str,
         max_key: str,
     ) -> float | None:
-        active = bool(getattr(self, active_attr))
-        abs_norm = abs(float(norm_value))
         dead_zone = float(self.follow_cfg.get(dead_key, 0.02))
         resume_zone = float(self.follow_cfg.get(resume_key, dead_zone))
+        step, next_active = compute_axis_step(
+            norm_value,
+            active=bool(getattr(self, active_attr)),
+            gain=float(self.follow_cfg.get(gain_key, self.follow_cfg.get(gain_alias, 1.0))),
+            sign=float(self.follow_cfg.get(sign_key, 1.0)),
+            dead=dead_zone,
+            resume=resume_zone,
+            min_step=float(self.follow_cfg.get(min_key, 0.0)),
+            min_zone=float(self.follow_cfg.get(min_zone_key, 1.0)),
+            max_step=float(self.follow_cfg.get(max_key, 1.0)),
+        )
+        setattr(self, active_attr, next_active)
+        return step
 
-        if active:
-            if abs_norm <= dead_zone:
-                setattr(self, active_attr, False)
-                return None
-        else:
-            if abs_norm < resume_zone:
-                return None
-            setattr(self, active_attr, True)
+    def _load_rail_config(self) -> dict[str, Any]:
+        raw = self.follow_cfg.get("rail_cinematic", {})
+        return RailSweepPlanner.normalize_config(raw if isinstance(raw, dict) else {})
 
-        gain = float(self.follow_cfg.get(gain_key, self.follow_cfg.get(gain_alias, 1.0)))
-        sign = float(self.follow_cfg.get(sign_key, 1.0))
-        raw_step = float(norm_value) * gain * sign
-        if abs(raw_step) <= 1e-9:
+    def _rail_step(self) -> float | None:
+        if not self._rail.running:
             return None
+        return self._rail.step(default_dt_sec=self.poll_interval_sec, live_pos_mm=self._live_rail_mm_for_planner())
 
-        min_step = float(self.follow_cfg.get(min_key, 0.0))
-        min_zone = float(self.follow_cfg.get(min_zone_key, 1.0))
-        max_step = float(self.follow_cfg.get(max_key, 1.0))
+    def _rail_commands(self) -> list[dict[str, Any]]:
+        rail_step = self._rail_step()
+        if rail_step is None:
+            return []
+        return [{"joint_key": str(self.rail_cfg.get("joint", "j10")), "delta_deg": rail_step, "kind": "rail_cinematic"}]
 
-        step_abs = abs(raw_step)
-        if abs_norm >= min_zone and min_step > 0:
-            step_abs = max(step_abs, min_step)
-        step_abs = min(step_abs, max_step)
-        signed = step_abs if raw_step > 0 else -step_abs
-        return round(signed, 4)
+    def _rail_current_mm(self) -> float:
+        return self._rail.current_mm(self._live_rail_mm_for_planner())
+
+    def _live_rail_mm_for_planner(self) -> float | None:
+        if self.dry_run:
+            return None
+        try:
+            payload = self.robot_client.get_robot_state()
+            data = payload.get("data") if isinstance(payload, dict) else {}
+            if isinstance(data, dict):
+                joints = data.get("joints_deg") or {}
+                if isinstance(joints, dict) and self.rail_cfg.get("joint", "j10") in joints:
+                    return float(joints[self.rail_cfg.get("joint", "j10")])
+        except Exception:
+            pass
+        return None
+
+    def _rail_status(self) -> dict[str, Any]:
+        return self._rail.status()
+
+    @staticmethod
+    def _command_result(action: str, message: str, ok: bool = True, commands: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+        return {"ok": bool(ok), "action": str(action), "commands": list(commands or []), "message": str(message)}
+
+    def _remember_noop(self, action: str, message: str) -> dict[str, Any]:
+        return self._remember_command(self._command_result(action, message))
 
     def _remember_command(self, command: dict[str, Any]) -> dict[str, Any]:
         command = dict(command)

@@ -3,21 +3,17 @@
 from __future__ import annotations
 
 import argparse
-import sys
-from pathlib import Path
 
-
-BASE_DIR = Path(__file__).resolve().parent
-if str(BASE_DIR) not in sys.path:
-    sys.path.insert(0, str(BASE_DIR))
-
+from agent.path_utils import AGENT_ROOT, ensure_project_root_on_path
 from agent.对话应用_agent_app import AgentApp
 from agent.配置_config import load_config
+
+ensure_project_root_on_path()
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="阶段十：语音 Agent / 对话控制系统")
-    parser.add_argument("--config", default=str(BASE_DIR / "Agent配置.yaml"), help="配置文件路径")
+    parser.add_argument("--config", default=str(AGENT_ROOT / "Agent配置.yaml"), help="配置文件路径")
     parser.add_argument("--no-tts", action="store_true", help="禁用 TTS 播报")
     parser.add_argument("--force-new-session", action="store_true", help="启动时创建新会话")
     parser.add_argument("--max-record-sec", type=float, default=None, help="最大录音秒数")

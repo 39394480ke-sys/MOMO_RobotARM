@@ -11,9 +11,11 @@
 
 from __future__ import annotations
 
+import re
 from abc import ABC, abstractmethod
 from typing import Any
 
+from 标定工具_calibration_utils import ARM_MOTOR_IDS, build_feetech_connect_error
 from 角度映射_angle_mapper import JOINT_ORDER, joint_label
 
 
@@ -187,17 +189,42 @@ class 真实_FeetechServoDriver(BaseServoDriver):
         self.bus = None
         self.motors: dict[str, Any] = {}
         self.joint_keys = self._build_joint_keys()
+        self.gripper_available = "gripper" in self.joint_keys
+        self.gripper_detection_message = "夹爪参与连接。" if self.gripper_available else "夹爪未配置或未标定。"
 
     def connect(self) -> None:
         Motor, MotorNormMode, FeetechMotorsBus = self._import_lerobot()
-        self.motors = {}
-        for joint_key in self.joint_keys:
-            entry = self.calibration_data.get(joint_key, {})
-            motor_id = int(entry.get("id", self._config_motor_id(joint_key)))
-            self.motors[joint_key] = Motor(motor_id, "sts3215", MotorNormMode.DEGREES)
-
-        self.bus = FeetechMotorsBus(port=self.port, motors=self.motors)
-        self.bus.connect()
+        try:
+            self._connect_with_joint_keys(self.joint_keys, Motor, MotorNormMode, FeetechMotorsBus)
+        except Exception as error:
+            if "gripper" in self.joint_keys and self._looks_like_only_gripper_missing(error):
+                self._disconnect_after_failed_connect()
+                arm_joint_keys = [joint_key for joint_key in self.joint_keys if joint_key != "gripper"]
+                try:
+                    self._connect_with_joint_keys(arm_joint_keys, Motor, MotorNormMode, FeetechMotorsBus)
+                except Exception as arm_error:
+                    raise RuntimeError(
+                        build_feetech_connect_error(
+                            arm_error,
+                            self.port,
+                            include_gripper=False,
+                        )
+                    ) from arm_error
+                self.joint_keys = arm_joint_keys
+                self.gripper_available = False
+                self.gripper_detection_message = "未检测到 J16 夹爪，已自动切换为无夹爪模式。"
+                print(self.gripper_detection_message)
+                print(f"真实 Feetech 舵机总线已连接：{self.port}")
+                return
+            raise RuntimeError(
+                build_feetech_connect_error(
+                    error,
+                    self.port,
+                    include_gripper=self.config.get("transport", {}).get("gripper_available", True),
+                )
+            ) from error
+        self.gripper_available = "gripper" in self.joint_keys
+        self.gripper_detection_message = "已检测到 J16 夹爪。" if self.gripper_available else "夹爪未参与连接。"
         print(f"真实 Feetech 舵机总线已连接：{self.port}")
 
     def disconnect(self, disable_torque: bool = True) -> None:
@@ -279,11 +306,43 @@ class 真实_FeetechServoDriver(BaseServoDriver):
 
     def _config_motor_id(self, joint_key: str) -> int:
         if joint_key == "gripper":
-            return 6
+            return ARM_MOTOR_IDS["gripper"]
         for joint in self.config.get("robot", {}).get("joints", []):
             if joint.get("key") == joint_key:
                 return int(joint.get("舵机ID", 0))
         raise KeyError(f"配置中找不到 {joint_label(joint_key)} 的舵机 ID。")
+
+    def _connect_with_joint_keys(self, joint_keys: list[str], Motor: Any, MotorNormMode: Any, FeetechMotorsBus: Any) -> None:
+        self.motors = {}
+        for joint_key in joint_keys:
+            entry = self.calibration_data.get(joint_key, {})
+            motor_id = int(entry.get("id", self._config_motor_id(joint_key)))
+            self.motors[joint_key] = Motor(motor_id, "sts3215", MotorNormMode.DEGREES)
+        self.bus = FeetechMotorsBus(port=self.port, motors=self.motors)
+        self.bus.connect()
+
+    def _disconnect_after_failed_connect(self) -> None:
+        if self.bus is None:
+            return
+        try:
+            self.bus.disconnect(disable_torque=False)
+        except TypeError:
+            try:
+                self.bus.disconnect()
+            except Exception:
+                pass
+        except Exception:
+            pass
+        self.bus = None
+
+    @staticmethod
+    def _looks_like_only_gripper_missing(error: Exception) -> bool:
+        message = str(error)
+        match = re.search(r"Missing motor IDs[^0-9]*(?P<ids>[\[\]\d,\s]+)", message)
+        if not match:
+            return False
+        missing_ids = {int(item) for item in re.findall(r"\d+", match.group("ids"))}
+        return missing_ids == {16}
 
     def _ensure_connected(self) -> None:
         if self.bus is None:

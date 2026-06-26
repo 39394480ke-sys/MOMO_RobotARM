@@ -5,6 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from .路径工具_path_utils import resolve_vision_path
+
 try:
     import cv2  # type: ignore
 except Exception:  # pragma: no cover
@@ -17,7 +19,10 @@ class GestureDetector:
         self.base_dir = Path(base_dir or ".").resolve()
         self.enabled = bool(self.config.get("enabled", True))
         self.backend = str(self.config.get("backend", "mediapipe"))
-        self.model_path = self._resolve_path(str(self.config.get("model_path", "weights/gesture_recognizer.task")))
+        self.model_path = resolve_vision_path(
+            str(self.config.get("model_path", "weights/gesture_recognizer.task")),
+            self.base_dir,
+        )
         self.required_stable_frames = int(self.config.get("stable_frames", 4))
         self.recognizer: Any | None = None
         self.mp: Any | None = None
@@ -118,9 +123,3 @@ class GestureDetector:
             "stable_frames": 0,
             "message": message or "手势识别不可用。",
         }
-
-    def _resolve_path(self, value: str) -> Path:
-        path = Path(value)
-        if path.is_absolute():
-            return path
-        return self.base_dir / path

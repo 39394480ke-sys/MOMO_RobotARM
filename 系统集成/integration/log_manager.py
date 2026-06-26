@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
-import json
-import time
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from .config_loader import INTEGRATION_DIR, resolve_path
+from .path_utils import ensure_project_root_on_path
+
+ensure_project_root_on_path()
+
+from 通用_io import log_json_line, tail_lines  # noqa: E402
 
 
 class LogManager:
@@ -19,16 +21,7 @@ class LogManager:
         self.system_log.parent.mkdir(parents=True, exist_ok=True)
 
     def _write(self, level: str, event: str, message: str, **fields: Any) -> None:
-        item = {
-            "time": datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds"),
-            "ts": time.time(),
-            "level": level,
-            "event": event,
-            "message": message,
-        }
-        item.update(fields)
-        with self.system_log.open("a", encoding="utf-8") as fh:
-            fh.write(json.dumps(item, ensure_ascii=False) + "\n")
+        log_json_line(self.system_log, level, event, message, time_style="iso", include_ts=True, **fields)
 
     def log_info(self, event: str, message: str, **fields: Any) -> None:
         self._write("info", event, message, **fields)
@@ -48,7 +41,4 @@ class LogManager:
                 path = resolve_path(log_file, self.base_dir)
         if not path.exists():
             return []
-        with path.open("r", encoding="utf-8", errors="replace") as fh:
-            content = fh.readlines()
-        return [line.rstrip("\n") for line in content[-lines:]]
-
+        return tail_lines(path, lines, errors="replace")

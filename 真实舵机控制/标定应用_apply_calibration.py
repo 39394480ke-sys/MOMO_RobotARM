@@ -10,26 +10,23 @@
 from __future__ import annotations
 
 import argparse
-from pathlib import Path
 from typing import Any
 
+from 真实路径工具_real_path_utils import real_config_path, resolve_real_path
 from 标定工具_calibration_utils import (
     JOINTS,
     MULTI_TURN_DISABLED_LIMIT_RAW,
     MULTI_TURN_JOINTS,
     MULTI_TURN_PHASE_VALUE,
     POSITION_MODE_VALUE,
-    SINGLE_TURN_CALIBRATION_JOINTS,
     bus_write,
+    connect_feetech_bus,
     confirm_or_abort,
-    create_feetech_bus,
     joint_label,
     load_config,
-    load_json,
+    single_turn_calibration_joints,
 )
-
-
-BASE_DIR = Path(__file__).resolve().parent
+from 通用_io import read_json_object  # noqa: E402
 
 
 def main() -> None:
@@ -39,10 +36,8 @@ def main() -> None:
     if not port:
         raise SystemExit("没有串口。请在真实配置.yaml 中设置 transport.port，或传入 --port。")
 
-    calibration_path = Path(args.calibration)
-    if not calibration_path.is_absolute():
-        calibration_path = BASE_DIR / calibration_path
-    calibration = load_json(calibration_path, default=None)
+    calibration_path = resolve_real_path(args.calibration)
+    calibration = read_json_object(calibration_path) if calibration_path.exists() else None
     if not isinstance(calibration, dict):
         raise SystemExit(f"标定文件不存在或格式错误：{calibration_path}")
 
@@ -55,11 +50,14 @@ def main() -> None:
     if not args.yes:
         confirm_or_abort("确认继续应用已有标定。", "我确认应用标定")
 
-    bus = create_feetech_bus(port, include_gripper=True)
+    include_gripper = should_include_gripper(config, calibration)
+    if not include_gripper:
+        print("夹爪不可用或未标定：只会应用 J10-J15 的寄存器配置。")
+
+    bus = connect_feetech_bus(port, include_gripper=include_gripper)
     try:
-        bus.connect()
         print("已连接 Feetech 舵机总线。")
-        apply_calibration(bus, calibration)
+        apply_calibration(bus, calibration, include_gripper=include_gripper)
         print("\n标定寄存器应用完成。")
     finally:
         try:
@@ -74,17 +72,28 @@ def main() -> None:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="把已有 标定文件.json 应用到真实舵机")
-    parser.add_argument("--config", default=str(BASE_DIR / "真实配置.yaml"), help="真实配置文件路径")
+    parser.add_argument("--config", default=str(real_config_path()), help="真实配置文件路径")
     parser.add_argument("--port", default=None, help="串口，例如 /dev/tty.usbmodemXXXX")
     parser.add_argument("--calibration", default="标定文件.json", help="已有标定文件")
     parser.add_argument("--yes", action="store_true", help="跳过固定文本确认，适合自动化但不推荐真机首次使用")
     return parser.parse_args()
 
 
-def apply_calibration(bus: Any, calibration: dict[str, Any]) -> None:
+def should_include_gripper(config: dict[str, Any], calibration: dict[str, Any]) -> bool:
+    """根据配置和标定文件判断是否操作夹爪。"""
+
+    if not config.get("transport", {}).get("gripper_available", True):
+        return False
+    meta = calibration.get("_meta", {})
+    if isinstance(meta, dict) and meta.get("gripper_available") is False:
+        return False
+    return isinstance(calibration.get("gripper"), dict)
+
+
+def apply_calibration(bus: Any, calibration: dict[str, Any], include_gripper: bool = True) -> None:
     """按规则写入寄存器。"""
 
-    for joint_name in SINGLE_TURN_CALIBRATION_JOINTS:
+    for joint_name in single_turn_calibration_joints(include_gripper):
         entry = require_entry(calibration, joint_name)
         operating_mode = int(entry.get("operating_mode", POSITION_MODE_VALUE))
         homing_offset = int(entry.get("homing_offset", 0))

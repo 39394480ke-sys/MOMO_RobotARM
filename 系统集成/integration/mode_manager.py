@@ -4,9 +4,13 @@ from __future__ import annotations
 
 from typing import Any
 
+from .path_utils import ensure_project_root_on_path
 from .runtime_state import RuntimeState
 from .safety_guard import SafetyGuard
 
+ensure_project_root_on_path()
+
+from 控制桥接_common import normalize_control_mode  # noqa: E402
 
 VALID_MODES = {"sim", "dry_run", "real"}
 
@@ -36,8 +40,7 @@ class ModeManager:
 
     @staticmethod
     def _normalize_mode(mode: str) -> str:
-        normalized = str(mode or "dry_run").strip()
-        if normalized not in VALID_MODES:
+        try:
+            return normalize_control_mode(mode or "dry_run", simulation_value="sim")
+        except ValueError:
             raise ValueError(f"模式只能是 sim / dry_run / real，当前：{mode}")
-        return normalized
-

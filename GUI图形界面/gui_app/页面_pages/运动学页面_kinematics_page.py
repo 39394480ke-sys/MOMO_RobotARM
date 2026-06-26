@@ -6,7 +6,12 @@ import json
 from collections.abc import Mapping
 
 from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtWidgets import QDoubleSpinBox, QFormLayout, QGroupBox, QHBoxLayout, QPushButton, QTextEdit, QVBoxLayout, QWidget
+from PyQt5.QtWidgets import QFormLayout, QGroupBox, QHBoxLayout, QPushButton, QTextEdit, QVBoxLayout, QWidget
+
+from gui_app.运动文本格式化_motion_text_format import append_joint_lines, append_tcp_lines
+from gui_app.结果格式化_result_format import result_message
+from gui_app.组件_widgets.布局工具_layout_tools import make_form_layout
+from gui_app.组件_widgets.数值输入工具_spinbox_tools import make_double_spin
 
 
 class KinematicsPage(QWidget):
@@ -110,22 +115,14 @@ class KinematicsPage(QWidget):
         self.execute_result_button.clicked.connect(self.execute_result_requested.emit)
 
     def _form(self, parent: QGroupBox) -> QFormLayout:
-        form = QFormLayout(parent)
-        form.setContentsMargins(12, 18, 12, 12)
-        form.setSpacing(8)
+        form = make_form_layout(parent)
         form.setLabelAlignment(Qt.AlignRight | Qt.AlignVCenter)
         form.setFormAlignment(Qt.AlignTop)
         form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
         return form
 
-    def _spin(self, minimum: float, maximum: float, value: float, step: float, decimals: int = 2) -> QDoubleSpinBox:
-        spin = QDoubleSpinBox()
-        spin.setRange(minimum, maximum)
-        spin.setValue(value)
-        spin.setSingleStep(step)
-        spin.setDecimals(decimals)
-        spin.setMinimumWidth(180)
-        return spin
+    def _spin(self, minimum: float, maximum: float, value: float, step: float, decimals: int = 2):
+        return make_double_spin(minimum, maximum, value, step, decimals, minimum_width=180)
 
     def _request_ik(self) -> None:
         xyz = [self.x_input.value(), self.y_input.value(), self.z_input.value()]
@@ -142,40 +139,20 @@ class KinematicsPage(QWidget):
     def _format_result(self, result: dict) -> str:
         ok = bool(result.get("ok"))
         lines = [f"状态: {'成功' if ok else '失败'}"]
-        message = result.get("message")
+        message = result_message(result, "")
         if message:
             lines.append(f"消息: {message}")
         data = result.get("data")
         if isinstance(data, Mapping):
-            self._append_pose(lines, "TCP", data.get("tcp_pose") or data.get("target_tcp_pose"))
+            append_tcp_lines(lines, "TCP", data.get("tcp_pose") or data.get("target_tcp_pose"))
             targets = data.get("target_joints_deg") or data.get("targets_deg")
-            if isinstance(targets, Mapping):
-                lines.append("")
-                lines.append("目标关节角度")
-                for key, value in targets.items():
-                    lines.append(f"  {key}: {float(value):.2f} deg")
+            append_joint_lines(lines, "目标关节角度", targets)
             ik = data.get("ik")
             if isinstance(ik, Mapping):
-                self._append_pose(lines, "IK 目标位姿", {"xyz": ik.get("xyz"), "rpy": ik.get("rpy")})
+                append_tcp_lines(lines, "IK 目标位姿", {"xyz": ik.get("xyz"), "rpy": ik.get("rpy")})
                 joints = ik.get("joints_deg") or ik.get("target_joints_deg")
-                if isinstance(joints, Mapping):
-                    lines.append("")
-                    lines.append("IK 关节解")
-                    for key, value in joints.items():
-                        lines.append(f"  {key}: {float(value):.2f} deg")
+                append_joint_lines(lines, "IK 关节解", joints)
         if len(lines) <= 2 and data is not None:
             lines.append("")
             lines.append(json.dumps(data, ensure_ascii=False, indent=2))
         return "\n".join(lines)
-
-    def _append_pose(self, lines: list[str], title: str, pose: object) -> None:
-        if not isinstance(pose, Mapping):
-            return
-        xyz = pose.get("xyz")
-        rpy = pose.get("rpy")
-        lines.append("")
-        lines.append(title)
-        if isinstance(xyz, (list, tuple)) and len(xyz) >= 3:
-            lines.append(f"  XYZ: {float(xyz[0]):.4f}, {float(xyz[1]):.4f}, {float(xyz[2]):.4f} m")
-        if isinstance(rpy, (list, tuple)) and len(rpy) >= 3:
-            lines.append(f"  RPY: {float(rpy[0]) * 57.2958:.2f}, {float(rpy[1]) * 57.2958:.2f}, {float(rpy[2]) * 57.2958:.2f} deg")

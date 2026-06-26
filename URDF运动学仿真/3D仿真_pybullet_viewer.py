@@ -2,15 +2,23 @@
 
 from __future__ import annotations
 
-import json
 import math
 import select
 import sys
 import time
-from pathlib import Path
+from json import JSONDecodeError
 from typing import Any
 
+from 运动学路径工具_kinematics_path_utils import PROJECT_ROOT
 from 运动学模型_kinematics_model import SDK_JOINT_NAMES, 创建运动学模型, 打印_json
+from 通用_io import read_json_object
+
+
+def _targets_to_model_q(values: list[float]) -> list[float]:
+    return [
+        float(value) / 1000.0 if SDK_JOINT_NAMES[idx] == "j10" else math.radians(float(value))
+        for idx, value in enumerate(values)
+    ]
 
 
 class PyBulletViewer:
@@ -43,8 +51,12 @@ class PyBulletViewer:
             limits = self.model.joint_limits_report()
             for joint_name, start_deg in zip(SDK_JOINT_NAMES, self.current_joints_deg):
                 joint_limits = limits[joint_name]
-                lower_deg = max(-180.0, float(joint_limits["lower_deg"]))
-                upper_deg = min(180.0, float(joint_limits["upper_deg"]))
+                if joint_name == "j10":
+                    lower_deg = max(-100.0, float(joint_limits["lower_rad"]) * 1000.0)
+                    upper_deg = min(100.0, float(joint_limits["upper_rad"]) * 1000.0)
+                else:
+                    lower_deg = max(-180.0, float(joint_limits["lower_deg"]))
+                    upper_deg = min(180.0, float(joint_limits["upper_deg"]))
                 slider_id = self.model.add_debug_slider(joint_name, lower_deg, upper_deg, start_deg)
                 self.slider_ids.append(slider_id)
             self.sliders_enabled = bool(self.slider_ids)
@@ -71,25 +83,26 @@ class PyBulletViewer:
 
     def set_joints_deg(self, joints_deg: list[float]) -> dict[str, Any]:
         if len(joints_deg) != len(SDK_JOINT_NAMES):
-            return {"ok": False, "错误": f"需要 {len(SDK_JOINT_NAMES)} 个关节角度。"}
+            return {"ok": False, "错误": f"需要 {len(SDK_JOINT_NAMES)} 个关节目标值：J10 为 mm，其余为 deg。"}
         self.current_joints_deg = [float(value) for value in joints_deg]
         self.last_slider_joints_deg = list(self.current_joints_deg)
-        pose = self.model.forward([math.radians(value) for value in self.current_joints_deg])
+        pose = self.model.forward(_targets_to_model_q(self.current_joints_deg))
         return {"ok": True, "joints_deg": dict(zip(SDK_JOINT_NAMES, self.current_joints_deg)), "tcp_pose": pose}
 
     def status(self) -> dict[str, Any]:
-        pose = self.model.forward([math.radians(value) for value in self.current_joints_deg])
+        pose = self.model.forward(_targets_to_model_q(self.current_joints_deg))
         return {"ok": True, "joints_deg": dict(zip(SDK_JOINT_NAMES, self.current_joints_deg)), "tcp_pose": pose}
 
     def play_action(self, name: str) -> dict[str, Any]:
-        action_path = Path(__file__).resolve().parents[1] / "仿真控制系统" / "姿态管理" / "动作库" / f"{name}.json"
+        action_path = PROJECT_ROOT / "仿真控制系统" / "姿态管理" / "动作库" / f"{name}.json"
         if not action_path.exists():
             return {"ok": False, "错误": f"没有找到阶段三动作：{action_path}"}
         try:
-            with action_path.open("r", encoding="utf-8") as file:
-                action = json.load(file)
-        except json.JSONDecodeError as exc:
+            action = read_json_object(action_path)
+        except JSONDecodeError as exc:
             return {"ok": False, "错误": f"动作 JSON 格式错误：{exc}"}
+        except ValueError as exc:
+            return {"ok": False, "错误": str(exc)}
 
         steps = action.get("步骤", [])
         if not isinstance(steps, list) or not steps:
@@ -114,7 +127,7 @@ class PyBulletViewer:
 def print_help() -> None:
     print("命令：")
     print("  状态")
-    print("  移动 0 20 30 10 0")
+    print("  移动 0 0 20 30 10 0")
     print("  播放动作 挥手")
     print("  末端")
     print("  退出")
@@ -154,10 +167,10 @@ def main() -> int:
             elif command == "末端":
                 打印_json(viewer.status().get("tcp_pose", {}))
             elif command == "移动":
-                if len(parts) != 6:
-                    print("移动命令需要 5 个角度，例如：移动 0 20 30 10 0")
+                if len(parts) != 7:
+                    print("移动命令需要 6 个目标值，例如：移动 0 0 20 30 10 0（J10 为 mm，其余为 deg）")
                     continue
-                打印_json(viewer.set_joints_deg([float(value) for value in parts[1:6]]))
+                打印_json(viewer.set_joints_deg([float(value) for value in parts[1:7]]))
             elif command == "播放动作":
                 if len(parts) < 2:
                     print("请输入动作名，例如：播放动作 挥手")

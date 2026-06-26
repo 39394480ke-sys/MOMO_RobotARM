@@ -6,11 +6,23 @@ from typing import Any
 
 
 ALLOWED_JOINT_NAMES = {
+    "j10",
+    "j11",
+    "j12",
+    "j13",
+    "j14",
+    "j15",
     "shoulder_pan",
     "shoulder_lift",
     "elbow_flex",
     "wrist_flex",
     "wrist_roll",
+    "J10",
+    "J11",
+    "J12",
+    "J13",
+    "J14",
+    "J15",
     "J1",
     "J2",
     "J3",
@@ -19,11 +31,22 @@ ALLOWED_JOINT_NAMES = {
 }
 
 JOINT_ALIAS = {
-    "J1": "shoulder_pan",
-    "J2": "shoulder_lift",
-    "J3": "elbow_flex",
-    "J4": "wrist_flex",
-    "J5": "wrist_roll",
+    "J1": "j11",
+    "J2": "j12",
+    "J3": "j13",
+    "J4": "j14",
+    "J5": "j15",
+    "J10": "j10",
+    "J11": "j11",
+    "J12": "j12",
+    "J13": "j13",
+    "J14": "j14",
+    "J15": "j15",
+    "shoulder_pan": "j11",
+    "shoulder_lift": "j12",
+    "elbow_flex": "j13",
+    "wrist_flex": "j14",
+    "wrist_roll": "j15",
 }
 
 SUPPORTED_BEHAVIORS = {"home", "open_gripper", "close_gripper"}
@@ -66,7 +89,7 @@ def robot_tool_specs() -> list[dict[str, Any]]:
             "type": "function",
             "function": {
                 "name": "rotate_joint",
-                "description": "让 J1-J5 中某个关节小幅旋转，delta_deg 必须在安全步长以内。",
+                "description": "让导轨版机械臂 j10-j15 中某个关节小幅移动，delta_deg 必须在安全步长以内。j10 是底盘导轨，其余为旋转关节。",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -125,4 +148,3 @@ def robot_tool_specs() -> list[dict[str, Any]]:
 
 def tool_names() -> list[str]:
     return [item["function"]["name"] for item in robot_tool_specs()]
-

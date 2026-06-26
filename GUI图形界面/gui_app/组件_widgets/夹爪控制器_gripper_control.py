@@ -37,3 +37,9 @@ class GripperControl(QWidget):
     def set_value(self, value: float) -> None:
         self.slider.setValue(int(round(float(value))))
 
+    def set_available(self, available: bool) -> None:
+        self.open_button.setEnabled(bool(available))
+        self.close_button.setEnabled(bool(available))
+        self.slider.setEnabled(bool(available))
+        if not available:
+            self.value_label.setText("未安装")

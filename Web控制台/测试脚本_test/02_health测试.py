@@ -3,16 +3,8 @@
 from __future__ import annotations
 
 import json
-import os
-import urllib.request
 
-
-BASE_URL = os.environ.get("WEB_API_URL", "http://127.0.0.1:8010")
-
-
-def get_json(path: str) -> dict:
-    with urllib.request.urlopen(BASE_URL + path, timeout=5) as response:
-        return json.loads(response.read().decode("utf-8"))
+from Web测试客户端_test_client import get_json
 
 
 def main() -> None:

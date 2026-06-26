@@ -3,20 +3,14 @@
 from __future__ import annotations
 
 import os
-import sys
-from pathlib import Path
 
-
-BASE_DIR = Path(__file__).resolve().parents[1]
-if str(BASE_DIR) not in sys.path:
-    sys.path.insert(0, str(BASE_DIR))
-
+from Agent测试路径_test_paths import agent_config_path
 from agent.对话应用_agent_app import AgentApp
 from agent.配置_config import load_config
 
 
 def main() -> None:
-    config = load_config(BASE_DIR / "Agent配置.yaml")
+    config = load_config(agent_config_path())
     app = AgentApp(config)
     if os.environ.get("ARM_MOCK_STT_TEXT"):
         app.ask_text(os.environ["ARM_MOCK_STT_TEXT"], speak=bool(config.get("tts", {}).get("enabled", True)))

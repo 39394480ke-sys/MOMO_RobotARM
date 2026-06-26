@@ -16,6 +16,7 @@ class JointControlRow(QWidget):
         self.joint_key = joint_key
         self.angle = 0.0
         self.step_deg = 1.0
+        self.unit = "mm" if joint_key == "j10" else "deg"
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 2, 0, 2)
@@ -28,7 +29,7 @@ class JointControlRow(QWidget):
         self.minus_button.setObjectName("JointStepButton")
         self.minus_button.setMinimumWidth(42)
         self.minus_button.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
-        self.angle_label = QLabel("0.00 deg")
+        self.angle_label = QLabel(f"0.00 {self.unit}")
         self.angle_label.setObjectName("AngleReadout")
         self.angle_label.setMinimumWidth(118)
         self.angle_label.setMaximumWidth(150)
@@ -57,4 +58,4 @@ class JointControlRow(QWidget):
 
     def set_angle(self, angle: float) -> None:
         self.angle = float(angle)
-        self.angle_label.setText(f"{self.angle:.2f} deg")
+        self.angle_label.setText(f"{self.angle:.2f} {self.unit}")

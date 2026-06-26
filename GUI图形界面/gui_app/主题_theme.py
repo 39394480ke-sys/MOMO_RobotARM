@@ -267,6 +267,33 @@ def build_stylesheet() -> str:
         background: #f4f7fb;
         border: none;
     }
+    QWidget#InspectorViewToolbar {
+        background: #eef3f8;
+        border-left: 1px solid #d8dee6;
+        border-top: 1px solid #d8dee6;
+        border-bottom: 1px solid #d8dee6;
+    }
+    QPushButton#InspectorViewTab {
+        background: #ffffff;
+        color: #334155;
+        border: 1px solid #cbd5e1;
+        border-radius: 5px;
+        padding: 5px 10px;
+        min-height: 22px;
+        font-weight: 700;
+    }
+    QPushButton#InspectorViewTab:checked {
+        background: #2f7fbf;
+        color: #ffffff;
+        border-color: #1769aa;
+    }
+    QLabel#CameraPreviewLabel {
+        background: #080f1f;
+        color: #dbeafe;
+        border: 1px solid #cfd7e2;
+        border-radius: 6px;
+        padding: 0;
+    }
     QWidget#ViewportToolbar {
         background: rgba(17, 24, 39, 150);
         border: 1px solid rgba(148, 163, 184, 130);
@@ -294,6 +321,29 @@ def build_stylesheet() -> str:
         font-family: "Menlo", "Monaco";
         font-size: 12px;
         line-height: 140%;
+    }
+    QTextEdit#AIChatText {
+        background: #0f172a;
+        color: #e5e7eb;
+        border: 1px solid #243244;
+        border-radius: 6px;
+        padding: 10px;
+        font-family: "PingFang SC", "Microsoft YaHei", Arial;
+        font-size: 14px;
+        line-height: 155%;
+    }
+    QLineEdit#AIChatInput {
+        background: #ffffff;
+        color: #111827;
+        border: 1px solid #b8c4d4;
+        border-radius: 6px;
+        padding: 8px 10px;
+        min-height: 24px;
+        font-size: 14px;
+    }
+    QLineEdit#AIChatInput:focus {
+        border: 2px solid #1769aa;
+        padding: 7px 9px;
     }
     QTextEdit#ResultText {
         background: #111827;

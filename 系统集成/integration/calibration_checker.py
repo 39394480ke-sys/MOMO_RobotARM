@@ -2,19 +2,24 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
 
 from .config_loader import INTEGRATION_DIR, resolve_path
+from .path_utils import ensure_project_root_on_path
+
+ensure_project_root_on_path()
+
+from 通用_io import read_json_object  # noqa: E402
 
 
 REQUIRED_FIELDS = {
-    "shoulder_pan": ["zero_present_raw", "range_min", "range_max"],
-    "shoulder_lift": ["home_present_raw", "phase"],
-    "elbow_flex": ["home_present_raw", "phase"],
-    "wrist_flex": ["zero_present_raw", "range_min", "range_max"],
-    "wrist_roll": ["home_present_raw", "phase"],
+    "j10": ["home_present_raw", "phase"],
+    "j11": ["home_present_raw", "phase"],
+    "j12": ["home_present_raw", "phase"],
+    "j13": ["home_present_raw", "phase"],
+    "j14": ["zero_present_raw", "range_min", "range_max"],
+    "j15": ["home_present_raw", "phase"],
     "gripper": ["range_min", "range_max"],
 }
 
@@ -39,12 +44,17 @@ class CalibrationChecker:
             result["errors"].append("标定文件不存在。")
             return result
         try:
-            data = json.loads(self.path.read_text(encoding="utf-8"))
+            data = read_json_object(self.path)
         except Exception as exc:
-            result["errors"].append(f"标定文件无法解析：{exc}")
+            message = str(exc)
+            if "不是 JSON 对象" in message:
+                result["errors"].append("标定文件最外层必须是对象。")
+            else:
+                result["errors"].append(f"标定文件无法解析：{exc}")
             return result
+        required_fields = self._required_fields_for(data)
         all_ok = True
-        for joint, fields in REQUIRED_FIELDS.items():
+        for joint, fields in required_fields.items():
             item = data.get(joint)
             missing = []
             if not isinstance(item, dict):
@@ -60,3 +70,9 @@ class CalibrationChecker:
         result["real_mode_allowed"] = all_ok
         return result
 
+    def _required_fields_for(self, calibration: dict[str, Any]) -> dict[str, list[str]]:
+        required = dict(REQUIRED_FIELDS)
+        meta = calibration.get("_meta", {}) if isinstance(calibration.get("_meta"), dict) else {}
+        if meta.get("gripper_available") is False and "gripper" not in calibration:
+            required.pop("gripper", None)
+        return required

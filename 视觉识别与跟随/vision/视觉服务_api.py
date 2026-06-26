@@ -10,14 +10,17 @@ from typing import Any
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, Response
+from pydantic import BaseModel
 
-from .可视化_visualizer import make_placeholder_frame
+from .可视化_visualizer import encode_jpeg, make_placeholder_frame
 from .视觉引擎_vision_engine import VisionEngine
 
-try:
-    import cv2  # type: ignore
-except Exception:  # pragma: no cover
-    cv2 = None  # type: ignore
+
+class SelectTargetRequest(BaseModel):
+    x: int
+    y: int
+    w: int
+    h: int
 
 
 def create_app(config: dict[str, Any], base_dir: str | Path | None = None, engine: VisionEngine | None = None, auto_start: bool = True) -> FastAPI:
@@ -64,15 +67,24 @@ def create_app(config: dict[str, Any], base_dir: str | Path | None = None, engin
             result = vision_engine.process_once()
         return result
 
+    @app.post("/target/select")
+    async def select_target(req: SelectTargetRequest) -> dict[str, Any]:
+        return vision_engine.select_manual_target((req.x, req.y, req.w, req.h))
+
+    @app.post("/target/reset")
+    async def reset_target() -> dict[str, Any]:
+        return vision_engine.reset_manual_target()
+
+    @app.get("/target/state")
+    async def target_state() -> dict[str, Any]:
+        return vision_engine.get_target_state()
+
     @app.get("/frame.jpg")
     async def frame_jpg() -> Response:
         content = vision_engine.store.latest_frame_bytes()
         if content is None:
             frame = make_placeholder_frame("no frame")
-            if frame is not None and cv2 is not None:
-                ok, encoded = cv2.imencode(".jpg", frame)
-                if ok:
-                    content = encoded.tobytes()
+            content = encode_jpeg(frame)
         return Response(content=content or b"", media_type="image/jpeg")
 
     @app.get("/debug", response_class=HTMLResponse)

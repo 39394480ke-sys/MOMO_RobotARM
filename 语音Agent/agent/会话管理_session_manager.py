@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
-import json
 import time
 import uuid
-from pathlib import Path
 from typing import Any
 
+from .path_utils import ensure_project_root_on_path
 from .配置_config import config_base_dir, resolve_path
+
+ensure_project_root_on_path()
+
+from 通用_io import atomic_write_json, read_json_object_or_default  # noqa: E402
 
 
 class SessionManager:
@@ -22,23 +25,20 @@ class SessionManager:
         if force_new:
             return self.reset_session()
         if self.path.exists():
-            try:
-                data = json.loads(self.path.read_text(encoding="utf-8") or "{}")
-                if isinstance(data, dict) and isinstance(data.get("messages"), list):
-                    if not data.get("session_id"):
-                        data["session_id"] = self._new_session_id()
-                    if not data.get("backend"):
-                        data["backend"] = self.config.get("agent", {}).get("backend", "openai_compatible")
-                    return data
-            except Exception:
-                pass
+            data = read_json_object_or_default(self.path)
+            if isinstance(data.get("messages"), list):
+                if not data.get("session_id"):
+                    data["session_id"] = self._new_session_id()
+                if not data.get("backend"):
+                    data["backend"] = self.config.get("agent", {}).get("backend", "openai_compatible")
+                return data
         data = self._empty_session()
         self.save_session(data)
         return data
 
     def save_session(self, session: dict[str, Any]) -> None:
         session["updated_at"] = time.time()
-        self.path.write_text(json.dumps(session, ensure_ascii=False, indent=2), encoding="utf-8")
+        atomic_write_json(self.path, session)
 
     def reset_session(self) -> dict[str, Any]:
         session = self._empty_session()

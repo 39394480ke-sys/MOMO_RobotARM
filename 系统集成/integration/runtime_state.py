@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
-import json
-import os
 import time
 from pathlib import Path
-from uuid import uuid4
 from typing import Any
 
 from .config_loader import INTEGRATION_DIR, resolve_path
+from .path_utils import ensure_project_root_on_path
+
+ensure_project_root_on_path()
+
+from 通用_io import atomic_write_json, read_json_object_or_default  # noqa: E402
 
 
 class RuntimeState:
@@ -32,23 +34,14 @@ class RuntimeState:
         }
 
     def load(self) -> dict[str, Any]:
-        if not self.path.exists():
-            return self.default_state()
-        try:
-            data = json.loads(self.path.read_text(encoding="utf-8"))
-        except Exception:
-            return self.default_state()
-        if not isinstance(data, dict):
-            return self.default_state()
         merged = self.default_state()
+        data = read_json_object_or_default(self.path)
         merged.update(data)
         return merged
 
     def save(self, state: dict[str, Any]) -> dict[str, Any]:
         state["updated_at"] = time.time()
-        tmp_path = self.path.with_name(f"{self.path.stem}.{os.getpid()}.{uuid4().hex}.tmp")
-        tmp_path.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
-        tmp_path.replace(self.path)
+        atomic_write_json(self.path, state)
         return state
 
     def update(self, **kwargs: Any) -> dict[str, Any]:

@@ -17,15 +17,16 @@ from .语音转文字_stt import transcribe_audio
 
 
 STOP_WORDS = {"停", "停止", "别动", "急停", "马上停", "不要动"}
+STATUS_HINTS = {"状态", "连接", "模式", "当前位置", "当前角度", "关节角度", "在干嘛", "咋样"}
 
 
 class AgentApp:
-    def __init__(self, config: dict[str, Any], force_new_session: bool = False):
+    def __init__(self, config: dict[str, Any], force_new_session: bool = False, tool_bridge: Any | None = None):
         self.config = config
         self.logger = get_logger(config)
-        self.client = create_agent_client(config, force_new_session=force_new_session)
+        self.tool_bridge = tool_bridge or RobotToolBridge(config)
+        self.client = create_agent_client(config, force_new_session=force_new_session, tool_bridge=self.tool_bridge)
         self.session_manager = SessionManager(config)
-        self.tool_bridge = RobotToolBridge(config)
 
     def ask_text(self, text: str, speak: bool = True) -> AgentReply:
         content = str(text or "").strip()
@@ -35,6 +36,9 @@ class AgentApp:
             result = self.tool_bridge.execute("stop_robot", {})
             message = "已发送停止命令。" if result.get("ok") else str(result.get("error", "停止命令失败。"))
             reply = AgentReply(text=message, session_id="", raw_payload={"tool_result": result})
+        elif any(hint in content for hint in STATUS_HINTS):
+            result = self.tool_bridge.execute("get_robot_state", {})
+            reply = AgentReply(text=_format_robot_state(result), session_id="", raw_payload={"tool_result": result})
         else:
             self.logger.log("info", "ask", content)
             reply = self.client.ask(content)
@@ -119,3 +123,31 @@ class AgentApp:
             return True
         print("未知命令。可用命令：/voice /say 文本 /session /warmup /reset /tools /quit")
         return True
+
+
+def _format_robot_state(tool_result: dict[str, Any]) -> str:
+    if not tool_result.get("ok"):
+        return str(tool_result.get("error") or "查询机械臂状态失败。")
+    data = tool_result.get("result", {})
+    if isinstance(data, dict) and data.get("data") and isinstance(data.get("data"), dict):
+        data = data["data"]
+    if not isinstance(data, dict):
+        return "查询成功，但状态格式无法识别。"
+    mode = str(data.get("mode") or data.get("模式") or "未知")
+    connected = bool(data.get("connected", data.get("已连接", False)))
+    joints = data.get("joints_deg") or data.get("关节角度") or {}
+    action = data.get("action") or {}
+    action_state = action.get("state", "未知") if isinstance(action, dict) else "未知"
+    tcp = data.get("tcp_pose") or {}
+    parts = [f"当前模式：{mode}。", f"连接状态：{'已连接' if connected else '未连接'}。"]
+    if isinstance(joints, dict) and joints:
+        joint_text = "，".join(f"{key}={float(value):.2f}" for key, value in joints.items() if isinstance(value, (int, float)))
+        if joint_text:
+            parts.append(f"关节：{joint_text}。")
+    if isinstance(tcp, dict) and tcp.get("xyz"):
+        xyz = tcp.get("xyz")
+        if isinstance(xyz, list) and len(xyz) >= 3:
+            parts.append(f"TCP xyz：{float(xyz[0]):.3f}, {float(xyz[1]):.3f}, {float(xyz[2]):.3f}。")
+    if action_state != "未知":
+        parts.append(f"动作状态：{action_state}。")
+    return " ".join(parts)

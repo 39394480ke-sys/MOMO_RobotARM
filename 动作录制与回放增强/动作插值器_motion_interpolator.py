@@ -9,6 +9,12 @@ from __future__ import annotations
 import math
 from typing import Mapping
 
+from 动作路径工具_motion_path_utils import ensure_project_root_on_path
+
+ensure_project_root_on_path()
+
+from 控制桥接_common import smoothstep01  # noqa: E402
+
 
 class MotionInterpolator:
     """关节和夹爪插值工具。"""
@@ -26,7 +32,7 @@ class MotionInterpolator:
         keys = list(end.keys())
         frames: list[dict[str, float]] = []
         for step in range(1, steps + 1):
-            ratio = step / steps
+            ratio = smoothstep01(step / steps)
             frames.append({
                 key: start.get(key, end[key]) + (end[key] - start.get(key, end[key])) * ratio
                 for key in keys

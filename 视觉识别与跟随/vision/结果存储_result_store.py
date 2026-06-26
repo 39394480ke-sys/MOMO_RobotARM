@@ -2,10 +2,20 @@
 
 from __future__ import annotations
 
-import json
 import threading
 from pathlib import Path
 from typing import Any
+
+from .可视化_visualizer import encode_jpeg
+from .路径工具_path_utils import (
+    ensure_parent_dirs,
+    ensure_project_root_on_path,
+    resolve_vision_path,
+)
+
+ensure_project_root_on_path()
+
+from 通用_io import atomic_write_json, read_json_object_or_default  # noqa: E402
 
 try:
     import cv2  # type: ignore
@@ -17,21 +27,24 @@ class ResultStore:
     def __init__(self, config: dict[str, Any], base_dir: str | Path | None = None):
         self.config = dict(config or {})
         self.base_dir = Path(base_dir or ".").resolve()
-        self.latest_result_path = self._resolve_path(str(self.config.get("latest_result_path", "runtime/latest_result.json")))
-        self.latest_frame_path = self._resolve_path(str(self.config.get("latest_frame_path", "runtime/latest_frame.jpg")))
+        self.latest_result_path = resolve_vision_path(
+            str(self.config.get("latest_result_path", "runtime/latest_result.json")),
+            self.base_dir,
+        )
+        self.latest_frame_path = resolve_vision_path(
+            str(self.config.get("latest_frame_path", "runtime/latest_frame.jpg")),
+            self.base_dir,
+        )
         self.save_latest_frame = bool(self.config.get("save_latest_frame", True))
         self._lock = threading.RLock()
         self._latest_result: dict[str, Any] = {}
         self._latest_frame: Any | None = None
-        self.latest_result_path.parent.mkdir(parents=True, exist_ok=True)
-        self.latest_frame_path.parent.mkdir(parents=True, exist_ok=True)
+        ensure_parent_dirs(self.latest_result_path, self.latest_frame_path)
 
     def save_result(self, result: dict[str, Any]) -> None:
         with self._lock:
             self._latest_result = dict(result)
-            tmp_path = self.latest_result_path.with_suffix(self.latest_result_path.suffix + ".tmp")
-            tmp_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
-            tmp_path.replace(self.latest_result_path)
+            atomic_write_json(self.latest_result_path, result)
 
     def save_frame(self, frame: Any) -> None:
         with self._lock:
@@ -44,10 +57,7 @@ class ResultStore:
             if self._latest_result:
                 return dict(self._latest_result)
         if self.latest_result_path.exists():
-            try:
-                return json.loads(self.latest_result_path.read_text(encoding="utf-8"))
-            except Exception:
-                return {}
+            return read_json_object_or_default(self.latest_result_path)
         return {}
 
     def get_latest_frame(self) -> Any | None:
@@ -60,19 +70,12 @@ class ResultStore:
 
     def latest_frame_bytes(self) -> bytes | None:
         frame = self.get_latest_frame()
-        if frame is not None and cv2 is not None:
-            ok, encoded = cv2.imencode(".jpg", frame)
-            if ok:
-                return encoded.tobytes()
+        encoded = encode_jpeg(frame)
+        if encoded is not None:
+            return encoded
         if self.latest_frame_path.exists():
             try:
                 return self.latest_frame_path.read_bytes()
             except Exception:
                 return None
         return None
-
-    def _resolve_path(self, value: str) -> Path:
-        path = Path(value)
-        if path.is_absolute():
-            return path
-        return self.base_dir / path

@@ -2,15 +2,19 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
 
 from .calibration_checker import CalibrationChecker
 from .config_loader import INTEGRATION_DIR
+from .path_utils import ensure_project_root_on_path
 from .process_manager import ProcessManager
 from .runtime_state import RuntimeState
 from .service_registry import ServiceRegistry
+
+ensure_project_root_on_path()
+
+from 通用_http import HTTPJsonError, request_json_object  # noqa: E402
 
 
 class HealthChecker:
@@ -66,18 +70,8 @@ class HealthChecker:
     @staticmethod
     def _get_json(url: str, timeout: float = 2.0) -> tuple[bool, Any]:
         try:
-            import requests
-
-            response = requests.get(url, timeout=timeout)
-            content_type = response.headers.get("content-type", "")
-            if "application/json" in content_type:
-                data = response.json()
-            else:
-                try:
-                    data = response.json()
-                except Exception:
-                    data = response.text[:300]
-            return 200 <= response.status_code < 300, data
+            return True, request_json_object(url, timeout=timeout)
+        except HTTPJsonError as exc:
+            return False, exc.payload if exc.payload is not None else exc.text[:300]
         except Exception as exc:
             return False, str(exc)
-

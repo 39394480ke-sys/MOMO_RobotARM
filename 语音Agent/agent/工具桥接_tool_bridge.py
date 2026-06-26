@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from typing import Any
 
-import requests
+from .path_utils import ensure_project_root_on_path
+
+ensure_project_root_on_path()
+
+from 控制桥接_common import api_error_info, clamp01, real_confirm_required, real_confirm_text, tool_result_fail, tool_result_ok, unwrap_api_data  # noqa: E402
+from 通用_http import HTTPJsonError, request_json_object  # noqa: E402
 
 from .安全策略_safety_policy import SafetyPolicy
 
@@ -15,7 +20,7 @@ class RobotToolBridge:
         self.policy = SafetyPolicy(config)
         self.base_url = str(config.get("robot_api", {}).get("base_url", "http://127.0.0.1:8010")).rstrip("/")
         self.timeout = float(config.get("robot_api", {}).get("timeout_sec", 6))
-        self.confirm_text = str(config.get("safety", {}).get("confirm_text", "我确认机械臂周围安全"))
+        self.confirm_text = real_confirm_text(config, "confirm_text", "real_confirm_text")
 
     def execute(self, tool_name: str, arguments: dict[str, Any] | None = None) -> dict[str, Any]:
         args = arguments or {}
@@ -25,15 +30,15 @@ class RobotToolBridge:
             if tool_name not in {"get_robot_state", "stop_robot"}:
                 ok, message = self.policy.check_api_available()
                 if not ok:
-                    return {"ok": False, "tool": tool_name, "error": message}
+                    return tool_result_fail(tool_name, message)
             mode = self._current_mode()
             safe_args = self.policy.check(tool_name, args, robot_mode=mode)
             result = self._dispatch(tool_name, safe_args)
-            return {"ok": True, "tool": tool_name, "result": result}
-        except requests.RequestException:
-            return {"ok": False, "tool": tool_name, "error": "机器人控制 API 不可用，请先启动阶段八 Web 服务。"}
+            return tool_result_ok(tool_name, result)
+        except ConnectionError:
+            return tool_result_fail(tool_name, "机器人控制 API 不可用，请先启动阶段八 Web 服务。")
         except Exception as exc:
-            return {"ok": False, "tool": tool_name, "error": f"工具调用失败：{exc}"}
+            return tool_result_fail(tool_name, f"工具调用失败：{exc}")
 
     def _dispatch(self, tool_name: str, args: dict[str, Any]) -> dict[str, Any]:
         match tool_name:
@@ -42,8 +47,7 @@ class RobotToolBridge:
             case "stop_robot":
                 return self._post("/api/v1/motion/stop", None)
             case "set_gripper":
-                payload = {"open_ratio": args["open_ratio"], "wait": True, "confirm_text": self._confirm_if_real()}
-                return self._post("/api/v1/motion/gripper", payload)
+                return self._post("/api/v1/motion/gripper", self._gripper_payload(float(args["open_ratio"])))
             case "rotate_joint":
                 payload = {
                     "joint_key": args["joint_name"],
@@ -75,9 +79,9 @@ class RobotToolBridge:
         if name == "home":
             return self._post("/api/v1/motion/home", {"speed_percent": 50, "confirm_text": self._confirm_if_real()})
         if name == "open_gripper":
-            return self._post("/api/v1/motion/gripper", {"open_ratio": 1.0, "wait": True, "confirm_text": self._confirm_if_real()})
+            return self._post("/api/v1/motion/gripper", self._gripper_payload(1.0))
         if name == "close_gripper":
-            return self._post("/api/v1/motion/gripper", {"open_ratio": 0.0, "wait": True, "confirm_text": self._confirm_if_real()})
+            return self._post("/api/v1/motion/gripper", self._gripper_payload(0.0))
         raise ValueError(f"不支持的内置行为：{name}")
 
     def _ensure_action_exists(self, name: str) -> None:
@@ -101,29 +105,40 @@ class RobotToolBridge:
             return str(self.config.get("robot_api", {}).get("default_mode", "dry_run"))
 
     def _confirm_if_real(self) -> str:
-        if self._current_mode() == "real" and bool(self.config.get("safety", {}).get("require_confirm_for_real", True)):
+        if self._current_mode() == "real" and real_confirm_required(self.config, key="require_confirm_for_real"):
             return self.confirm_text
         return ""
 
+    def _gripper_payload(self, open_ratio: float) -> dict[str, Any]:
+        return {"open_ratio": clamp01(open_ratio), "wait": True, "confirm_text": self._confirm_if_real()}
+
     def _get(self, path: str) -> dict[str, Any]:
-        response = requests.get(f"{self.base_url}{path}", timeout=self.timeout)
-        return self._unwrap(response)
+        return self._request_api("GET", path)
 
     def _post(self, path: str, payload: dict[str, Any] | None) -> dict[str, Any]:
-        response = requests.post(f"{self.base_url}{path}", json=payload or {}, timeout=self.timeout)
-        return self._unwrap(response)
+        return self._request_api("POST", path, payload or {})
 
-    def _unwrap(self, response: requests.Response) -> dict[str, Any]:
+    def _request_api(self, method: str, path: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         try:
-            payload = response.json()
+            response = request_json_object(
+                f"{self.base_url}{path}",
+                method=method,
+                payload=payload,
+                timeout=self.timeout,
+                trust_env=False,
+            )
+        except HTTPJsonError as exc:
+            if exc.status is None:
+                raise ConnectionError(str(exc)) from exc
+            return self._raise_api_error(exc.payload, exc.text)
+        try:
+            return unwrap_api_data(response, "阶段八 API 请求失败。")
         except Exception as exc:
-            raise RuntimeError(f"阶段八 API 返回非 JSON：HTTP {response.status_code}") from exc
-        if response.status_code >= 400 or not payload.get("ok", False):
-            error = payload.get("error") if isinstance(payload, dict) else None
-            message = error.get("message") if isinstance(error, dict) else response.text
-            raise RuntimeError(str(message or f"HTTP {response.status_code}"))
-        data = payload.get("data", {})
-        return data if isinstance(data, dict) else {"value": data}
+            raise RuntimeError(str(exc)) from exc
+
+    def _raise_api_error(self, payload: Any, fallback: str) -> dict[str, Any]:
+        info = api_error_info(payload, fallback)
+        raise RuntimeError(str(info.get("message") or fallback))
 
 
 def execute_tool(config: dict[str, Any], tool_name: str, arguments: dict[str, Any] | None = None) -> dict[str, Any]:

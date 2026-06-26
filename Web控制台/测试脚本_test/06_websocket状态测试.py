@@ -8,10 +8,8 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 
-
-WS_URL = os.environ.get("WEB_WS_URL", "ws://127.0.0.1:8010/api/v1/ws/state")
+from Web测试客户端_test_client import web_ws_url
 
 
 async def main_async() -> None:
@@ -22,7 +20,7 @@ async def main_async() -> None:
         raise SystemExit(1) from exc
 
     messages = []
-    async with websockets.connect(WS_URL, open_timeout=5) as websocket:
+    async with websockets.connect(web_ws_url(), open_timeout=5) as websocket:
         for _ in range(3):
             raw = await asyncio.wait_for(websocket.recv(), timeout=3)
             msg = json.loads(raw)

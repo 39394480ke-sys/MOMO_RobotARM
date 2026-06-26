@@ -6,12 +6,17 @@
 
 from __future__ import annotations
 
-import json
 import time
+from json import JSONDecodeError
 from pathlib import Path
 from typing import Any, Callable
 
+from 仿真路径工具_sim_path_utils import ensure_project_root_on_path
+
+ensure_project_root_on_path()
+
 from 机械臂模型_robot_arm import 操作结果
+from 通用_io import list_json_stems, read_json_object, resolve_named_json_path
 
 
 class 动作播放器:
@@ -34,23 +39,21 @@ class 动作播放器:
     def 列出动作(self) -> list[str]:
         """列出动作目录里的所有 JSON 动作文件。"""
 
-        return sorted(路径.stem for 路径 in self.动作目录.glob("*.json"))
+        return list_json_stems(self.动作目录)
 
     def 读取动作(self, 名称: str) -> dict[str, Any]:
         """读取一个动作 JSON。"""
 
-        路径 = self.动作目录 / f"{名称}.json"
+        路径 = resolve_named_json_path(self.动作目录, 名称)
         if not 路径.exists():
             raise FileNotFoundError(f"没有找到动作：{名称}")
 
         try:
-            with 路径.open("r", encoding="utf-8") as 文件:
-                动作 = json.load(文件)
-        except json.JSONDecodeError as 错误:
+            动作 = read_json_object(路径)
+        except JSONDecodeError as 错误:
             raise ValueError(f"动作文件 JSON 格式错误：{错误}") from 错误
-
-        if not isinstance(动作, dict):
-            raise ValueError("动作文件最外层必须是 JSON 对象。")
+        except ValueError as 错误:
+            raise ValueError("动作文件最外层必须是 JSON 对象。") from 错误
         if "步骤" not in 动作 or not isinstance(动作["步骤"], list):
             raise ValueError("动作文件必须包含列表字段“步骤”。")
 

@@ -3,7 +3,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-ENV_NAME="${ARM_ENV_NAME:-arm_rebot}"
+ENV_NAME="${ARM_ENV_NAME:-momo_rebot}"
 PYTHON=(mamba run -n "$ENV_NAME" python)
 
 mkdir -p .venv runtime/pids runtime/logs runtime/state
@@ -56,4 +56,3 @@ if [[ "$INSTALL_REAL" == "1" ]]; then
 fi
 
 echo "bootstrap 完成。"
-

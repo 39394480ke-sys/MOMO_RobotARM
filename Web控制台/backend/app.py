@@ -5,7 +5,6 @@ app.py 只负责路由、异常处理和静态前端挂载；业务逻辑在 ser
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any, Callable
 
@@ -14,7 +13,9 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from .errors import WebAPIError, api_error, api_success
+from .path_utils import PROJECT_ROOT, WEB_DIR, ensure_project_root_on_path
+from 控制桥接_common import api_error, api_success
+from .errors import WebAPIError
 from .schemas import (
     CartesianJogRequest,
     ConnectRequest,
@@ -36,22 +37,44 @@ from .static_server import install_static_routes
 from .websocket_manager import WebSocketManager
 
 
-BASE_DIR = Path(__file__).resolve().parents[1]
+BASE_DIR = WEB_DIR
 CONFIG = None
 
 
 def load_web_config(path: str | Path | None = None) -> dict[str, Any]:
     config_path = Path(path) if path else BASE_DIR / "Web配置.yaml"
-    text = config_path.read_text(encoding="utf-8")
-    try:
-        import yaml  # type: ignore
+    ensure_project_root_on_path()
+    from 通用_io import env_int, env_value, read_config
 
-        data = yaml.safe_load(text) or {}
-    except Exception:
-        data = json.loads(text)
-    if not isinstance(data, dict):
-        raise ValueError("Web配置.yaml 最外层必须是对象。")
-    return data
+    config = read_config(config_path)
+    env_paths = (PROJECT_ROOT / ".env", BASE_DIR / "环境变量.env", PROJECT_ROOT / "系统集成" / "环境变量.env")
+    server = config.setdefault("server", {})
+    follow = config.setdefault("follow", {})
+    app_cfg = config.setdefault("app", {})
+
+    server["host"] = env_value("ARM_WEB_HOST", server.get("host", "127.0.0.1"), env_paths=env_paths)
+    server["port"] = env_int("ARM_WEB_PORT", int(server.get("port", 8010)), env_paths=env_paths)
+    app_cfg["default_mode"] = env_value("ARM_DEFAULT_MODE", app_cfg.get("default_mode", "dry_run"), env_paths=env_paths)
+
+    vision_host = str(env_value("ARM_VISION_HOST", "127.0.0.1", env_paths=env_paths))
+    vision_port = env_int("ARM_VISION_PORT", 8000, env_paths=env_paths)
+    web_host = str(server.get("host", "127.0.0.1"))
+    web_port = int(server.get("port", 8010))
+    latest_default = f"http://127.0.0.1:{vision_port}/latest" if vision_host == "0.0.0.0" else f"http://{vision_host}:{vision_port}/latest"
+    api_default = f"http://127.0.0.1:{web_port}" if web_host == "0.0.0.0" else f"http://{web_host}:{web_port}"
+    vision_env_changed = any(env_value(name, "", env_paths=env_paths) for name in ("ARM_VISION_HOST", "ARM_VISION_PORT"))
+    web_env_changed = any(env_value(name, "", env_paths=env_paths) for name in ("ARM_WEB_HOST", "ARM_WEB_PORT"))
+    follow["latest_url"] = env_value(
+        "ARM_VISION_LATEST_URL",
+        latest_default if vision_env_changed else follow.get("latest_url", latest_default),
+        env_paths=env_paths,
+    )
+    follow["robot_api_base"] = env_value(
+        "ARM_ROBOT_API_BASE",
+        api_default if web_env_changed else follow.get("robot_api_base", api_default),
+        env_paths=env_paths,
+    )
+    return config
 
 
 CONFIG = load_web_config()

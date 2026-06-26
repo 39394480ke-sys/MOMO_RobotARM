@@ -2,31 +2,56 @@
 
 from __future__ import annotations
 
-import json
-import math
-import sys
 import tempfile
 import time
 from copy import deepcopy
 from pathlib import Path
 from typing import Any, Mapping
 
+from 动作路径工具_motion_path_utils import ACTION_ROOT, PROJECT_ROOT, ensure_project_root_on_path
 
-BASE_DIR = Path(__file__).resolve().parent
-PROJECT_ROOT = BASE_DIR.parent
+BASE_DIR = ACTION_ROOT
+ensure_project_root_on_path()
+
+from 控制桥接_common import (  # noqa: E402
+    JOINT_ORDER as COMMON_JOINT_ORDER,
+    LEGACY_JOINT_ALIASES as COMMON_LEGACY_JOINT_ALIASES,
+    MULTI_TURN_JOINTS as COMMON_MULTI_TURN_JOINTS,
+    approximate_tcp_pose,
+    ensure_import_paths,
+    extract_joints_from_state as common_extract_joints_from_state,
+    normalize_gripper_state as common_normalize_gripper_state,
+    normalize_joint_targets as common_normalize_joint_targets,
+    normalize_multi_turn_state as common_normalize_multi_turn_state,
+    normalize_playback_speed as common_normalize_playback_speed,
+    normalize_raw_present_position as common_normalize_raw_present_position,
+    targets_to_kinematics_q,
+)
+from 通用_io import atomic_write_json, deep_merge, read_structured  # noqa: E402
+
 STAGE3_DIR = PROJECT_ROOT / "仿真控制系统"
 STAGE4_DIR = PROJECT_ROOT / "真实舵机控制"
 STAGE5_DIR = PROJECT_ROOT / "URDF运动学仿真"
 
 SCHEMA_VERSION = "arm_replay_sequence_v1"
-JOINT_ORDER = ["shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll"]
-MULTI_TURN_JOINTS = ["shoulder_lift", "elbow_flex", "wrist_roll"]
+JOINT_ORDER = list(COMMON_JOINT_ORDER)
+MULTI_TURN_JOINTS = list(COMMON_MULTI_TURN_JOINTS)
+LEGACY_JOINT_ALIASES = dict(COMMON_LEGACY_JOINT_ALIASES)
 CHINESE_JOINT_NAMES = {
-    "shoulder_pan": "底座旋转",
-    "shoulder_lift": "肩部抬升",
-    "elbow_flex": "肘部弯曲",
-    "wrist_flex": "腕部俯仰",
-    "wrist_roll": "腕部旋转",
+    "j10": "底盘导轨",
+    "j11": "底座旋转",
+    "j12": "肩部抬升",
+    "j13": "肘部弯曲",
+    "j14": "腕部俯仰",
+    "j15": "腕部旋转",
+}
+DEFAULT_JOINT_SPEED_LIMITS = {
+    "j10": 20.0,
+    "j11": 45.0,
+    "j12": 35.0,
+    "j13": 45.0,
+    "j14": 45.0,
+    "j15": 60.0,
 }
 
 
@@ -49,12 +74,19 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "include_raw_position": True,
         "include_multi_turn_state": True,
         "include_gripper": True,
+        "recorded_pose_duration_sec": 0.0,
     },
     "playback": {
         "default_duration_sec": 1.5,
         "default_interval_sec": 0.3,
         "update_hz": 25.0,
+        "auto_duration_from_distance": True,
+        "joint_speed_limits": dict(DEFAULT_JOINT_SPEED_LIMITS),
         "real_mode_min_duration_sec": 2.0,
+        "real_mode_wait_until_reached": True,
+        "real_mode_reach_timeout_sec": 12.0,
+        "real_mode_reach_tolerance_deg": 2.0,
+        "real_mode_reach_tolerance_mm": 2.0,
         "dry_run_default": True,
         "clamp_to_limits": True,
         "stop_on_limit_violation": True,
@@ -82,9 +114,7 @@ def now_text() -> str:
 
 
 def ensure_stage_paths() -> None:
-    for path in (str(STAGE3_DIR), str(STAGE4_DIR), str(STAGE5_DIR)):
-        if path not in sys.path:
-            sys.path.insert(0, path)
+    ensure_import_paths((STAGE3_DIR, STAGE4_DIR, STAGE5_DIR))
 
 
 def load_config(config_path: str | Path | None = None) -> dict[str, Any]:
@@ -93,23 +123,8 @@ def load_config(config_path: str | Path | None = None) -> dict[str, Any]:
         path = BASE_DIR / path
     if not path.exists():
         return deepcopy(DEFAULT_CONFIG)
-    text = path.read_text(encoding="utf-8")
-    try:
-        import yaml  # type: ignore
-
-        data = yaml.safe_load(text) or {}
-    except Exception:
-        data = json.loads(text)
+    data = read_structured(path)
     return deep_merge(deepcopy(DEFAULT_CONFIG), data)
-
-
-def deep_merge(base: dict[str, Any], override: Mapping[str, Any]) -> dict[str, Any]:
-    for key, value in dict(override).items():
-        if isinstance(value, Mapping) and isinstance(base.get(key), dict):
-            base[key] = deep_merge(base[key], value)
-        else:
-            base[key] = value
-    return base
 
 
 def resolve_stage6_path(path_value: str | Path) -> Path:
@@ -117,19 +132,6 @@ def resolve_stage6_path(path_value: str | Path) -> Path:
     if path.is_absolute():
         return path
     return BASE_DIR / path
-
-
-def read_json(path: str | Path) -> Any:
-    with Path(path).open("r", encoding="utf-8") as file:
-        return json.load(file)
-
-
-def write_json(path: str | Path, payload: Any) -> None:
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as file:
-        json.dump(payload, file, ensure_ascii=False, indent=2)
-        file.write("\n")
 
 
 def build_empty_sequence(
@@ -157,13 +159,60 @@ def build_empty_sequence(
     }
 
 
+def refresh_sequence_pose_count(sequence: dict[str, Any]) -> dict[str, Any]:
+    """Synchronize ``pose_count`` with the current ``poses`` list."""
+
+    poses = sequence.get("poses", []) if isinstance(sequence, dict) else []
+    sequence["pose_count"] = len(poses) if isinstance(poses, list) else 0
+    return sequence
+
+
+def append_sequence_pose(sequence: dict[str, Any], pose: dict[str, Any]) -> dict[str, Any]:
+    """Append one pose and keep sequence metadata consistent."""
+
+    sequence.setdefault("poses", []).append(pose)
+    return refresh_sequence_pose_count(sequence)
+
+
+def summarize_sequence_payload(sequence: Mapping[str, Any]) -> dict[str, Any]:
+    poses = sequence.get("poses", []) if isinstance(sequence, Mapping) else []
+    poses = poses if isinstance(poses, list) else []
+    total = sum(
+        float(pose.get("duration_sec", 0)) + float(pose.get("hold_sec", 0))
+        for pose in poses
+        if isinstance(pose, Mapping)
+    )
+    tcp_points = [
+        pose.get("tcp_pose", {}).get("xyz")
+        for pose in poses
+        if isinstance(pose, Mapping)
+        and isinstance(pose.get("tcp_pose"), Mapping)
+        and pose.get("tcp_pose", {}).get("xyz") is not None
+    ]
+    return {
+        "动作名称": sequence.get("name") if isinstance(sequence, Mapping) else None,
+        "pose_count": len(poses),
+        "创建时间": sequence.get("created_at") if isinstance(sequence, Mapping) else None,
+        "总时长": round(total, 3),
+        "是否包含 raw": any(pose.get("raw_present_position") for pose in poses if isinstance(pose, Mapping)),
+        "是否包含 tcp_pose": any(pose.get("tcp_pose") for pose in poses if isinstance(pose, Mapping)),
+        "是否包含 gripper": any((pose.get("gripper") or {}).get("available") for pose in poses if isinstance(pose, Mapping)),
+        "是否包含 multi_turn_state": any(pose.get("multi_turn_state") for pose in poses if isinstance(pose, Mapping)),
+        "末端轨迹点数": len(tcp_points),
+        "末端轨迹起点": tcp_points[0] if tcp_points else None,
+        "末端轨迹终点": tcp_points[-1] if tcp_points else None,
+    }
+
+
 def normalize_joint_targets(value: Any, joint_order: list[str] | None = None) -> dict[str, float]:
     order = joint_order or JOINT_ORDER
-    if isinstance(value, Mapping):
-        return {joint: float(value.get(joint, 0.0)) for joint in order}
-    if isinstance(value, (list, tuple)):
-        return {joint: float(value[index]) for index, joint in enumerate(order) if index < len(value)}
-    return {joint: 0.0 for joint in order}
+    return common_normalize_joint_targets(
+        value,
+        order,
+        ignore_unknown=True,
+        legacy_5_joint_list=True,
+        fill_missing=not isinstance(value, (list, tuple)),
+    )
 
 
 def extract_state(controller: Any) -> dict[str, Any]:
@@ -177,76 +226,38 @@ def extract_state(controller: Any) -> dict[str, Any]:
         }
     else:
         state = {}
+    if isinstance(state, Mapping) and "data" in state and any(key in state for key in ("ok", "message")):
+        data = state.get("data")
+        if isinstance(data, Mapping):
+            return dict(data)
     return state if isinstance(state, dict) else {}
 
 
 def state_joint_targets(state: Mapping[str, Any], joint_order: list[str]) -> dict[str, float]:
-    for key in ("joint_state", "joint_targets_deg", "关节角度", "joints_deg"):
-        if key in state:
-            return normalize_joint_targets(state[key], joint_order)
-    return {joint: 0.0 for joint in joint_order}
+    return common_extract_joints_from_state(
+        state,
+        joint_order,
+        keys=("joint_state", "joint_targets_deg", "关节角度", "joints_deg"),
+        ignore_unknown=True,
+        legacy_5_joint_list=True,
+        fill_missing=False,
+    )
 
 
 def normalize_gripper_state(state: Mapping[str, Any]) -> dict[str, Any]:
-    raw = state.get("gripper_state", state.get("gripper", state.get("夹爪")))
-    if raw is None:
-        return {"available": False}
-    if isinstance(raw, Mapping):
-        if raw.get("available") is False:
-            return {"available": False}
-        present_raw = raw.get("present_raw", raw.get("raw", raw.get("goal_raw")))
-        open_ratio = raw.get("open_ratio")
-        open_percent = raw.get("open_percent", raw.get("open_value", raw.get("开合")))
-        payload: dict[str, Any] = {"available": True}
-        if present_raw is not None:
-            payload["present_raw"] = int(round(float(present_raw)))
-        if open_ratio is not None:
-            payload["open_ratio"] = float(open_ratio)
-            payload["open_percent"] = int(round(float(open_ratio) * 100))
-        elif open_percent is not None:
-            payload["open_percent"] = int(round(float(open_percent)))
-            payload["open_ratio"] = float(open_percent) / 100.0
-        return payload
-    try:
-        value = float(raw)
-    except (TypeError, ValueError):
-        return {"available": False}
-    return {"available": True, "open_ratio": value / 100.0, "open_percent": int(round(value))}
+    return common_normalize_gripper_state(state)
 
 
 def normalize_multi_turn_state(state: Mapping[str, Any], multi_turn_joints: list[str]) -> dict[str, dict[str, Any]]:
-    source = state.get("multi_turn_state") or {}
-    if not isinstance(source, Mapping):
-        source = {}
-    result: dict[str, dict[str, Any]] = {}
-    for joint in multi_turn_joints:
-        item = source.get(joint, {})
-        if isinstance(item, Mapping):
-            current_raw = item.get("current_raw", item.get("present_raw", item.get("goal_raw")))
-            relative_raw = item.get("relative_raw")
-            continuous_raw = item.get("continuous_raw")
-            if continuous_raw is None:
-                continuous_raw = relative_raw if relative_raw is not None else 0
-            result[joint] = {
-                "startup_raw": item.get("startup_raw", item.get("home_present_raw")),
-                "current_raw": current_raw,
-                "continuous_raw": continuous_raw,
-                "relative_raw": relative_raw if relative_raw is not None else continuous_raw,
-                "motor_deg": item.get("motor_deg"),
-                "joint_deg": item.get("joint_deg"),
-                "goal_raw": item.get("goal_raw"),
-            }
-        else:
-            result[joint] = {
-                "startup_raw": None,
-                "current_raw": None,
-                "continuous_raw": 0,
-                "relative_raw": 0,
-                "motor_deg": None,
-                "joint_deg": None,
-                "goal_raw": None,
-            }
-    return result
+    return common_normalize_multi_turn_state(state, multi_turn_joints)
+
+
+def normalize_raw_present_position(raw_present_position: Any) -> dict[str, int] | None:
+    return common_normalize_raw_present_position(raw_present_position)
+
+
+def normalize_playback_speed(speed: Any, default: float = 1.0) -> float:
+    return common_normalize_playback_speed(speed, default)
 
 
 def compute_tcp_pose_if_possible(joint_targets_deg: Mapping[str, float], explicit_tcp_pose: Any = None) -> Any:
@@ -257,35 +268,9 @@ def compute_tcp_pose_if_possible(joint_targets_deg: Mapping[str, float], explici
         from 运动学模型_kinematics_model import 创建运动学模型
 
         model = 创建运动学模型(use_gui=False)
-        q_rad = [math.radians(float(joint_targets_deg[joint])) for joint in JOINT_ORDER]
-        return model.forward(q_rad)
+        return model.forward(targets_to_kinematics_q(joint_targets_deg))
     except Exception:
         return approximate_tcp_pose(joint_targets_deg)
-
-
-def approximate_tcp_pose(joint_targets_deg: Mapping[str, float]) -> dict[str, Any]:
-    """PyBullet 不可用时的教学级 TCP 兜底。
-
-    真实或阶段五控制器提供 tcp_pose 时不会走这里。此值只保证动作文件包含
-    TCP 字段，方便后续流程和摘要测试，不替代阶段五 URDF FK。
-    """
-
-    base = math.radians(float(joint_targets_deg.get("shoulder_pan", 0.0)))
-    shoulder = math.radians(float(joint_targets_deg.get("shoulder_lift", 0.0)))
-    elbow = math.radians(float(joint_targets_deg.get("elbow_flex", 0.0)))
-    wrist = math.radians(float(joint_targets_deg.get("wrist_flex", 0.0)))
-    l1, l2, l3 = 0.12, 0.12, 0.08
-    reach = l1 * math.cos(shoulder) + l2 * math.cos(shoulder + elbow) + l3 * math.cos(shoulder + elbow + wrist)
-    z = 0.08 + l1 * math.sin(shoulder) + l2 * math.sin(shoulder + elbow) + l3 * math.sin(shoulder + elbow + wrist)
-    return {
-        "xyz": [round(reach * math.cos(base), 6), round(reach * math.sin(base), 6), round(z, 6)],
-        "rpy": [
-            0.0,
-            round(shoulder + elbow + wrist, 6),
-            round(base + math.radians(float(joint_targets_deg.get("wrist_roll", 0.0))), 6),
-        ],
-        "source": "approximate_fk_without_pybullet",
-    }
 
 
 def is_dry_run_controller(controller: Any) -> bool:
@@ -377,7 +362,7 @@ class SimulatedStage6Controller:
         try:
             from 机械臂模型_robot_arm import 机械臂模型
 
-            config = read_json(STAGE3_DIR / "配置_config.yaml")
+            config = read_structured(STAGE3_DIR / "配置_config.yaml")
             self.robot = 机械臂模型(config)
         except Exception:
             self.robot = None
@@ -401,7 +386,7 @@ class SimulatedStage6Controller:
             joints = dict(self.current)
             gripper_value = float(self.gripper)
         raw = {joint: 2047 + int(round(joints[joint] * 10)) for joint in self.joint_order}
-        raw.update({"shoulder_lift": 2241, "elbow_flex": 6628, "wrist_roll": 311})
+        raw.update({"j10": 2047, "j12": 2241, "j13": 6628, "j15": 311})
         multi = {}
         for joint in MULTI_TURN_JOINTS:
             continuous = int(round(joints[joint] * 4096.0 / 360.0))
@@ -451,12 +436,12 @@ def create_stage4_controller(dry_run: bool = True) -> Any:
     from copy import deepcopy
     from 真实机械臂控制器_real_arm_controller import RealArmController
 
-    original_config = read_json(STAGE4_DIR / "真实配置.yaml")
+    original_config = read_structured(STAGE4_DIR / "真实配置.yaml")
     config = deepcopy(original_config)
     config.setdefault("transport", {})["dry_run"] = bool(dry_run)
     mode_name = "dry_run" if dry_run else "real"
     runtime_config = Path(tempfile.gettempdir()) / f"arm_stage6_{mode_name}_真实配置_runtime.yaml"
-    write_json(runtime_config, config)
+    atomic_write_json(runtime_config, config)
     controller = RealArmController(runtime_config)
     return controller
 

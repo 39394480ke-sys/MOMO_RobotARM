@@ -32,22 +32,24 @@
 ## 固定硬件逻辑
 
 ```text
-J1 shoulder_pan    底座旋转    舵机 ID 1    单圈
-J2 shoulder_lift   肩部抬升    舵机 ID 2    多圈
-J3 elbow_flex      肘部弯曲    舵机 ID 3    多圈
-J4 wrist_flex      腕部俯仰    舵机 ID 4    单圈
-J5 wrist_roll      腕部旋转    舵机 ID 5    多圈
-J6 gripper         夹爪        舵机 ID 6    单圈/夹爪
+J10 j10      底盘导轨    舵机 ID 10   多圈，单位 mm，5mm 导程丝杠
+J11 j11      底座旋转    舵机 ID 11   多圈，1:5 行星减速，单位 deg
+J12 j12      肩部抬升    舵机 ID 12   多圈
+J13 j13      肘部弯曲    舵机 ID 13   多圈
+J14 j14      腕部俯仰    舵机 ID 14   单圈
+J15 j15      腕部旋转    舵机 ID 15   多圈
+J16 gripper  夹爪预留    舵机 ID 16   单圈/夹爪
 ```
 
-多圈关节固定为 `J2 / J3 / J5`。
+多圈关节固定为 `J10 / J11 / J12 / J13 / J15`。
 
 ```yaml
-shoulder_pan: 1.0
-shoulder_lift: -5.3
-elbow_flex: 5.6
-wrist_flex: -1.0
-wrist_roll: 1.0
+j10: 72.0
+j11: 5.0
+j12: -5.3
+j13: 5.6
+j14: -1.0
+j15: 1.0
 ```
 
 ## 最小运行

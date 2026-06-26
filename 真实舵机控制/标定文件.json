@@ -1,99 +1,104 @@
 {
   "_meta": {
-    "generated_at_unix_s": 1779024064.30229,
+    "generated_at_unix_s": 1782410039.064536,
     "script": "标定程序_calibrate.py",
+    "gripper_available": false,
     "bounded_single_turn_joints": [
-      "shoulder_pan",
-      "wrist_flex",
-      "gripper"
+      "j14"
     ],
     "absolute_raw_joints": [
-      "shoulder_lift",
-      "elbow_flex",
-      "wrist_roll"
+      "j10",
+      "j11",
+      "j12",
+      "j13",
+      "j15"
     ],
     "notes": {
-      "bounded_single_turn": "J1/J4/夹爪使用有限位单圈标定。",
-      "absolute_raw": "J2/J3/J5 使用 mode 0 + Phase 28 + 0/0 限位的多圈绝对 raw 模式。",
+      "bounded_single_turn": "J14 使用有限位单圈标定；夹爪未安装，已禁用。",
+      "absolute_raw": "J10/J11/J12/J13/J15 使用 mode 0 + Phase 28 + 0/0 限位的多圈绝对 raw 模式；J11 为 1:5 减速底盘旋转。",
       "home": "home() 回到由 zero_present_raw / home_present_raw 定义的相对 0 度。"
     }
   },
-  "shoulder_lift": {
-    "show_name": "J2_肩部抬升",
+  "j10": {
+    "show_name": "J10_底盘导轨",
     "模式": "多圈",
     "direction": 1,
-    "id": 2,
+    "id": 10,
     "drive_mode": 0,
     "homing_offset": 0,
     "phase": 28,
     "range_min": 0,
     "range_max": 0,
     "operating_mode": 0,
-    "home_present_raw": 2164,
-    "home_present_wrapped_raw": 2164
+    "home_present_raw": 5622,
+    "home_present_wrapped_raw": 1526
   },
-  "elbow_flex": {
-    "show_name": "J3_肘部弯曲",
+  "j11": {
+    "show_name": "J11_底座旋转",
     "模式": "多圈",
     "direction": 1,
-    "id": 3,
+    "id": 11,
     "drive_mode": 0,
     "homing_offset": 0,
     "phase": 28,
     "range_min": 0,
     "range_max": 0,
     "operating_mode": 0,
-    "home_present_raw": 1324,
-    "home_present_wrapped_raw": 1324
+    "home_present_raw": 1153,
+    "home_present_wrapped_raw": 1153
   },
-  "wrist_roll": {
-    "show_name": "J5_腕部旋转",
+  "j12": {
+    "show_name": "J12_肩部抬升",
     "模式": "多圈",
     "direction": 1,
-    "id": 5,
+    "id": 12,
     "drive_mode": 0,
     "homing_offset": 0,
     "phase": 28,
     "range_min": 0,
     "range_max": 0,
     "operating_mode": 0,
-    "home_present_raw": 2365,
-    "home_present_wrapped_raw": 2365
+    "home_present_raw": 1081,
+    "home_present_wrapped_raw": 1081
   },
-  "shoulder_pan": {
-    "show_name": "J1_底座旋转",
+  "j13": {
+    "show_name": "J13_肘部弯曲",
+    "模式": "多圈",
+    "direction": 1,
+    "id": 13,
+    "drive_mode": 0,
+    "homing_offset": 0,
+    "phase": 28,
+    "range_min": 0,
+    "range_max": 0,
+    "operating_mode": 0,
+    "home_present_raw": 3321,
+    "home_present_wrapped_raw": 3321
+  },
+  "j15": {
+    "show_name": "J15_腕部旋转",
+    "模式": "多圈",
+    "direction": 1,
+    "id": 15,
+    "drive_mode": 0,
+    "homing_offset": 0,
+    "phase": 28,
+    "range_min": 0,
+    "range_max": 0,
+    "operating_mode": 0,
+    "home_present_raw": 1370,
+    "home_present_wrapped_raw": 1370
+  },
+  "j14": {
+    "show_name": "J14_腕部俯仰",
     "模式": "单圈",
     "direction": 1,
-    "id": 1,
+    "id": 14,
     "drive_mode": 0,
-    "homing_offset": 57,
-    "range_min": 761,
-    "range_max": 3326,
+    "homing_offset": 1271,
+    "range_min": 841,
+    "range_max": 3215,
     "operating_mode": 0,
     "zero_present_raw": 2047
-  },
-  "wrist_flex": {
-    "show_name": "J4_腕部俯仰",
-    "模式": "单圈",
-    "direction": 1,
-    "id": 4,
-    "drive_mode": 0,
-    "homing_offset": -1805,
-    "range_min": 415,
-    "range_max": 2195,
-    "operating_mode": 0,
-    "zero_present_raw": 2026
-  },
-  "gripper": {
-    "show_name": "夹爪_ID6",
-    "模式": "单圈",
-    "direction": 1,
-    "id": 6,
-    "drive_mode": 0,
-    "homing_offset": 2047,
-    "range_min": 1450,
-    "range_max": 2911,
-    "operating_mode": 0,
-    "zero_present_raw": 1450
   }
 }

@@ -13,9 +13,15 @@ from __future__ import annotations
 import threading
 import time
 import traceback
-import sys
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
+
+from .path_utils import ensure_project_root_on_path
+
+ensure_project_root_on_path()
+
+from 控制桥接_common import normalize_control_mode, real_confirm_matches, real_confirm_required, real_confirm_text  # noqa: E402
+from 通用_io import read_structured_section  # noqa: E402
 
 from .controller_bridge import ControllerBridge
 from .errors import WebAPIError
@@ -46,7 +52,7 @@ class WebControlService:
         self.websocket_manager = websocket_manager
         self.started_at = time.time()
         self.default_mode = self._normalize_mode(config.get("app", {}).get("default_mode", "dry_run"))
-        self.confirm_text = str(config.get("safety", {}).get("real_confirm_text", "我确认机械臂周围安全"))
+        self.confirm_text = real_confirm_text(config, "real_confirm_text", "confirm_text")
         self.logger = JsonLineLogger(self._resolve_app_path(config.get("app", {}).get("log_path", "runtime/logs/web_api.log")))
         self.state_manager = SessionStateManager(
             self._resolve_app_path(config.get("app", {}).get("session_state_path", "runtime/state/session_state.json")),
@@ -387,8 +393,8 @@ class WebControlService:
         self._require_real_confirm_if_needed("real", confirm_text, action=action)
 
     def _require_real_confirm_if_needed(self, mode: str, confirm_text: str, action: str) -> None:
-        requires = bool(self.config.get("safety", {}).get("real_mode_requires_confirm", True))
-        if mode == "real" and requires and str(confirm_text).strip() != self.confirm_text:
+        requires = real_confirm_required(self.config)
+        if mode == "real" and requires and not real_confirm_matches(self.config, confirm_text, "real_confirm_text", "confirm_text"):
             raise WebAPIError("SAFETY_CONFIRM_REQUIRED", f"{action} 需要安全确认，请输入：{self.confirm_text}")
 
     def _manual_step_limit(self) -> float:
@@ -421,9 +427,9 @@ class WebControlService:
 
     def _create_follow_controller(self, request: FollowStartRequest) -> Any:
         vision_root = self.base_dir.parent / "视觉识别与跟随"
-        vision_root_text = str(vision_root)
-        if vision_root_text not in sys.path:
-            sys.path.insert(0, vision_root_text)
+        from 控制桥接_common import ensure_import_paths
+
+        ensure_import_paths([vision_root])
         from vision.视觉跟随_controller import VisionFollowController
 
         follow_cfg = dict(self.config.get("follow", {}))
@@ -449,20 +455,31 @@ class WebControlService:
             follow_cfg["poll_interval_sec"] = float(request.poll_interval)
         if request.move_duration is not None:
             follow_cfg["move_duration_sec"] = float(request.move_duration)
+        rail_cfg = dict(follow_cfg.get("rail_cinematic", {})) if isinstance(follow_cfg.get("rail_cinematic", {}), dict) else {}
+        if request.rail_enabled is not None:
+            rail_cfg["enabled"] = bool(request.rail_enabled)
+        if request.rail_start_mm is not None:
+            rail_cfg["start_mm"] = float(request.rail_start_mm)
+        if request.rail_end_mm is not None:
+            rail_cfg["end_mm"] = float(request.rail_end_mm)
+        if request.rail_speed_mm_s is not None:
+            rail_cfg["speed_mm_s"] = float(request.rail_speed_mm_s)
+        if request.rail_step_mm is not None:
+            rail_cfg["step_mm"] = float(request.rail_step_mm)
+        if request.rail_interval_sec is not None:
+            rail_cfg["interval_sec"] = float(request.rail_interval_sec)
+        if rail_cfg:
+            rail_cfg.setdefault("joint", "j10")
+            rail_cfg.setdefault("bounce", False)
+            follow_cfg["rail_cinematic"] = rail_cfg
         return VisionFollowController({"follow": follow_cfg}, latest_url=request.latest_url, dry_run=request.dry_run)
 
     def _load_vision_follow_config(self, vision_root: Path) -> dict[str, Any]:
         config_path = vision_root / "视觉配置.yaml"
         try:
-            import yaml  # type: ignore
-
-            data = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+            return read_structured_section(config_path, "follow")
         except Exception:
             return {}
-        if not isinstance(data, dict):
-            return {}
-        follow = data.get("follow", {})
-        return dict(follow) if isinstance(follow, dict) else {}
 
     def _local_api_base(self) -> str:
         server = self.config.get("server", {})
@@ -474,12 +491,10 @@ class WebControlService:
 
     @staticmethod
     def _normalize_mode(mode: str) -> str:
-        value = str(mode).strip().lower()
-        mapping = {"simulation": "sim", "dry-run": "dry_run", "dryrun": "dry_run", "仿真": "sim", "真实": "real"}
-        value = mapping.get(value, value)
-        if value not in {"sim", "dry_run", "real"}:
+        try:
+            return normalize_control_mode(mode, simulation_value="sim")
+        except ValueError:
             raise WebAPIError("BAD_MODE", f"未知模式：{mode}")
-        return value
 
 
 def _deg_to_rad(value: float) -> float:

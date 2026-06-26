@@ -5,6 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from .路径工具_path_utils import resolve_vision_path
+
 try:
     import cv2  # type: ignore
 except Exception:  # pragma: no cover
@@ -16,7 +18,10 @@ class FaceDetector:
         self.config = dict(config or {})
         self.base_dir = Path(base_dir or ".").resolve()
         self.backend = str(self.config.get("face_backend", "opencv_yunet"))
-        self.model_path = self._resolve_path(str(self.config.get("face_model_path", "weights/face_detection_yunet_2023mar.onnx")))
+        self.model_path = resolve_vision_path(
+            str(self.config.get("face_model_path", "weights/face_detection_yunet_2023mar.onnx")),
+            self.base_dir,
+        )
         self.score_threshold = float(self.config.get("face_score_threshold", 0.75))
         self.nms_threshold = float(self.config.get("face_nms_threshold", 0.3))
         self.top_k = int(self.config.get("face_top_k", 5000))
@@ -109,9 +114,3 @@ class FaceDetector:
                 top_k=self.top_k,
             )
         self.input_size = input_size
-
-    def _resolve_path(self, value: str) -> Path:
-        path = Path(value)
-        if path.is_absolute():
-            return path
-        return self.base_dir / path

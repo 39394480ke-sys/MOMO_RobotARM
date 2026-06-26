@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from gui_app.path_utils import PROJECT_ROOT, ensure_project_root_on_path
+
+ensure_project_root_on_path()
+
+from 通用_io import read_json_object_or_default, read_text
 
 from PyQt5.QtCore import pyqtSignal
 from PyQt5.QtGui import QColor
@@ -71,17 +75,16 @@ class CalibrationPage(QWidget):
         )
 
     def _show_calibration_help(self) -> None:
-        path = Path(__file__).resolve().parents[3] / "真实舵机控制" / "标定说明.md"
+        path = PROJECT_ROOT / "真实舵机控制" / "标定说明.md"
         if not path.exists():
             self.command_text.setPlainText(f"未找到标定说明：{path}")
             return
-        text = path.read_text(encoding="utf-8", errors="replace")
+        text = read_text(path, errors="replace")
         self.command_text.setPlainText(f"标定说明：{path}\n\n{text}")
 
     def _show_calibration_commands(self) -> None:
-        root = Path(__file__).resolve().parents[3]
-        calibrate = root / "真实舵机控制" / "标定程序_calibrate.py"
-        apply = root / "真实舵机控制" / "标定应用_apply_calibration.py"
+        calibrate = PROJECT_ROOT / "真实舵机控制" / "标定程序_calibrate.py"
+        apply = PROJECT_ROOT / "真实舵机控制" / "标定应用_apply_calibration.py"
         self.command_text.setPlainText(
             "标定终端命令\n\n"
             "1. 运行完整标定程序：\n"
@@ -101,19 +104,10 @@ class CalibrationPage(QWidget):
         self.status_label.style().unpolish(self.status_label)
         self.status_label.style().polish(self.status_label)
         items = calibration.get("项目", {})
+        calibration_entries = self._load_calibration_entries(calibration)
         self.table.setRowCount(len(items))
         for row, (joint, item) in enumerate(items.items()):
-            entry = {}
-            try:
-                path_text = calibration.get("标定文件")
-                if path_text:
-                    import json
-                    from pathlib import Path
-
-                    payload = json.loads(Path(path_text).read_text(encoding="utf-8")) if Path(path_text).exists() else {}
-                    entry = payload.get(joint, {}) if isinstance(payload, dict) else {}
-            except Exception:
-                entry = {}
+            entry = calibration_entries.get(joint, {})
             values = [
                 item.get("show_name", joint),
                 entry.get("id", ""),
@@ -136,3 +130,13 @@ class CalibrationPage(QWidget):
                         pass
                 self.table.setItem(row, col, table_item)
         self.table.resizeColumnsToContents()
+
+    def _load_calibration_entries(self, calibration: dict) -> dict[str, dict]:
+        path_text = calibration.get("标定文件")
+        if not path_text:
+            return {}
+        try:
+            payload = read_json_object_or_default(path_text)
+        except Exception:
+            return {}
+        return {str(key): value for key, value in payload.items() if isinstance(value, dict)} if isinstance(payload, dict) else {}

@@ -4,14 +4,14 @@ camera:
   width: 640
   height: 480
   fps: 30
-  rotate_180: true
+  rotate_180: false
   video_file: ""
   rtsp_url: ""
 
 detector:
   face_backend: opencv_yunet
   face_model_path: weights/face_detection_yunet_2023mar.onnx
-  face_score_threshold: 0.75
+  face_score_threshold: 0.60
   face_nms_threshold: 0.3
   face_top_k: 5000
 
@@ -22,11 +22,22 @@ gesture:
   stable_frames: 4
 
 target:
+  mode: face
   selection_strategy: largest_face
   center_x_norm: 0.50
   center_y_norm: 0.42
   dead_zone_x: 0.02
   dead_zone_y: 0.025
+
+tracker:
+  type: CSRT
+  max_lost_frames: 15
+  min_box_width: 20
+  min_box_height: 20
+
+manual_select:
+  allow_gui_select: true
+  allow_api_select: true
 
 smoothing:
   enabled: true
@@ -47,11 +58,14 @@ follow:
   move_duration_sec: 0.25
   speed_percent: 60
 
-  pan_joint: shoulder_pan
-  tilt_joint: elbow_flex
+  pan_joint: j11
+  tilt_joint: j13
+  enabled_follow_joints:
+    - j11
+    - j13
 
   pan_sign: 1.0
-  tilt_sign: -1.0
+  tilt_sign: 1.0
 
   pan_gain_deg_per_norm: 4.8
   tilt_gain_deg_per_norm: 4.8
@@ -68,6 +82,24 @@ follow:
 
   max_pan_step_deg: 3.0
   max_tilt_step_deg: 3.0
+
+  rail_cinematic:
+    enabled: false
+    joint: j10
+    start_mm: -140
+    end_mm: 140
+    speed_mm_s: 5.0
+    bounce: false
+
+  two_step_cinematic:
+    sample_interval_sec: 0.12
+    playback_smooth: 0.55
+    playback_speed_scale: 1.0
+    max_compensation_deg: 4.0
+    offset_stop_norm: 0.65
+    playback_hz: 20
+    ease_sec: 0.8
+    min_rail_step_mm: 0.25
 
   real_mode_requires_confirm: true
   dry_run_default: true

@@ -4,26 +4,29 @@ from __future__ import annotations
 
 import json
 import re
-from pathlib import Path
 from typing import Any
 
-import requests
+from .path_utils import PROJECT_ROOT, ensure_project_root_on_path
+
+ensure_project_root_on_path()
 
 from .Agent客户端_agent_client import AgentReply
 from .会话管理_session_manager import SessionManager
 from .工具定义_robot_tools import robot_tool_specs
 from .工具桥接_tool_bridge import RobotToolBridge
 from .配置_config import config_base_dir, resolve_path
+from 通用_http import HTTPJsonError, request_json_object
+from 通用_io import read_text, resolve_secret_value
 
 
 class OpenAICompatibleAgentClient:
-    def __init__(self, config: dict[str, Any], force_new_session: bool = False):
+    def __init__(self, config: dict[str, Any], force_new_session: bool = False, tool_bridge: Any | None = None):
         self.config = config
         self.agent_cfg = config.get("agent", {})
         self.backend_cfg = config.get("openai_compatible", {})
         self.session_manager = SessionManager(config)
         self.session = self.session_manager.load_session(force_new=force_new_session)
-        self.tool_bridge = RobotToolBridge(config)
+        self.tool_bridge = tool_bridge or RobotToolBridge(config)
         self.system_prompt = self._load_system_prompt()
 
     def ask(self, message: str) -> AgentReply:
@@ -35,7 +38,7 @@ class OpenAICompatibleAgentClient:
 
         try:
             reply = self._run_chat_with_tools()
-        except requests.RequestException as exc:
+        except HTTPJsonError as exc:
             text = f"Agent backend 不可用，请检查 OpenAI-compatible 服务是否启动：{exc}"
             reply = AgentReply(text=text, session_id=self.session["session_id"], raw_payload={"error": str(exc)})
         except Exception as exc:
@@ -117,18 +120,20 @@ class OpenAICompatibleAgentClient:
     def _post_chat(self, payload: dict[str, Any]) -> dict[str, Any]:
         api_base = str(self.backend_cfg.get("api_base", "http://127.0.0.1:1234/v1")).rstrip("/")
         headers = {"Content-Type": "application/json"}
-        api_key = str(self.backend_cfg.get("api_key", "")).strip()
+        api_key = resolve_secret_value(
+            self.backend_cfg.get("api_key", ""),
+            default_env_names=("OPENAI_COMPATIBLE_API_KEY", "SILICONFLOW_API_KEY"),
+            env_paths=(PROJECT_ROOT / "系统集成" / "环境变量.env", PROJECT_ROOT / ".env"),
+        )
         if api_key:
             headers["Authorization"] = f"Bearer {api_key}"
-        response = requests.post(
+        return request_json_object(
             f"{api_base}/chat/completions",
+            method="POST",
             headers=headers,
-            json=payload,
+            payload=payload,
             timeout=float(self.agent_cfg.get("timeout_sec", 60)),
         )
-        if response.status_code >= 400:
-            raise RuntimeError(f"HTTP {response.status_code}: {response.text[:500]}")
-        return response.json()
 
     def _chat_completion_payload(self, messages: list[dict[str, Any]], tools: list[dict[str, Any]]) -> dict[str, Any]:
         payload = {
@@ -149,7 +154,7 @@ class OpenAICompatibleAgentClient:
         path = resolve_path(path_value, config_base_dir(self.config))
         if not path.exists():
             return "你是我的机械臂语音助手，只能通过安全工具控制机械臂。"
-        return path.read_text(encoding="utf-8")
+        return read_text(path)
 
 
 def _choice_message(data: dict[str, Any]) -> dict[str, Any]:
@@ -187,10 +192,11 @@ def _extract_standard_tool_calls(message: dict[str, Any]) -> list[dict[str, Any]
 def _extract_json_tool_calls(content: str) -> tuple[list[dict[str, Any]], str]:
     data = _parse_json_object(content)
     if not isinstance(data, dict):
-        return [], ""
+        return _extract_loose_tool_calls(content)
     calls = data.get("tool_calls")
     if not isinstance(calls, list):
-        return [], str(data.get("reply") or "")
+        loose_calls, loose_reply = _extract_loose_tool_calls(content)
+        return loose_calls, str(data.get("reply") or loose_reply or "")
     parsed: list[dict[str, Any]] = []
     for item in calls:
         if not isinstance(item, dict):
@@ -200,6 +206,23 @@ def _extract_json_tool_calls(content: str) -> tuple[list[dict[str, Any]], str]:
         if name:
             parsed.append({"name": name, "arguments": arguments})
     return parsed, str(data.get("reply") or "")
+
+
+def _extract_loose_tool_calls(content: str) -> tuple[list[dict[str, Any]], str]:
+    """Best-effort parser for small/free models that emit malformed JSON."""
+    reply_match = re.search(r'"reply"\s*:\s*"([^"]*)"', content)
+    reply = reply_match.group(1).strip() if reply_match else ""
+    parsed: list[dict[str, Any]] = []
+    name_matches = list(re.finditer(r'"name"\s*:\s*"([A-Za-z_][A-Za-z0-9_]*)"', content))
+    for index, match in enumerate(name_matches):
+        name = match.group(1).strip()
+        tail = content[match.end() :]
+        args = {}
+        args_match = re.search(r'"arguments"\s*:\s*(\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\})', tail, flags=re.S)
+        if args_match:
+            args = _parse_arguments(args_match.group(1))
+        parsed.append({"id": f"loose-tool-{index}", "name": name, "arguments": args})
+    return parsed, reply
 
 
 def _parse_arguments(value: Any) -> dict[str, Any]:

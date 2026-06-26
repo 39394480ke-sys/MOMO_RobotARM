@@ -142,7 +142,7 @@ WS /api/v1/ws/state
 ```bash
 curl -X POST http://127.0.0.1:8010/api/v1/motion/joint-step \
   -H "Content-Type: application/json" \
-  -d '{"joint_key":"shoulder_pan","delta_deg":2,"speed_percent":50}'
+  -d '{"joint_key":"j11","delta_deg":2,"speed_percent":50}'
 ```
 
 夹爪：

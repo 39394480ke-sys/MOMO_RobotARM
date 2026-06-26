@@ -2,16 +2,13 @@
 
 from __future__ import annotations
 
-import importlib.util
 from typing import Any
 
+from .path_utils import ensure_project_root_on_path
 
-IMPORT_NAMES = {
-    "pyyaml": ["yaml"],
-    "opencv-contrib-python": ["cv2"],
-    "feetech-servo-sdk": ["feetech_servo_sdk", "feetech", "scservo_sdk"],
-    "pyserial": ["serial"],
-}
+ensure_project_root_on_path()
+
+from 控制桥接_common import check_python_packages  # noqa: E402
 
 
 class DependencyChecker:
@@ -41,10 +38,4 @@ class DependencyChecker:
         }
 
     def _check_many(self, names: list[str]) -> dict[str, bool]:
-        return {name: self._available(name) for name in names}
-
-    @staticmethod
-    def _available(package_name: str) -> bool:
-        import_names = IMPORT_NAMES.get(package_name, [package_name])
-        return any(importlib.util.find_spec(name) is not None for name in import_names)
-
+        return check_python_packages(names)

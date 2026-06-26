@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-import sys
 import time
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from importlib import import_module
+
+import 运动学测试路径_test_paths  # noqa: F401
 
 
 if __name__ == "__main__":
@@ -14,7 +12,7 @@ if __name__ == "__main__":
     viewer = None
     try:
         viewer = viewer_module.PyBulletViewer()
-        for joints in ([0, 0, 0, 0, 0], [0, 25, 40, 10, 0], [20, 15, 25, -10, 0]):
+        for joints in ([0, 0, 0, 0, 0, 0], [10, 0, 25, 40, 10, 0], [20, 15, 25, 40, -10, 0]):
             result = viewer.set_joints_deg(list(joints))
             print(result)
             time.sleep(1.0)

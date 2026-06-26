@@ -18,6 +18,8 @@ class Visualizer:
         faces = result.get("faces", []) or []
         target = result.get("target_face")
         target_bbox = target.get("bbox") if isinstance(target, dict) else None
+        generic_target = result.get("target") if isinstance(result.get("target"), dict) else None
+        generic_bbox = generic_target.get("bbox") if isinstance(generic_target, dict) else None
 
         for face in faces:
             bbox = face.get("bbox", [0, 0, 0, 0])
@@ -27,6 +29,15 @@ class Visualizer:
             cx, cy = [int(round(float(v))) for v in face.get("center", [x + w / 2, y + h / 2])[:2]]
             cv2.circle(canvas, (cx, cy), 4, color, -1)
             cv2.putText(canvas, f"{face.get('score', 0):.2f}", (x, max(18, y - 6)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
+
+        if generic_bbox and result.get("target_source") != "face":
+            x, y, w, h = [int(round(float(v))) for v in generic_bbox[:4]]
+            color = (80, 220, 80) if result.get("tracking_state") == "tracking" else (40, 120, 255)
+            cv2.rectangle(canvas, (x, y), (x + w, y + h), color, 2)
+            cx, cy = [int(round(float(v))) for v in generic_target.get("center", [x + w / 2, y + h / 2])[:2]]
+            cv2.circle(canvas, (cx, cy), 5, color, -1)
+            label = f"{result.get('target_source', 'target')}:{result.get('tracking_state', 'idle')}"
+            cv2.putText(canvas, label, (x, max(18, y - 6)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
 
         offset = result.get("offset", {}) or {}
         desired = offset.get("desired_center")
@@ -44,6 +55,8 @@ class Visualizer:
         fps = float(result.get("fps", 0.0) or 0.0)
         lines = [
             f"detected: {bool(result.get('detected'))}",
+            f"target: {result.get('target_source', 'none')} / {result.get('tracking_state', 'idle')}",
+            f"scale: {float((generic_target or {}).get('size_scale', 1.0)):.3f}  err: {float((generic_target or {}).get('size_error', 0.0)):.3f}",
             f"ndx: {float(offset.get('ndx', 0.0)):.3f}  ndy: {float(offset.get('ndy', 0.0)):.3f}",
             f"dir: {(result.get('direction') or {}).get('combined', 'center')}",
             f"gesture: {gesture.get('stable') or gesture.get('raw') or '-'}",
@@ -67,5 +80,15 @@ def make_placeholder_frame(message: str = "camera unavailable", width: int = 640
         frame[:] = (35, 35, 35)
         cv2.putText(frame, message[:60], (30, int(height) // 2), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (230, 230, 230), 2)
         return frame
+    except Exception:
+        return None
+
+
+def encode_jpeg(frame: Any) -> bytes | None:
+    if frame is None or cv2 is None:
+        return None
+    try:
+        ok, encoded = cv2.imencode(".jpg", frame)
+        return encoded.tobytes() if ok else None
     except Exception:
         return None

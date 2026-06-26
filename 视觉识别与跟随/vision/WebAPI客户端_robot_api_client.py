@@ -2,10 +2,31 @@
 
 from __future__ import annotations
 
-import json
-import urllib.error
-import urllib.request
 from typing import Any
+
+from .路径工具_path_utils import ensure_project_root_on_path
+
+ensure_project_root_on_path()
+
+from 控制桥接_common import api_error, api_error_from_payload  # noqa: E402
+from 通用_http import HTTPJsonError, request_json_object  # noqa: E402
+
+
+def request_json_url(method: str, url: str, payload: dict[str, Any] | None = None, timeout_sec: float = 1.0) -> dict[str, Any]:
+    method = str(method or "GET").upper()
+    try:
+        return request_json_object(str(url), method=method, payload=payload, timeout=float(timeout_sec))
+    except HTTPJsonError as exc:
+        data = exc.payload
+        if isinstance(data, dict):
+            return api_error_from_payload(data, exc.text, "HTTP_ERROR")
+        return api_error("HTTP_ERROR", exc.text)
+    except Exception as exc:
+        return api_error("HTTP_ERROR", f"HTTP JSON 请求失败：{exc}")
+
+
+def fetch_json_url(url: str, timeout_sec: float = 1.0) -> dict[str, Any]:
+    return request_json_url("GET", url, timeout_sec=timeout_sec)
 
 
 class RobotAPIClient:
@@ -13,12 +34,6 @@ class RobotAPIClient:
         self.base_url = str(base_url).rstrip("/")
         self.timeout_sec = float(timeout_sec)
         self.confirm_text = str(confirm_text or "")
-        try:
-            import requests  # type: ignore
-
-            self._requests = requests
-        except Exception:
-            self._requests = None
 
     def get_session_status(self) -> dict[str, Any]:
         return self._request("GET", "/api/v1/session/status")
@@ -40,34 +55,7 @@ class RobotAPIClient:
 
     def _request(self, method: str, path: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         url = self.base_url + path
-        if self._requests is not None:
-            try:
-                if method == "GET":
-                    response = self._requests.get(url, timeout=self.timeout_sec)
-                else:
-                    response = self._requests.post(url, json=payload or {}, timeout=self.timeout_sec)
-                data = response.json()
-                if response.status_code >= 400:
-                    return {"ok": False, "error": data.get("error") or {"message": response.text}, "data": data.get("data")}
-                return data
-            except Exception as exc:
-                return {"ok": False, "data": None, "error": {"code": "HTTP_ERROR", "message": f"阶段八 API 请求失败：{exc}"}}
-
-        try:
-            body = None
-            headers = {}
-            if method != "GET":
-                body = json.dumps(payload or {}, ensure_ascii=False).encode("utf-8")
-                headers["Content-Type"] = "application/json"
-            request = urllib.request.Request(url, data=body, headers=headers, method=method)
-            with urllib.request.urlopen(request, timeout=self.timeout_sec) as response:
-                text = response.read().decode("utf-8")
-            return json.loads(text)
-        except urllib.error.HTTPError as exc:
-            try:
-                data = json.loads(exc.read().decode("utf-8"))
-            except Exception:
-                data = {"error": {"code": "HTTP_ERROR", "message": str(exc)}}
-            return {"ok": False, "data": data.get("data"), "error": data.get("error") or {"code": "HTTP_ERROR", "message": str(exc)}}
-        except Exception as exc:
-            return {"ok": False, "data": None, "error": {"code": "HTTP_ERROR", "message": f"阶段八 API 请求失败：{exc}"}}
+        result = request_json_url(method, url, payload, self.timeout_sec)
+        if not result.get("ok", True):
+            return api_error_from_payload(result, "阶段八 API 请求失败。", "HTTP_ERROR")
+        return result

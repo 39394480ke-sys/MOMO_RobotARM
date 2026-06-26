@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import math
-import sys
-from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
+import 运动学测试路径_test_paths  # noqa: F401
 from 运动学模型_kinematics_model import SDK_JOINT_NAMES, 创建运动学模型, 打印_json
+
+
+def _model_q_to_user_targets(values):
+    return {
+        name: float(values[idx]) * 1000.0 if name == "j10" else math.degrees(float(values[idx]))
+        for idx, name in enumerate(SDK_JOINT_NAMES)
+    }
 
 
 def run_delta(model, current_rad, frame: str):
@@ -23,10 +27,7 @@ def run_delta(model, current_rad, frame: str):
         "frame": frame,
         "current_pose": current_pose,
         "target_pose": {"xyz": target_xyz, "rpy": target_rpy},
-        "ik_solution_deg": {
-            name: math.degrees(float(ik["q_user_rad"][idx]))
-            for idx, name in enumerate(SDK_JOINT_NAMES)
-        },
+        "ik_solution": _model_q_to_user_targets(ik["q_user_rad"]),
         "ik": ik,
     }
 

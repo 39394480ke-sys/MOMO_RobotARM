@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
-import json
+from json import JSONDecodeError
 from pathlib import Path
 from typing import Any
 
+from 真实路径工具_real_path_utils import ensure_project_root_on_path
+
+ensure_project_root_on_path()
+
 from 角度映射_angle_mapper import JOINT_ORDER, MULTI_TURN_JOINTS, SINGLE_TURN_JOINTS, joint_label
+from 通用_io import atomic_write_json, read_json_object
 
 
 SINGLE_TURN_REQUIRED_FIELDS = [
@@ -50,13 +55,11 @@ class CalibrationManager:
             return self.data
 
         try:
-            with self.path.open("r", encoding="utf-8") as 文件:
-                data = json.load(文件)
-        except json.JSONDecodeError as 错误:
+            data = read_json_object(self.path)
+        except JSONDecodeError as 错误:
             raise ValueError(f"标定文件 JSON 格式错误：{错误}") from 错误
-
-        if not isinstance(data, dict):
-            raise ValueError("标定文件最外层必须是 JSON 对象。")
+        except ValueError as 错误:
+            raise ValueError("标定文件最外层必须是 JSON 对象。") from 错误
 
         self.data = data
         return self.data
@@ -69,10 +72,7 @@ class CalibrationManager:
     def save(self) -> None:
         """保存标定文件。"""
 
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        with self.path.open("w", encoding="utf-8") as 文件:
-            json.dump(self.data, 文件, ensure_ascii=False, indent=2)
-            文件.write("\n")
+        atomic_write_json(self.path, self.data)
 
     def get(self, joint_key: str) -> dict[str, Any]:
         """获取单个关节标定项。"""
@@ -143,7 +143,9 @@ class CalibrationManager:
         """生成标定状态报告。"""
 
         joint_keys = self.get_joint_order()
-        gripper_available = bool(self.config.get("transport", {}).get("gripper_available", True))
+        meta = self.data.get("_meta", {})
+        meta_gripper_disabled = isinstance(meta, dict) and meta.get("gripper_available") is False
+        gripper_available = bool(self.config.get("transport", {}).get("gripper_available", True)) and not meta_gripper_disabled
         check_keys = list(joint_keys)
         if gripper_available:
             check_keys.append("gripper")

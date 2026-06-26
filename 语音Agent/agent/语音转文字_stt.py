@@ -9,6 +9,13 @@ from typing import Any
 
 import requests
 
+from .path_utils import ensure_project_root_on_path
+
+ensure_project_root_on_path()
+
+from 通用_io import resolve_secret_value  # noqa: E402
+from .配置_config import secret_env_paths
+
 
 def transcribe_audio(wav_bytes: bytes, config: dict[str, Any]) -> str:
     stt_cfg = config.get("stt", {})
@@ -25,7 +32,7 @@ def transcribe_audio(wav_bytes: bytes, config: dict[str, Any]) -> str:
     if not url:
         raise RuntimeError("STT 服务地址未配置。")
     headers = {}
-    api_key = str(stt_cfg.get("api_key", "")).strip()
+    api_key = resolve_secret_value(stt_cfg.get("api_key", ""), env_paths=secret_env_paths(config))
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
     files = {"file": ("audio.wav", wav_bytes, "audio/wav")}
@@ -77,4 +84,3 @@ def _extract_text_from_payload(payload: Any) -> str:
     raw = json.dumps(payload, ensure_ascii=False)
     match = re.search(r'"text"\s*:\s*"([^"]+)"', raw)
     return match.group(1) if match else ""
-

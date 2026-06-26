@@ -9,13 +9,17 @@ from typing import Any
 from 运动学模型_kinematics_model import SDK_JOINT_NAMES, 创建运动学模型, 加载运动学配置, 打印_json
 
 
+def _targets_to_model_q(values: list[float]) -> list[float]:
+    return [float(value) / 1000.0 if SDK_JOINT_NAMES[idx] == "j10" else math.radians(float(value)) for idx, value in enumerate(values)]
+
+
 def 计算FK(joints_deg: list[float], use_gui: bool = False) -> dict[str, Any]:
     if len(joints_deg) != len(SDK_JOINT_NAMES):
         return {"ok": False, "错误": f"需要 {len(SDK_JOINT_NAMES)} 个关节角度。"}
     model = None
     try:
         model = 创建运动学模型(use_gui=use_gui)
-        q_rad = [math.radians(float(value)) for value in joints_deg]
+        q_rad = _targets_to_model_q(joints_deg)
         fk = model.forward(q_rad)
         return {
             "ok": True,
@@ -34,7 +38,7 @@ def 计算FK(joints_deg: list[float], use_gui: bool = False) -> dict[str, Any]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="URDF 正运动学 FK 测试")
-    parser.add_argument("--joints-deg", nargs=5, type=float, required=True, metavar=("J1", "J2", "J3", "J4", "J5"))
+    parser.add_argument("--joints-deg", nargs=6, type=float, required=True, metavar=("J10", "J11", "J12", "J13", "J14", "J15"))
     parser.add_argument("--gui", action="store_true", help="用 PyBullet GUI 打开模型")
     args = parser.parse_args()
     result = 计算FK(list(args.joints_deg), use_gui=bool(args.gui))

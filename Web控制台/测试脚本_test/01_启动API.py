@@ -3,16 +3,12 @@
 from __future__ import annotations
 
 import argparse
-import sys
-from pathlib import Path
 
-
-WEB_DIR = Path(__file__).resolve().parents[1]
-if str(WEB_DIR) not in sys.path:
-    sys.path.insert(0, str(WEB_DIR))
+from Web测试路径_test_paths import ensure_web_test_paths
 
 
 def main() -> None:
+    ensure_web_test_paths()
     parser = argparse.ArgumentParser(description="启动 Web API")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8010)

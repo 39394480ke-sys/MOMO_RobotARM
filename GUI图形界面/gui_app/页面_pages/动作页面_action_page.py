@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
-import json
 import time
-from collections.abc import Mapping
 
 from PyQt5.QtCore import pyqtSignal
-from PyQt5.QtWidgets import QGroupBox, QHBoxLayout, QLabel, QLineEdit, QListWidget, QMessageBox, QPushButton, QTextEdit, QVBoxLayout, QWidget
+from PyQt5.QtWidgets import QGroupBox, QHBoxLayout, QLabel, QLineEdit, QListWidget, QPushButton, QTextEdit, QVBoxLayout, QWidget
+
+from gui_app.动作摘要格式化_action_summary_format import format_action_summary_detail
+from gui_app.组件_widgets.布局工具_layout_tools import make_vbox_layout
+from gui_app.组件_widgets.命名列表工具_named_list_tools import confirm_delete_selected, current_text, emit_selected_text, set_named_payloads
 
 
 class ActionPage(QWidget):
@@ -45,9 +47,7 @@ class ActionPage(QWidget):
         self.delete_button.setObjectName("WarningButton")
 
         record_box = QGroupBox("动作录制")
-        record_layout = QVBoxLayout(record_box)
-        record_layout.setContentsMargins(10, 16, 10, 10)
-        record_layout.setSpacing(8)
+        record_layout = make_vbox_layout(record_box, margins=(10, 16, 10, 10))
         self.record_name_input = QLineEdit()
         self.record_name_input.setPlaceholderText("动作名称，例如：抓取演示")
         self.record_name_input.setText(f"GUI录制_{time.strftime('%H%M%S')}")
@@ -79,11 +79,11 @@ class ActionPage(QWidget):
         layout.addLayout(button_layout)
         self._actions = {}
         self.refresh_button.clicked.connect(self.refresh_requested.emit)
-        self.play_button.clicked.connect(lambda: self._emit_selected(self.play_requested))
+        self.play_button.clicked.connect(lambda: emit_selected_text(self.list_widget, self.play_requested))
         self.pause_button.clicked.connect(self.pause_requested.emit)
         self.resume_button.clicked.connect(self.resume_requested.emit)
         self.stop_button.clicked.connect(self.stop_requested.emit)
-        self.delete_button.clicked.connect(self._confirm_delete)
+        self.delete_button.clicked.connect(lambda: confirm_delete_selected(self, self.list_widget, "动作", self.delete_requested))
         self.record_button.clicked.connect(lambda: self.record_start_requested.emit(self.record_name_input.text()))
         self.teach_button.clicked.connect(lambda: self.teach_start_requested.emit(self.record_name_input.text()))
         self.capture_button.clicked.connect(self.capture_pose_requested.emit)
@@ -93,10 +93,8 @@ class ActionPage(QWidget):
         self.set_recording_status({"active": False})
 
     def set_actions(self, actions: list[dict]) -> None:
-        self._actions = {item["name"]: item.get("summary", {}) for item in actions}
-        self.list_widget.clear()
-        self.list_widget.addItems(sorted(self._actions.keys()))
-        self._show_detail(self.list_widget.currentItem().text() if self.list_widget.currentItem() else "")
+        self._actions = set_named_payloads(self.list_widget, actions, lambda item: item.get("summary", {}))
+        self._show_detail(current_text(self.list_widget))
 
     def _show_detail(self, name: str) -> None:
         summary = self._actions.get(name, {})
@@ -106,33 +104,7 @@ class ActionPage(QWidget):
         if not summary:
             self.detail.setPlainText(f"动作：{name}\n\n暂无动作摘要。")
             return
-        self.detail.setPlainText(self._format_action_detail(name, summary))
-
-    def _format_action_detail(self, name: str, summary: object) -> str:
-        lines = [f"动作：{name}", ""]
-        if isinstance(summary, Mapping):
-            for label, key in (("帧数", "frame_count"), ("时长", "duration_sec"), ("来源", "source"), ("更新时间", "updated_at")):
-                if key in summary:
-                    lines.append(f"{label}: {summary.get(key)}")
-            joints = summary.get("joints") or summary.get("joint_names")
-            if isinstance(joints, (list, tuple)):
-                lines.append(f"关节: {', '.join(str(item) for item in joints)}")
-        if len(lines) <= 2:
-            lines.append(json.dumps(summary, ensure_ascii=False, indent=2))
-        return "\n".join(lines)
-
-    def _emit_selected(self, signal) -> None:
-        item = self.list_widget.currentItem()
-        if item:
-            signal.emit(item.text())
-
-    def _confirm_delete(self) -> None:
-        item = self.list_widget.currentItem()
-        if not item:
-            return
-        reply = QMessageBox.question(self, "确认删除动作", f"确定删除动作“{item.text()}”？", QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
-        if reply == QMessageBox.Yes:
-            self.delete_requested.emit(item.text())
+        self.detail.setPlainText(format_action_summary_detail(name, summary))
 
     def set_recording_status(self, recording: dict) -> None:
         active = bool(recording.get("active"))

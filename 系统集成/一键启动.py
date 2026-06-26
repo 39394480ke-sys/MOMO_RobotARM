@@ -152,13 +152,20 @@ def _wait_health(name: str, url: str, timeout: float = 30.0) -> bool:
 
 def _set_web_mode(mode: str, confirm_text: str) -> None:
     try:
-        import requests
+        from integration.path_utils import ensure_project_root_on_path
 
-        requests.post(f"{WEB_BASE}/api/v1/session/mode", json={"mode": mode, "confirm_text": confirm_text}, timeout=5)
+        ensure_project_root_on_path()
+        from 通用_http import request_json_object
+
+        request_json_object(
+            f"{WEB_BASE}/api/v1/session/mode",
+            method="POST",
+            payload={"mode": mode, "confirm_text": confirm_text},
+            timeout=5,
+        )
     except Exception:
         pass
 
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

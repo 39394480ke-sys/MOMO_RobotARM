@@ -4,10 +4,10 @@
 
 ## 运行环境
 
-本项目统一使用你的 `arm_rebot` 环境里的 `python`。先激活环境，再进入阶段六目录：
+本项目统一使用你的 `momo_rebot` 环境里的 `python`。先激活环境，再进入阶段六目录：
 
 ```bash
-mamba activate arm_rebot
+mamba activate momo_rebot
 cd "/Users/ke/Library/Mobile Documents/com~apple~CloudDocs/Code/机械臂/动作录制与回放增强"
 python -V
 ```
@@ -30,9 +30,9 @@ python -V
 
 `raw_present_position` 是舵机直接读到的原始位置。它用于排查标定、角度映射和硬件状态问题。角度看起来一样时，raw 可以帮助判断舵机实际在哪个位置。
 
-## 为什么 J2/J3/J5 要保存 multi_turn_state
+## 为什么 J10/J12/J13/J15 要保存 multi_turn_state
 
-J2 肩部抬升、J3 肘部弯曲、J5 腕部旋转是多圈关节。多圈关节不能简单把 raw 对 4096 取模，否则可能回放到错误圈数。阶段六保存 continuous_raw，让支持该能力的阶段四控制器可以按原圈数回放。
+J10 底盘导轨、J12 肩部抬升、J13 肘部弯曲、J15 腕部旋转是多圈关节。多圈关节不能简单把 raw 对 4096 取模，否则可能回放到错误圈数。阶段六保存 continuous_raw，让支持该能力的阶段四控制器可以按原圈数回放。
 
 ## 为什么不能简单播放角度
 

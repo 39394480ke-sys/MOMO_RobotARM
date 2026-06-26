@@ -5,7 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from 动作录制器_action_recorder import ActionRecorder
-from 动作工具_common import SimulatedStage6Controller, build_empty_sequence, load_config, write_json
+from 动作工具_common import SimulatedStage6Controller, append_sequence_pose, build_empty_sequence, load_config
+from 通用_io import write_json
 
 
 def make_sequence(name: str, targets: list[dict[str, float]], grippers: list[int]) -> dict:
@@ -19,8 +20,7 @@ def make_sequence(name: str, targets: list[dict[str, float]], grippers: list[int
         pose = recorder.capture_current_pose(index=index, name=f"pose_{index}")
         pose["duration_sec"] = 1.5
         pose["hold_sec"] = 0.3
-        sequence["poses"].append(pose)
-    sequence["pose_count"] = len(sequence["poses"])
+        append_sequence_pose(sequence, pose)
     return sequence
 
 
@@ -31,25 +31,25 @@ def main() -> None:
         "挥手_增强.json": make_sequence(
             "挥手_增强",
             [
-                {"shoulder_pan": 0, "shoulder_lift": 20, "elbow_flex": 30, "wrist_flex": 10, "wrist_roll": -25},
-                {"shoulder_pan": 0, "shoulder_lift": 20, "elbow_flex": 30, "wrist_flex": 10, "wrist_roll": -5},
-                {"shoulder_pan": 0, "shoulder_lift": 20, "elbow_flex": 30, "wrist_flex": 10, "wrist_roll": -20},
+                {"j10": 0, "j11": 0, "j12": 20, "j13": 30, "j14": 10, "j15": -25},
+                {"j10": 0, "j11": 0, "j12": 20, "j13": 30, "j14": 10, "j15": -5},
+                {"j10": 0, "j11": 0, "j12": 20, "j13": 30, "j14": 10, "j15": -20},
             ],
             [60, 60, 60],
         ),
         "展示动作_增强.json": make_sequence(
             "展示动作_增强",
             [
-                {"shoulder_pan": 0, "shoulder_lift": 0, "elbow_flex": 0, "wrist_flex": 0, "wrist_roll": 0},
-                {"shoulder_pan": 20, "shoulder_lift": 25, "elbow_flex": 35, "wrist_flex": -10, "wrist_roll": -15},
+                {"j10": 0, "j11": 0, "j12": 0, "j13": 0, "j14": 0, "j15": 0},
+                {"j10": 0, "j11": 20, "j12": 25, "j13": 35, "j14": -10, "j15": -15},
             ],
             [50, 80],
         ),
         "示例_录制动作.json": make_sequence(
             "示例录制动作",
             [
-                {"shoulder_pan": 0, "shoulder_lift": 0, "elbow_flex": 0, "wrist_flex": 0, "wrist_roll": 0},
-                {"shoulder_pan": -15, "shoulder_lift": 15, "elbow_flex": 25, "wrist_flex": 5, "wrist_roll": -10},
+                {"j10": 0, "j11": 0, "j12": 0, "j13": 0, "j14": 0, "j15": 0},
+                {"j10": 0, "j11": -15, "j12": 15, "j13": 25, "j14": 5, "j15": -10},
             ],
             [0, 50],
         ),

@@ -1,19 +1,30 @@
 """逻辑角度和真实舵机 raw 值之间的映射。
 
-上层统一使用逻辑关节角度，单位是度。
+上层统一使用逻辑关节目标值。旋转关节单位是度，j10 导轨单位是毫米。
 底层 Feetech 舵机写入和读取的是 Present_Position / Goal_Position raw 值。
 
 注意：
-- shoulder_pan = J1_底座旋转，单圈
-- shoulder_lift = J2_肩部抬升，多圈
-- elbow_flex = J3_肘部弯曲，多圈
-- wrist_flex = J4_腕部俯仰，单圈
-- wrist_roll = J5_腕部旋转，多圈
+- j10 = J10_底盘导轨，多圈
+- j11 = J11_底座旋转，多圈，1:5 行星减速
+- j12 = J12_肩部抬升，多圈
+- j13 = J13_肘部弯曲，多圈
+- j14 = J14_腕部俯仰，单圈
+- j15 = J15_腕部旋转，多圈
 """
 
 from __future__ import annotations
 
 from typing import Any
+
+from 真实路径工具_real_path_utils import ensure_project_root_on_path
+
+ensure_project_root_on_path()
+
+from 控制桥接_common import (  # noqa: E402
+    JOINT_ORDER as COMMON_JOINT_ORDER,
+    MULTI_TURN_JOINTS as COMMON_MULTI_TURN_JOINTS,
+    joint_label as common_joint_label,
+)
 
 
 RAW_COUNTS_PER_REV = 4096
@@ -26,39 +37,17 @@ POSITION_MODE_VALUE = 0
 MULTI_TURN_PHASE_VALUE = 28
 MULTI_TURN_DISABLED_LIMIT_RAW = 0
 
-JOINT_ORDER = [
-    "shoulder_pan",   # J1_底座旋转
-    "shoulder_lift",  # J2_肩部抬升
-    "elbow_flex",     # J3_肘部弯曲
-    "wrist_flex",     # J4_腕部俯仰
-    "wrist_roll",     # J5_腕部旋转
-]
-
-MULTI_TURN_JOINTS = [
-    "shoulder_lift",  # J2_肩部抬升
-    "elbow_flex",     # J3_肘部弯曲
-    "wrist_roll",     # J5_腕部旋转
-]
+JOINT_ORDER = list(COMMON_JOINT_ORDER)
+MULTI_TURN_JOINTS = list(COMMON_MULTI_TURN_JOINTS)
 
 SINGLE_TURN_JOINTS = [
-    "shoulder_pan",  # J1_底座旋转
-    "wrist_flex",    # J4_腕部俯仰
+    "j14",  # J14_腕部俯仰
 ]
-
-JOINT_LABELS = {
-    "shoulder_pan": "J1_底座旋转",
-    "shoulder_lift": "J2_肩部抬升",
-    "elbow_flex": "J3_肘部弯曲",
-    "wrist_flex": "J4_腕部俯仰",
-    "wrist_roll": "J5_腕部旋转",
-    "gripper": "夹爪_ID6",
-}
-
 
 def joint_label(joint_key: str) -> str:
     """返回带 J 编号的显示名。"""
 
-    return JOINT_LABELS.get(joint_key, joint_key)
+    return common_joint_label(joint_key, compact=True)
 
 
 def wrap_single_turn_raw(raw: float | int) -> int:
@@ -257,12 +246,14 @@ def 获取关节模式(
 ) -> str:
     """从配置和标定中获取单圈/多圈模式。"""
 
-    if calibration_entry and calibration_entry.get("模式"):
-        return str(calibration_entry["模式"])
-    if joint_config.get("模式"):
-        return str(joint_config["模式"])
     if joint_key in MULTI_TURN_JOINTS:
         return "多圈"
+    if joint_key in SINGLE_TURN_JOINTS:
+        return "单圈"
+    if joint_config.get("模式"):
+        return str(joint_config["模式"])
+    if calibration_entry and calibration_entry.get("模式"):
+        return str(calibration_entry["模式"])
     return "单圈"
 
 

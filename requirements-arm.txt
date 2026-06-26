@@ -1,0 +1,6 @@
+# Minimal pip dependencies for ARM first-stage migration.
+# Do not install full LeRobot here: lerobot.motors imports torch on 0.4.4.
+
+deepdiff<9,>=7.0.1
+feetech-servo-sdk==1.0.0
+tqdm

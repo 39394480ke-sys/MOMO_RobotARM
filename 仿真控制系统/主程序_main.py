@@ -8,17 +8,20 @@
 
 from __future__ import annotations
 
-import json
 import sys
-from pathlib import Path
 from typing import Any
+
+from 仿真路径工具_sim_path_utils import SIM_ROOT, ensure_project_root_on_path
+
+ensure_project_root_on_path()
 
 from 动作播放器_action_player import 动作播放器
 from 姿态管理.姿态管理_pose_manager import 姿态管理器
 from 机械臂模型_robot_arm import 格式化数值, 机械臂模型
+from 通用_io import read_structured, write_json
 
 
-当前目录 = Path(__file__).resolve().parent
+当前目录 = SIM_ROOT
 配置路径 = 当前目录 / "配置_config.yaml"
 
 
@@ -26,7 +29,7 @@ def 主函数() -> None:
     """程序入口：创建模块并进入命令循环。"""
 
     try:
-        配置 = 读取配置(配置路径)
+        配置 = read_structured(配置路径)
         准备默认文件(配置)
 
         机械臂 = 机械臂模型(配置)
@@ -63,32 +66,6 @@ def 主函数() -> None:
             break
 
 
-def 读取配置(路径: Path) -> dict[str, Any]:
-    """读取配置文件。
-
-    本项目的配置写成 JSON 兼容格式，所以没有安装 PyYAML 也能运行。
-    如果以后改成普通 YAML，请安装：
-        pip install pyyaml
-    """
-
-    文本 = 路径.read_text(encoding="utf-8")
-
-    try:
-        return json.loads(文本)
-    except json.JSONDecodeError:
-        try:
-            import yaml  # type: ignore
-        except ImportError as 错误:
-            raise RuntimeError(
-                "配置不是 JSON 兼容格式，并且当前环境没有安装 PyYAML。请执行：pip install pyyaml"
-            ) from 错误
-
-        数据 = yaml.safe_load(文本)
-        if not isinstance(数据, dict):
-            raise ValueError("配置文件最外层必须是对象。")
-        return 数据
-
-
 def 准备默认文件(配置: dict[str, Any]) -> None:
     """首次运行时创建姿态库和动作库。"""
 
@@ -106,11 +83,11 @@ def 准备默认文件(配置: dict[str, Any]) -> None:
                 "夹爪": 姿态.get("夹爪", 50),
                 "说明": 姿态.get("说明", ""),
             }
-        写入_json(姿态库路径, 默认姿态库)
+        write_json(姿态库路径, 默认姿态库)
 
     挥手路径 = 动作目录 / "挥手.json"
     if not 挥手路径.exists():
-        写入_json(挥手路径, 默认挥手动作())
+        write_json(挥手路径, 默认挥手动作())
 
 
 def 默认挥手动作() -> dict[str, Any]:
@@ -122,50 +99,41 @@ def 默认挥手动作() -> dict[str, Any]:
         "步骤": [
             {
                 "名称": "准备",
-                "关节角度": [0, 20, 30, 10, 0],
+                "关节角度": [0, 0, 20, 30, 10, 0],
                 "夹爪": 60,
                 "插值步数": 5,
                 "等待秒": 0.08,
             },
             {
                 "名称": "向左摆腕",
-                "关节角度": [0, 20, 30, 10, -35],
+                "关节角度": [0, 0, 20, 30, 10, -35],
                 "夹爪": 60,
                 "插值步数": 5,
                 "等待秒": 0.08,
             },
             {
                 "名称": "向右摆腕",
-                "关节角度": [0, 20, 30, 10, 35],
+                "关节角度": [0, 0, 20, 30, 10, 35],
                 "夹爪": 60,
                 "插值步数": 5,
                 "等待秒": 0.08,
             },
             {
                 "名称": "再次向左摆腕",
-                "关节角度": [0, 20, 30, 10, -35],
+                "关节角度": [0, 0, 20, 30, 10, -35],
                 "夹爪": 60,
                 "插值步数": 5,
                 "等待秒": 0.08,
             },
             {
                 "名称": "回到准备",
-                "关节角度": [0, 20, 30, 10, 0],
+                "关节角度": [0, 0, 20, 30, 10, 0],
                 "夹爪": 60,
                 "插值步数": 5,
                 "等待秒": 0.08,
             },
         ],
     }
-
-
-def 写入_json(路径: Path, 数据: Any) -> None:
-    """写入支持中文的 JSON 文件。"""
-
-    路径.parent.mkdir(parents=True, exist_ok=True)
-    with 路径.open("w", encoding="utf-8") as 文件:
-        json.dump(数据, 文件, ensure_ascii=False, indent=2)
-        文件.write("\n")
 
 
 def 处理命令(
@@ -303,12 +271,12 @@ def 标准化命令(命令: str) -> str:
 
 
 def 执行移动(参数: list[str], 机械臂: 机械臂模型) -> None:
-    """执行“移动 0 20 30 10 0”。"""
+    """执行“移动 0 0 20 30 10 0”。"""
 
     try:
         角度 = [float(值) for 值 in 参数]
     except ValueError:
-        print("移动失败：角度必须是数字。示例：移动 0 20 30 10 0")
+        print("移动失败：角度必须是数字。示例：移动 0 0 20 30 10 0")
         return
 
     结果 = 机械臂.移动到关节角度(角度)
@@ -468,7 +436,7 @@ def 打印帮助() -> None:
         """
 可用命令：
   状态
-  移动 0 20 30 10 0
+  移动 0 0 20 30 10 0
   移动单关节 2 30
   夹爪 80
   夹爪 张开

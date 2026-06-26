@@ -1,15 +1,13 @@
 from __future__ import annotations
 
-import sys
 import time
-from pathlib import Path
 
-BASE_DIR = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(BASE_DIR))
+import 系统测试路径_test_paths  # noqa: F401
 
 from integration.config_loader import load_config
 from integration.health_checker import HealthChecker
 from integration.process_manager import ProcessManager
+from 通用_http import request_json_object
 
 
 def wait_health(url: str, timeout: float = 30.0) -> None:
@@ -25,8 +23,6 @@ def wait_health(url: str, timeout: float = 30.0) -> None:
 
 
 def main() -> int:
-    import requests
-
     config = load_config()
     config["services"]["vision"]["enabled"] = False
     manager = ProcessManager(config)
@@ -34,12 +30,17 @@ def main() -> int:
         result = manager.start_service("web_api")
         assert result["ok"], result
         wait_health("http://127.0.0.1:8010/api/v1/health")
-        resp = requests.post("http://127.0.0.1:8010/api/v1/session/connect", json={"mode": "dry_run", "confirm_text": ""}, timeout=10)
-        assert resp.status_code == 200, resp.text
-        state_resp = requests.get("http://127.0.0.1:8010/api/v1/robot/state", timeout=10)
-        assert state_resp.status_code == 200, state_resp.text
-        stop_resp = requests.post("http://127.0.0.1:8010/api/v1/motion/stop", timeout=10)
-        assert stop_resp.status_code == 200, stop_resp.text
+        connected = request_json_object(
+            "http://127.0.0.1:8010/api/v1/session/connect",
+            method="POST",
+            payload={"mode": "dry_run", "confirm_text": ""},
+            timeout=10,
+        )
+        assert connected["ok"] is True, connected
+        state = request_json_object("http://127.0.0.1:8010/api/v1/robot/state", timeout=10)
+        assert state["ok"] is True, state
+        stopped = request_json_object("http://127.0.0.1:8010/api/v1/motion/stop", method="POST", timeout=10)
+        assert stopped["ok"] is True, stopped
         print("dry_run 全链路测试通过。")
         return 0
     finally:
@@ -48,4 +49,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

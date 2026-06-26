@@ -1,9 +1,6 @@
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import 运动学测试路径_test_paths  # noqa: F401
 
 from URDF检查_urdf_inspector import 检查URDF
 from 运动学模型_kinematics_model import 打印_json

@@ -8,6 +8,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from gui_app.结果格式化_result_format import result_message
+
 
 @dataclass
 class GUIState:
@@ -30,13 +32,12 @@ class AppStore:
 
     def update_from_result(self, result: dict[str, Any]) -> None:
         if result.get("ok"):
-            self.gui_state.last_message = str(result.get("message", ""))
+            self.gui_state.last_message = result_message(result, "")
             self.gui_state.last_error = ""
         else:
-            self.gui_state.last_error = str(result.get("message", result.get("error", "")))
+            self.gui_state.last_error = result_message(result, "")
 
     def set_state_payload(self, payload: dict[str, Any]) -> None:
         self.gui_state.state = payload
         self.gui_state.connected = bool(payload.get("connected", payload.get("已连接", self.gui_state.connected)))
         self.gui_state.connection_text = "已连接" if self.gui_state.connected else "未连接"
-

@@ -6,11 +6,16 @@
 
 from __future__ import annotations
 
-import json
 import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+from 真实路径工具_real_path_utils import PROJECT_ROOT, REAL_CONTROL_DIR, ensure_project_root_on_path, resolve_real_path
+
+ensure_project_root_on_path()
+
+from 通用_io import atomic_write_json, env_bool, env_value, read_json_object_or_default, read_structured, resolve_path, write_json  # noqa: E402
 
 from 安全检查_safety_checker import SafetyChecker
 from 标定管理_calibration_manager import CalibrationManager
@@ -38,12 +43,11 @@ class RealArmController:
     """真实机械臂控制器。"""
 
     def __init__(self, config_path: str | Path | None = None):
-        self.base_dir = Path(__file__).resolve().parent
-        self.config_path = Path(config_path) if config_path else self.base_dir / "真实配置.yaml"
-        if not self.config_path.is_absolute():
-            self.config_path = self.base_dir / self.config_path
+        self.base_dir = REAL_CONTROL_DIR
+        self.config_path = resolve_real_path(config_path or "真实配置.yaml")
 
         self.config = 读取配置(self.config_path)
+        self._dry_run_override: bool | None = None
         self.joint_order = list(self.config.get("robot", {}).get("joint_order", JOINT_ORDER))
         self.joint_config_by_key = self._build_joint_config_by_key()
 
@@ -64,6 +68,7 @@ class RealArmController:
             for joint_key in self.joint_order
         }
         self.current_gripper = float(self.config.get("gripper", {}).get("默认开合", 50))
+        self._torque_enabled_joints: set[str] = set()
 
     def connect(self) -> 操作结果:
         """连接驱动并读取当前位置。"""
@@ -80,12 +85,15 @@ class RealArmController:
             print(self.safety_checker.startup_warning())
             self.driver.connect()
             self.connected = True
+            self._torque_enabled_joints.clear()
             self.current_raw = self.driver.read_all_present_positions()
             self.runtime_state["connected"] = True
             self.runtime_state["dry_run"] = self.is_dry_run()
             self.runtime_state["calibration_path"] = str(self.calibration_manager.path)
             self.runtime_state["startup_present_raw"] = self._build_calibrated_startup_raw()
+            self.runtime_state["gripper_detection"] = getattr(self.driver, "gripper_detection_message", "")
             self._refresh_state_from_raw(self.current_raw)
+            self._reset_goal_state_to_current()
             self._save_runtime_state()
             if self.is_dry_run():
                 return 操作结果(True, "连接成功，已加载标定文件并读取 dry-run 舵机状态。")
@@ -105,6 +113,7 @@ class RealArmController:
         try:
             self.driver.disconnect(disable_torque=disable_torque)
             self.connected = False
+            self._torque_enabled_joints.clear()
             self.runtime_state["connected"] = False
             self._save_runtime_state()
             return 操作结果(True, "已断开。")
@@ -123,8 +132,10 @@ class RealArmController:
         if was_connected:
             self.driver.disconnect(disable_torque=False)
             self.connected = False
+            self._torque_enabled_joints.clear()
 
         self.config.setdefault("transport", {})["dry_run"] = bool(enabled)
+        self._dry_run_override = bool(enabled) if not persist else None
         self.safety_checker = SafetyChecker(self.config, self.calibration_manager)
         self.driver = self._create_driver()
         self.runtime_state["dry_run"] = bool(enabled)
@@ -132,7 +143,7 @@ class RealArmController:
         self._save_runtime_state()
 
         if persist:
-            写入_json(self.config_path, self.config)
+            write_json(self.config_path, self.config)
 
         模式 = "dry-run" if enabled else "真实模式"
         suffix = "，请重新执行“连接”。" if was_connected else ""
@@ -157,9 +168,11 @@ class RealArmController:
             "goal_raw_by_joint": dict(self.runtime_state.get("goal_raw_by_joint", {})),
             "raw_present_position": dict(self.current_raw),
             "multi_turn_state": dict(self.runtime_state.get("multi_turn_state", {})) if self.current_raw else {},
-            "夹爪": dict(self.runtime_state.get("gripper", {"开合": self.current_gripper}))
-            if "gripper" in self.current_raw
-            else {"open_value": self.current_gripper},
+            "夹爪": (
+                dict(self.runtime_state.get("gripper", {"开合": self.current_gripper}))
+                if self._gripper_available() and "gripper" in self.current_raw
+                else {"available": False, "open_value": self.current_gripper}
+            ),
         }
 
     def move_joints(self, target_deg_by_joint: dict[str, float]) -> 操作结果:
@@ -174,7 +187,7 @@ class RealArmController:
             if not angle_check.成功:
                 return 操作结果(False, angle_check.消息)
 
-            calibration_check = self.safety_checker.check_calibration_for_move()
+            calibration_check = self.safety_checker.check_calibration_for_move(list(target_deg_by_joint))
             if not calibration_check.成功:
                 return 操作结果(False, calibration_check.消息)
 
@@ -182,7 +195,7 @@ class RealArmController:
             goal_raw_by_joint: dict[str, int] = {}
             calibration_by_joint: dict[str, dict[str, Any]] = {}
             for joint_key, target_deg in target_deg_by_joint.items():
-                entry = self.calibration_manager.get(joint_key)
+                entry = self._calibration_entry_for_move(joint_key)
                 calibration_by_joint[joint_key] = entry
                 detail = joint_deg_to_goal_detail(
                     joint_key,
@@ -200,19 +213,15 @@ class RealArmController:
 
             self._print_goal_raw_plan(detail_by_joint)
             if not self.is_dry_run():
-                self.driver.enable_torque()
+                for joint_key in goal_raw_by_joint:
+                    if joint_key not in self._torque_enabled_joints:
+                        self.driver.enable_torque(joint_key)
+                        self._torque_enabled_joints.add(joint_key)
             self.driver.write_many_goal_positions(goal_raw_by_joint)
             self.current_raw.update(goal_raw_by_joint)
             for joint_key, target_deg in target_deg_by_joint.items():
                 self.current_joint_deg[joint_key] = float(target_deg)
-            self.runtime_state["goal_joint_targets_deg"] = {
-                **dict(self.runtime_state.get("goal_joint_targets_deg", {})),
-                **{joint_key: float(target_deg) for joint_key, target_deg in target_deg_by_joint.items()},
-            }
-            self.runtime_state["goal_raw_by_joint"] = {
-                **dict(self.runtime_state.get("goal_raw_by_joint", {})),
-                **{joint_key: int(goal_raw) for joint_key, goal_raw in goal_raw_by_joint.items()},
-            }
+            self._update_goal_state(target_deg_by_joint, goal_raw_by_joint)
             self._refresh_state_from_raw(self.driver.read_all_present_positions())
             self._save_runtime_state()
             return 操作结果(True, "移动命令已完成。" if self.is_dry_run() else "真实移动命令已写入舵机。")
@@ -239,9 +248,10 @@ class RealArmController:
             return 操作结果(False, state["错误"])
         current_deg = float(state.get("关节角度", {}).get(joint_key, self.current_joint_deg.get(joint_key, 0.0)))
         target_deg = current_deg + float(delta_deg)
+        unit = "mm" if joint_key == "j10" else "度"
         print(
-            f"{joint_label(joint_key)} 当前角度={current_deg:.2f} 度，"
-            f"微调={float(delta_deg):+.2f} 度，目标角度={target_deg:.2f} 度。"
+            f"{joint_label(joint_key)} 当前目标={current_deg:.2f} {unit}，"
+            f"微调={float(delta_deg):+.2f} {unit}，目标={target_deg:.2f} {unit}。"
         )
         return self.move_joint(joint_key, target_deg)
 
@@ -260,8 +270,8 @@ class RealArmController:
         if not self.connected:
             return 操作结果(False, "尚未连接。请先输入：连接")
 
-        if not self.config.get("transport", {}).get("gripper_available", True):
-            return 操作结果(False, "配置中 gripper_available=false，夹爪不可用。")
+        if not self._gripper_available():
+            return 操作结果(False, "夹爪未安装或未标定，当前已禁用夹爪相关功能。")
 
         if not self.calibration_manager.has("gripper"):
             return 操作结果(False, "标定文件缺少夹爪 gripper，禁止移动夹爪。")
@@ -373,7 +383,7 @@ class RealArmController:
         }
 
     def 移动到关节角度(self, 目标角度: list[float]) -> 操作结果:
-        """阶段三兼容：按固定顺序移动 J1-J5。"""
+        """阶段三兼容：按固定顺序移动 J11-J15。"""
 
         if len(目标角度) != len(self.joint_order):
             return 操作结果(False, f"角度数量不对：需要 {len(self.joint_order)} 个。")
@@ -424,6 +434,8 @@ class RealArmController:
         """
 
         self.config = 读取配置(self.config_path)
+        if self._dry_run_override is not None:
+            self.config.setdefault("transport", {})["dry_run"] = bool(self._dry_run_override)
         self.joint_order = list(self.config.get("robot", {}).get("joint_order", JOINT_ORDER))
         self.joint_config_by_key = self._build_joint_config_by_key()
         calibration_path = self._resolve_path(self.config.get("calibration", {}).get("path", "标定文件.json"))
@@ -446,7 +458,7 @@ class RealArmController:
                 startup_raw[joint_key] = int(entry["home_present_raw"])
             else:
                 startup_raw[joint_key] = int(entry["zero_present_raw"])
-        if self.calibration_manager.has("gripper"):
+        if self._gripper_available() and self.calibration_manager.has("gripper"):
             entry = self.calibration_manager.get("gripper")
             startup_raw["gripper"] = int(entry.get("zero_present_raw", entry.get("range_min", 0)))
         return startup_raw
@@ -501,14 +513,20 @@ class RealArmController:
                     "goal_raw": raw_by_joint.get(joint_key),
                 }
 
-        if "gripper" in raw_by_joint and self.calibration_manager.has("gripper"):
+        if self._gripper_available() and "gripper" in raw_by_joint and self.calibration_manager.has("gripper"):
             gripper_entry = self.calibration_manager.get("gripper")
             self.current_gripper = gripper_raw_to_open_value(raw_by_joint["gripper"], gripper_entry)
             self.runtime_state["gripper"] = {
+                "available": True,
                 "present_raw": int(raw_by_joint["gripper"]),
                 "open_value": self.current_gripper,
                 "range_min": gripper_entry.get("range_min"),
                 "range_max": gripper_entry.get("range_max"),
+            }
+        elif not self._gripper_available():
+            self.runtime_state["gripper"] = {
+                "available": False,
+                "reason": "夹爪未安装或未标定",
             }
 
         self.runtime_state["updated_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
@@ -520,6 +538,38 @@ class RealArmController:
         self.runtime_state["mapping_details"] = details
         self.runtime_state["multi_turn_state"] = multi_turn_state
 
+    def _reset_goal_state_to_current(self) -> None:
+        """连接后用当前读数重置目标状态，避免标定后沿用旧会话目标。"""
+
+        self.runtime_state["goal_joint_targets_deg"] = {
+            joint_key: float(self.current_joint_deg[joint_key])
+            for joint_key in self.joint_order
+            if joint_key in self.current_joint_deg
+        }
+        self.runtime_state["goal_raw_by_joint"] = {
+            joint_key: int(self.current_raw[joint_key])
+            for joint_key in self.joint_order
+            if joint_key in self.current_raw
+        }
+
+    def _update_goal_state(self, targets_deg: dict[str, float], goal_raw_by_joint: dict[str, int]) -> None:
+        """只保留当前关节体系内的目标，清掉历史别名和旧标定残留。"""
+
+        current_goals = {
+            joint_key: float(self.runtime_state.get("goal_joint_targets_deg", {}).get(joint_key, self.current_joint_deg.get(joint_key, 0.0)))
+            for joint_key in self.joint_order
+        }
+        current_goals.update({joint_key: float(target_deg) for joint_key, target_deg in targets_deg.items() if joint_key in self.joint_order})
+        self.runtime_state["goal_joint_targets_deg"] = current_goals
+
+        current_raw_goals = {
+            joint_key: int(self.runtime_state.get("goal_raw_by_joint", {}).get(joint_key, self.current_raw.get(joint_key, 0)))
+            for joint_key in self.joint_order
+            if joint_key in self.current_raw or joint_key in goal_raw_by_joint
+        }
+        current_raw_goals.update({joint_key: int(goal_raw) for joint_key, goal_raw in goal_raw_by_joint.items() if joint_key in self.joint_order})
+        self.runtime_state["goal_raw_by_joint"] = current_raw_goals
+
     def _print_goal_raw_plan(self, detail_by_joint: dict[str, dict[str, Any]]) -> None:
         title = "[DRY-RUN] 如果是真实模式，将写入以下 Goal_Position：" if self.is_dry_run() else "将写入以下 Goal_Position："
         print(title)
@@ -527,13 +577,45 @@ class RealArmController:
             if joint_key not in detail_by_joint:
                 continue
             detail = detail_by_joint[joint_key]
+            unit = "mm" if joint_key == "j10" else "deg"
             print(
                 f"  {detail['show_name']} ({joint_key}) "
-                f"角度={detail['joint_deg']:.2f} deg "
+                f"目标={detail['joint_deg']:.2f} {unit} "
                 f"relative_raw={detail['relative_raw']} "
                 f"goal_raw={detail['goal_raw']} "
                 f"模式={detail['模式']} scale={detail['joint_scale']}"
             )
+
+    def _calibration_entry_for_move(self, joint_key: str) -> dict[str, Any]:
+        if self.calibration_manager.has(joint_key):
+            return self.calibration_manager.get(joint_key)
+        if self.is_dry_run():
+            joint_config = self.joint_config_by_key.get(joint_key, {})
+            return {
+                "show_name": joint_label(joint_key),
+                "模式": joint_config.get("模式", "多圈"),
+                "direction": 1,
+                "id": int(joint_config.get("舵机ID", 0)),
+                "phase": 28,
+                "range_min": 0,
+                "range_max": 0,
+                "operating_mode": 0,
+                "home_present_raw": 0,
+                "zero_present_raw": 2048,
+            }
+        return self.calibration_manager.get(joint_key)
+
+    def _gripper_available(self) -> bool:
+        """配置和标定都允许时，才认为夹爪可用。"""
+
+        if not self.config.get("transport", {}).get("gripper_available", True):
+            return False
+        meta = self.calibration_manager.data.get("_meta", {})
+        if isinstance(meta, dict) and meta.get("gripper_available") is False:
+            return False
+        if self.connected and hasattr(self.driver, "gripper_available"):
+            return bool(getattr(self.driver, "gripper_available"))
+        return self.calibration_manager.has("gripper")
 
     def _load_runtime_state(self) -> dict[str, Any]:
         if not self.runtime_state_path.exists():
@@ -548,56 +630,26 @@ class RealArmController:
                 "multi_turn_state": {},
                 "gripper": {},
             }
-        try:
-            with self.runtime_state_path.open("r", encoding="utf-8") as 文件:
-                data = json.load(文件)
-            if isinstance(data, dict):
-                return data
-        except json.JSONDecodeError:
-            pass
-        return {}
+        return read_json_object_or_default(self.runtime_state_path)
 
     def _save_runtime_state(self) -> None:
-        self.runtime_state_path.parent.mkdir(parents=True, exist_ok=True)
-        with self.runtime_state_path.open("w", encoding="utf-8") as 文件:
-            json.dump(self.runtime_state, 文件, ensure_ascii=False, indent=2)
-            文件.write("\n")
+        atomic_write_json(self.runtime_state_path, self.runtime_state)
 
     def _resolve_path(self, path_value: str | Path) -> Path:
-        path = Path(path_value)
-        if path.is_absolute():
-            return path
-        return self.base_dir / path
+        return resolve_path(path_value, self.base_dir)
 
 
 def 读取配置(path: str | Path) -> dict[str, Any]:
     """读取 JSON 兼容 YAML。没有 PyYAML 时也能运行。"""
 
-    path = Path(path)
-    text = path.read_text(encoding="utf-8")
-    try:
-        data = json.loads(text)
-    except json.JSONDecodeError:
-        try:
-            import yaml  # type: ignore
-        except ImportError as 错误:
-            raise RuntimeError(
-                "配置不是 JSON 兼容格式，并且当前环境没有安装 PyYAML。"
-                "请把配置保持为 JSON 兼容 YAML，或执行：pip install pyyaml"
-            ) from 错误
-        data = yaml.safe_load(text)
-    if not isinstance(data, dict):
-        raise ValueError("配置文件最外层必须是对象。")
-    return data
-
-
-def 写入_json(path: str | Path, data: Any) -> None:
-    """写入支持中文的 JSON 文件。"""
-
-    path = Path(path)
-    with path.open("w", encoding="utf-8") as 文件:
-        json.dump(data, 文件, ensure_ascii=False, indent=2)
-        文件.write("\n")
+    config = read_structured(path)
+    env_paths = (PROJECT_ROOT / ".env", REAL_CONTROL_DIR / "环境变量.env", PROJECT_ROOT / "系统集成" / "环境变量.env")
+    transport = config.setdefault("transport", {})
+    port = str(env_value("ARM_ROBOT_PORT", "", env_paths=env_paths) or "").strip()
+    if port:
+        transport["port"] = port
+    transport["dry_run"] = env_bool("ARM_REAL_DRY_RUN", bool(transport.get("dry_run", True)), env_paths=env_paths)
+    return config
 
 
 真实机械臂控制器 = RealArmController

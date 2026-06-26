@@ -1,12 +1,9 @@
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
-BASE_DIR = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(BASE_DIR))
+import 系统测试路径_test_paths  # noqa: F401
 
 from integration.config_loader import load_config, resolve_path
+from integration.path_utils import INTEGRATION_DIR
 
 
 def main() -> int:
@@ -14,11 +11,11 @@ def main() -> int:
     assert config["project"]["name"] == "我的机械臂控制项目"
     missing = []
     for key, path in config.get("paths", {}).items():
-        resolved = resolve_path(path, BASE_DIR)
+        resolved = resolve_path(path, INTEGRATION_DIR)
         if not resolved.exists():
             missing.append(f"{key}: {resolved}")
     for service in config.get("services", {}).values():
-        cwd = resolve_path(service["cwd"], BASE_DIR)
+        cwd = resolve_path(service["cwd"], INTEGRATION_DIR)
         if not cwd.exists():
             missing.append(f"{service['name']} cwd: {cwd}")
     if missing:
@@ -29,4 +26,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

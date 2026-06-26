@@ -321,6 +321,10 @@ pre {
   margin: 18px 0;
 }
 
+.disabled-panel {
+  opacity: 0.55;
+}
+
 .kv {
   display: grid;
   grid-template-columns: 80px 1fr;

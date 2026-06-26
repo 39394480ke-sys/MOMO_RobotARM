@@ -2,12 +2,7 @@
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
-BASE_DIR = Path(__file__).resolve().parents[1]
-if str(BASE_DIR) not in sys.path:
-    sys.path.insert(0, str(BASE_DIR))
+from 视觉测试路径_test_paths import VISION_ROOT as BASE_DIR
 
 from vision.手势识别_gesture_detector import GestureDetector
 from vision.摄像头_source import VideoSource

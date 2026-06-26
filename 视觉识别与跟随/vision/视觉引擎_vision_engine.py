@@ -13,6 +13,7 @@ from .偏移计算_offset_calculator import OffsetCalculator
 from .可视化_visualizer import Visualizer, make_placeholder_frame
 from .平滑滤波_smoothing import OffsetSmoother
 from .手势识别_gesture_detector import GestureDetector
+from .主体跟踪_object_tracker import ObjectTracker
 from .摄像头_source import VideoSource
 from .目标选择_target_selector import TargetSelector
 from .结果存储_result_store import ResultStore
@@ -26,11 +27,18 @@ class VisionEngine:
         self.detector_cfg = dict(self.config.get("detector", {}))
         self.gesture_cfg = dict(self.config.get("gesture", {}))
         self.target_cfg = dict(self.config.get("target", {}))
+        self.tracker_cfg = dict(self.config.get("tracker", {}))
         self.smoothing_cfg = dict(self.config.get("smoothing", {}))
         self.service_cfg = dict(self.config.get("service", {}))
 
         self.video_source = VideoSource(self.camera_cfg, self.base_dir)
         self.face_detector = FaceDetector(self.detector_cfg, self.base_dir)
+        self.object_tracker = ObjectTracker(
+            tracker_type=str(self.tracker_cfg.get("type", "CSRT")),
+            max_lost_frames=int(self.tracker_cfg.get("max_lost_frames", 15)),
+            min_box_width=int(self.tracker_cfg.get("min_box_width", 20)),
+            min_box_height=int(self.tracker_cfg.get("min_box_height", 20)),
+        )
         self.target_selector = TargetSelector(self.target_cfg)
         self.offset_calculator = OffsetCalculator(self.target_cfg)
         self.smoother = OffsetSmoother(self.smoothing_cfg)
@@ -40,6 +48,11 @@ class VisionEngine:
 
         self.frame_id = 0
         self.started_at = 0.0
+        self.target_mode = str(self.target_cfg.get("mode", "face")).strip().lower() or "face"
+        self.latest_frame: Any | None = None
+        self.manual_reference_bbox: tuple[int, int, int, int] | None = None
+        self.manual_reference_area = 0.0
+        self.manual_reference_size = 0.0
         self._running = False
         self._thread: threading.Thread | None = None
         self._lock = threading.RLock()
@@ -67,6 +80,62 @@ class VisionEngine:
         self.logger.info("视觉引擎已停止。")
         return self.get_status()
 
+    def select_manual_target(self, bbox: list[float] | tuple[float, float, float, float]) -> dict[str, Any]:
+        with self._lock:
+            frame = self.latest_frame.copy() if self.latest_frame is not None and hasattr(self.latest_frame, "copy") else self.latest_frame
+        if frame is None:
+            return {"ok": False, "message": "当前还没有摄像头画面，无法框选主体。"}
+        try:
+            ok = self.object_tracker.init(frame, bbox)
+        except Exception as exc:
+            return {"ok": False, "message": f"初始化手动目标失败：{exc}"}
+        if ok:
+            self.target_mode = "manual"
+            if self.object_tracker.last_bbox:
+                self.manual_reference_bbox = self.object_tracker.last_bbox
+                size_meta = self._bbox_size_meta(self.object_tracker.last_bbox)
+                self.manual_reference_area = size_meta["area"]
+                self.manual_reference_size = size_meta["size"]
+            self.smoother.reset()
+            return {
+                "ok": True,
+                "message": "手动目标已锁定。",
+                "bbox": list(self.object_tracker.last_bbox or bbox),
+                "reference_area": round(self.manual_reference_area, 3),
+                "reference_size": round(self.manual_reference_size, 3),
+                "target_mode": self.target_mode,
+            }
+        return {"ok": False, "message": self.object_tracker.last_error or "手动目标初始化失败。"}
+
+    def reset_manual_target(self, fallback_mode: str = "face") -> dict[str, Any]:
+        self.object_tracker.reset()
+        self.manual_reference_bbox = None
+        self.manual_reference_area = 0.0
+        self.manual_reference_size = 0.0
+        self.target_mode = str(fallback_mode or "face").strip().lower()
+        if self.target_mode not in {"face", "manual", "hybrid"}:
+            self.target_mode = "face"
+        self.smoother.reset()
+        return {"ok": True, "message": "已取消手动目标。", "target_mode": self.target_mode}
+
+    def get_target_state(self) -> dict[str, Any]:
+        latest = self.store.get_latest_result()
+        target = latest.get("target") if isinstance(latest.get("target"), dict) else {}
+        return {
+            "target_mode": self.target_mode,
+            "tracker_active": self.object_tracker.active,
+            "tracker_type": self.object_tracker.tracker_type,
+            "tracker_lost_count": self.object_tracker.lost_count,
+            "tracker_last_bbox": list(self.object_tracker.last_bbox) if self.object_tracker.last_bbox else None,
+            "manual_reference_bbox": list(self.manual_reference_bbox) if self.manual_reference_bbox else None,
+            "manual_reference_area": round(self.manual_reference_area, 3),
+            "manual_reference_size": round(self.manual_reference_size, 3),
+            "target": target,
+            "has_target": bool(latest.get("has_target", latest.get("detected", False))),
+            "tracking_state": latest.get("tracking_state", target.get("tracking_state", "idle")),
+            "target_source": latest.get("target_source", target.get("source", "none")),
+        }
+
     def process_once(self) -> dict[str, Any]:
         if not self.video_source.is_opened():
             if not self.video_source.open():
@@ -83,17 +152,20 @@ class VisionEngine:
 
         self.frame_id += 1
         height, width = frame.shape[:2]
+        with self._lock:
+            self.latest_frame = frame.copy()
         now = time.time()
         self._update_fps(now)
 
         face_result = self.face_detector.detect(frame)
         faces = list(face_result.get("faces", []))
-        selection = self.target_selector.select(faces)
-        target_face = selection.get("target_face")
-        detected = bool(selection.get("detected"))
+        target_info = self._select_target(frame, faces)
+        target_face = target_info.get("target_face")
+        target = target_info.get("target")
+        detected = bool(target_info.get("has_target", False))
 
-        if detected and isinstance(target_face, dict):
-            offset = self.offset_calculator.calculate(width, height, target_face.get("center"))
+        if detected and isinstance(target, dict):
+            offset = self.offset_calculator.calculate(width, height, target.get("center"))
         else:
             offset = self.offset_calculator.empty(width, height)
         smoothed = self.smoother.update(offset if detected else None)
@@ -108,6 +180,13 @@ class VisionEngine:
             "timestamp": now,
             "frame_id": self.frame_id,
             "detected": detected,
+            "has_target": detected,
+            "target_source": target_info.get("target_source", "none"),
+            "tracking_state": target_info.get("tracking_state", "idle"),
+            "target": target,
+            "bbox": target.get("bbox") if isinstance(target, dict) else None,
+            "center": target.get("center") if isinstance(target, dict) else None,
+            "confidence": target_info.get("confidence", 0.0),
             "target_face": target_face,
             "faces": faces,
             "offset": {
@@ -140,7 +219,7 @@ class VisionEngine:
                 "face_available": bool(face_result.get("available", False)),
                 "face_error": str(face_result.get("error", "")),
             },
-            "message": selection.get("message", ""),
+            "message": target_info.get("message", ""),
         }
 
         visualized = self.visualizer.draw(frame, result)
@@ -177,6 +256,7 @@ class VisionEngine:
                 "error": self.face_detector.last_error,
                 "model_path": str(self.face_detector.model_path),
             },
+            "target": self.get_target_state(),
             "gesture_detector": {
                 "available": self.gesture_detector.available,
                 "error": self.gesture_detector.last_error,
@@ -211,6 +291,13 @@ class VisionEngine:
             "timestamp": time.time(),
             "frame_id": self.frame_id,
             "detected": False,
+            "has_target": False,
+            "target_source": "none",
+            "tracking_state": "idle",
+            "target": None,
+            "bbox": None,
+            "center": None,
+            "confidence": 0.0,
             "target_face": None,
             "faces": [],
             "offset": {
@@ -246,6 +333,121 @@ class VisionEngine:
             },
             "message": message or "camera unavailable",
         }
+
+    def _select_target(self, frame: Any, faces: list[dict[str, Any]]) -> dict[str, Any]:
+        mode = self.target_mode if self.target_mode in {"face", "manual", "hybrid"} else "face"
+
+        if mode in {"manual", "hybrid"} and self.object_tracker.active:
+            tracked = self.object_tracker.update(frame)
+            if tracked.get("ok") and tracked.get("bbox"):
+                target = self._target_from_bbox(
+                    tracked["bbox"],
+                    "manual_tracker",
+                    1.0,
+                    "tracking",
+                    reference_area=self.manual_reference_area,
+                    reference_size=self.manual_reference_size,
+                )
+                return {
+                    "has_target": True,
+                    "target": target,
+                    "target_face": None,
+                    "target_source": "manual_tracker",
+                    "tracking_state": "tracking",
+                    "confidence": 1.0,
+                    "message": "正在跟踪手动框选主体。",
+                }
+            return {
+                "has_target": False,
+                "target": None,
+                "target_face": None,
+                "target_source": "manual_tracker",
+                "tracking_state": "lost",
+                "confidence": 0.0,
+                "message": "手动框选目标丢失，已停止输出跟随目标。",
+            }
+
+        if mode in {"face", "hybrid"}:
+            selection = self.target_selector.select(faces)
+            target_face = selection.get("target_face")
+            if bool(selection.get("detected")) and isinstance(target_face, dict):
+                target = self._target_from_bbox(
+                    target_face.get("bbox", [0, 0, 0, 0]),
+                    "face",
+                    float(target_face.get("score", 1.0)),
+                    "tracking",
+                    center=target_face.get("center"),
+                )
+                return {
+                    "has_target": True,
+                    "target": target,
+                    "target_face": target_face,
+                    "target_source": "face",
+                    "tracking_state": "tracking",
+                    "confidence": target.get("confidence", 0.0),
+                    "message": selection.get("message", "已选择人脸目标。"),
+                }
+            return {
+                "has_target": False,
+                "target": None,
+                "target_face": None,
+                "target_source": "face",
+                "tracking_state": "idle",
+                "confidence": 0.0,
+                "message": selection.get("message", "没有检测到人脸。"),
+            }
+
+        return {
+            "has_target": False,
+            "target": None,
+            "target_face": None,
+            "target_source": "none",
+            "tracking_state": "idle",
+            "confidence": 0.0,
+            "message": "当前目标模式未启用。",
+        }
+
+    @staticmethod
+    def _target_from_bbox(
+        bbox: list[float] | tuple[float, float, float, float],
+        source: str,
+        confidence: float,
+        tracking_state: str,
+        center: list[float] | tuple[float, float] | None = None,
+        reference_area: float = 0.0,
+        reference_size: float = 0.0,
+    ) -> dict[str, Any]:
+        x, y, w, h = [float(v) for v in list(bbox)[:4]]
+        if center:
+            cx, cy = float(center[0]), float(center[1])
+        else:
+            cx, cy = x + w / 2.0, y + h / 2.0
+        size_meta = VisionEngine._bbox_size_meta((x, y, w, h))
+        ref_area = max(0.0, float(reference_area))
+        ref_size = max(0.0, float(reference_size))
+        if ref_size <= 0.0 and ref_area > 0.0:
+            ref_size = ref_area ** 0.5
+        size_scale = size_meta["size"] / ref_size if ref_size > 0.0 else 1.0
+        size_error = size_scale - 1.0 if ref_size > 0.0 else 0.0
+        return {
+            "source": source,
+            "bbox": [round(x, 2), round(y, 2), round(w, 2), round(h, 2)],
+            "center": [round(cx, 2), round(cy, 2)],
+            "confidence": round(float(confidence), 4),
+            "tracking_state": tracking_state,
+            "area": round(size_meta["area"], 3),
+            "size": round(size_meta["size"], 3),
+            "reference_area": round(ref_area, 3),
+            "reference_size": round(ref_size, 3),
+            "size_scale": round(size_scale, 6),
+            "size_error": round(size_error, 6),
+        }
+
+    @staticmethod
+    def _bbox_size_meta(bbox: list[float] | tuple[float, ...]) -> dict[str, float]:
+        _x, _y, w, h = [float(v) for v in list(bbox)[:4]]
+        area = max(0.0, w) * max(0.0, h)
+        return {"area": area, "size": area ** 0.5 if area > 0.0 else 0.0}
 
     def _save_result_and_placeholder(self, result: dict[str, Any], message: str) -> None:
         self.store.save_result(result)

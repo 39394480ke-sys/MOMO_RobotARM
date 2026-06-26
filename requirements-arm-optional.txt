@@ -1,0 +1,4 @@
+# Optional ARM dependencies. Install only after Web + real control are stable.
+
+mediapipe
+openai

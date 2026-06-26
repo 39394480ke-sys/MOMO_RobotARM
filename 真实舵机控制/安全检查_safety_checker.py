@@ -43,11 +43,21 @@ class SafetyChecker:
             "电源稳定、串口和标定正确，并随时准备断电。"
         )
 
-    def check_calibration_for_move(self) -> SafetyResult:
+    def check_calibration_for_move(self, target_joint_keys: list[str] | None = None) -> SafetyResult:
         """检查真机移动是否具备完整标定。"""
 
         if self.is_dry_run():
             return SafetyResult(True, "dry-run 模式允许映射检查，不会真实移动。")
+
+        if target_joint_keys is not None:
+            bad = []
+            for joint_key in target_joint_keys:
+                report = self.calibration_manager.joint_report(joint_key)
+                if not report["完整"]:
+                    bad.append(f"{report['show_name']}：{'; '.join(report['问题'] or report['缺失字段'])}")
+            if not bad:
+                return SafetyResult(True, "本次目标关节标定完整，允许真实移动。")
+            return SafetyResult(False, "本次目标关节标定不完整，禁止真实移动。" + "；".join(bad))
 
         report = self.calibration_manager.calibration_report()
         if report["允许真机移动"]:

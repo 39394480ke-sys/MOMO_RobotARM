@@ -12,10 +12,16 @@
 
 from __future__ import annotations
 
-import json
 from copy import deepcopy
+from json import JSONDecodeError
 from pathlib import Path
 from typing import Any
+
+from 仿真路径工具_sim_path_utils import ensure_project_root_on_path
+
+ensure_project_root_on_path()
+
+from 通用_io import atomic_write_json, read_json_object
 
 
 class 姿态管理器:
@@ -37,13 +43,11 @@ class 姿态管理器:
             return self.姿态库
 
         try:
-            with self.姿态库路径.open("r", encoding="utf-8") as 文件:
-                数据 = json.load(文件)
-        except json.JSONDecodeError as 错误:
+            数据 = read_json_object(self.姿态库路径)
+        except JSONDecodeError as 错误:
             raise ValueError(f"姿态库 JSON 格式错误：{错误}") from 错误
-
-        if not isinstance(数据, dict):
-            raise ValueError("姿态库文件的最外层必须是 JSON 对象。")
+        except ValueError as 错误:
+            raise ValueError("姿态库文件的最外层必须是 JSON 对象。") from 错误
 
         self.姿态库 = 数据
         return self.姿态库
@@ -51,10 +55,7 @@ class 姿态管理器:
     def 保存全部姿态(self) -> None:
         """把当前姿态库写回 JSON 文件。"""
 
-        self.姿态库路径.parent.mkdir(parents=True, exist_ok=True)
-        with self.姿态库路径.open("w", encoding="utf-8") as 文件:
-            json.dump(self.姿态库, 文件, ensure_ascii=False, indent=2)
-            文件.write("\n")
+        atomic_write_json(self.姿态库路径, self.姿态库)
 
     def 补齐默认姿态(self) -> None:
         """仅在姿态库文件首次创建时写入配置中的默认姿态。"""

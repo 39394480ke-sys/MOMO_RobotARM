@@ -2,7 +2,7 @@
 
 这个模块封装 PyBullet 正逆运动学流程：
 - URDF 负责机器人结构和 FK / IK。
-- SDK 上层仍使用固定的 5 个逻辑关节顺序。
+- SDK 上层使用固定逻辑关节顺序：J10 导轨 + 5 个旋转关节。
 - joint_name_aliases 负责把 SDK 关节名映射到 URDF 关节名。
 - 不直接控制真实舵机。
 """
@@ -17,56 +17,58 @@ from typing import Any, Mapping, Sequence
 
 import numpy as np
 
+from 运动学路径工具_kinematics_path_utils import KINEMATICS_ROOT, ensure_project_root_on_path, resolve_kinematics_path
+
+ensure_project_root_on_path()
+
+from 控制桥接_common import (  # noqa: E402
+    JOINT_ORDER as COMMON_JOINT_ORDER,
+    URDF_JOINT_NAME_ALIASES as COMMON_URDF_JOINT_NAME_ALIASES,
+)
+from 通用_io import deep_merge, read_structured  # noqa: E402
+
 try:
     import pybullet as _pb
 
     PYBULLET_AVAILABLE = True
-    PYBULLET_IMPORT_ERROR: Exception | None = None
-except Exception as exc:  # pragma: no cover - 由用户环境决定
+except Exception:  # pragma: no cover - 由用户环境决定
     _pb = None
     PYBULLET_AVAILABLE = False
-    PYBULLET_IMPORT_ERROR = exc
 
 try:
-    import yaml as _yaml
+    import yaml  # type: ignore  # noqa: F401
 
     YAML_AVAILABLE = True
-    YAML_IMPORT_ERROR: Exception | None = None
-except Exception as exc:  # pragma: no cover - 由用户环境决定
-    _yaml = None
+except Exception:  # pragma: no cover - 由用户环境决定
     YAML_AVAILABLE = False
-    YAML_IMPORT_ERROR = exc
 
 
-SDK_JOINT_NAMES = [
-    "shoulder_pan",
-    "shoulder_lift",
-    "elbow_flex",
-    "wrist_flex",
-    "wrist_roll",
-]
+SDK_JOINT_NAMES = list(COMMON_JOINT_ORDER)
 
-JOINT_NAME_ALIASES = {
-    "shoulder_pan": "shoulder",
-    "shoulder_lift": "shoulder_lift",
-    "elbow_flex": "elbow",
-    "wrist_flex": "wrist",
-    "wrist_roll": "wrist_roll",
-}
+JOINT_NAME_ALIASES = dict(COMMON_URDF_JOINT_NAME_ALIASES)
 
 DEFAULT_CONFIG: dict[str, Any] = {
     "robot": {
-        "name": "soarmmoce",
+        "name": "soarmmoce_with_linear_rail",
         "urdf_path": "urdf/soarmoce_urdf.urdf",
-        "target_frame": "wrist_roll",
+        "target_frame": "Link_6",
         "sdk_joint_names": list(SDK_JOINT_NAMES),
         "joint_name_aliases": dict(JOINT_NAME_ALIASES),
+        "joint_user_units": {
+            "j10": "mm",
+            "j11": "deg",
+            "j12": "deg",
+            "j13": "deg",
+            "j14": "deg",
+            "j15": "deg",
+        },
         "joint_scales": {
-            "shoulder_pan": 1.0,
-            "shoulder_lift": -5.3,
-            "elbow_flex": 5.6,
-            "wrist_flex": -1.0,
-            "wrist_roll": 1.0,
+            "j10": 1.0,
+            "j11": 5.0,
+            "j12": -5.3,
+            "j13": 5.6,
+            "j14": -1.0,
+            "j15": 1.0,
         },
         "model_offsets_deg": {joint_name: 0.0 for joint_name in SDK_JOINT_NAMES},
     },
@@ -99,16 +101,6 @@ def yaml缺失提示() -> str:
     return "当前环境没有安装 pyyaml。\n请运行：\npip install pyyaml"
 
 
-def _deep_merge(base: dict[str, Any], override: Mapping[str, Any]) -> dict[str, Any]:
-    result = deepcopy(base)
-    for key, value in dict(override).items():
-        if isinstance(value, Mapping) and isinstance(result.get(key), dict):
-            result[key] = _deep_merge(result[key], value)
-        else:
-            result[key] = value
-    return result
-
-
 def 加载运动学配置(config_path: str | Path | None = None) -> dict[str, Any]:
     """加载阶段五配置。
 
@@ -116,7 +108,7 @@ def 加载运动学配置(config_path: str | Path | None = None) -> dict[str, An
     FK / IK 仍会在需要 PyBullet 时给出中文安装提示。
     """
 
-    base_dir = Path(__file__).resolve().parent
+    base_dir = KINEMATICS_ROOT
     path = Path(config_path) if config_path else base_dir / "运动学配置.yaml"
     if not path.is_absolute():
         path = base_dir / path
@@ -124,29 +116,22 @@ def 加载运动学配置(config_path: str | Path | None = None) -> dict[str, An
     if not path.exists():
         return deepcopy(DEFAULT_CONFIG)
 
-    if not YAML_AVAILABLE or _yaml is None:
+    if not YAML_AVAILABLE:
         config = deepcopy(DEFAULT_CONFIG)
         config["_warning"] = yaml缺失提示()
         return config
 
-    with path.open("r", encoding="utf-8") as file:
-        payload = _yaml.safe_load(file) or {}
-    if not isinstance(payload, dict):
-        raise ValueError(f"配置文件最外层必须是字典：{path}")
-    return _deep_merge(DEFAULT_CONFIG, payload)
+    payload = read_structured(path)
+    return deep_merge(DEFAULT_CONFIG, payload)
 
 
 def 解析资源路径(path_text: str | Path, base_dir: str | Path | None = None) -> Path:
-    path = Path(path_text).expanduser()
-    if path.is_absolute():
-        return path.resolve()
-    root = Path(base_dir).resolve() if base_dir else Path(__file__).resolve().parent
-    return (root / path).resolve()
+    return resolve_kinematics_path(path_text, base_dir)
 
 
 def 创建运动学模型(config_path: str | Path | None = None, use_gui: bool | None = None) -> "KinematicsModel":
     config = 加载运动学配置(config_path)
-    base_dir = Path(__file__).resolve().parent
+    base_dir = KINEMATICS_ROOT
     robot = config.get("robot", {})
     viewer = config.get("viewer", {})
     urdf_path = 解析资源路径(robot.get("urdf_path", "urdf/soarmoce_urdf.urdf"), base_dir)
@@ -155,7 +140,7 @@ def 创建运动学模型(config_path: str | Path | None = None, use_gui: bool |
         sdk_joint_names=robot.get("sdk_joint_names", SDK_JOINT_NAMES),
         joint_name_aliases=robot.get("joint_name_aliases", JOINT_NAME_ALIASES),
         model_offsets_deg=robot.get("model_offsets_deg", {}),
-        target_frame=robot.get("target_frame", "wrist_roll"),
+        target_frame=robot.get("target_frame", "j15"),
         use_gui=bool(viewer.get("use_gui", False)) if use_gui is None else bool(use_gui),
     )
 
@@ -224,7 +209,7 @@ class KinematicsModel:
 
         self.sdk_joint_names = [str(name) for name in sdk_joint_names]
         self.joint_name_aliases = {str(key): str(value) for key, value in dict(joint_name_aliases).items()}
-        self.target_frame = str(target_frame or "wrist_roll").strip() or "wrist_roll"
+        self.target_frame = str(target_frame or "j15").strip() or "j15"
         self.model_offsets_rad = np.asarray(
             [math.radians(float(dict(model_offsets_deg).get(name, 0.0))) for name in self.sdk_joint_names],
             dtype=float,

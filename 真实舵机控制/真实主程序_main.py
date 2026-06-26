@@ -4,20 +4,18 @@ from __future__ import annotations
 
 import math
 import sys
-from pathlib import Path
 from typing import Any
+
+from 真实路径工具_real_path_utils import KINEMATICS_ROOT, REAL_CONTROL_DIR, ensure_real_stage_paths, resolve_real_path
+
+ensure_real_stage_paths()
 
 from 真实机械臂控制器_real_arm_controller import RealArmController, 操作结果
 from 角度映射_angle_mapper import JOINT_ORDER, MULTI_TURN_JOINTS, joint_label
 
 
-当前目录 = Path(__file__).resolve().parent
-仿真目录 = (当前目录 / "../仿真控制系统").resolve()
-运动学目录 = (当前目录 / "../URDF运动学仿真").resolve()
-if str(仿真目录) not in sys.path:
-    sys.path.insert(0, str(仿真目录))
-if str(运动学目录) not in sys.path:
-    sys.path.insert(0, str(运动学目录))
+当前目录 = REAL_CONTROL_DIR
+运动学目录 = KINEMATICS_ROOT
 
 try:
     from 动作播放器_action_player import 动作播放器
@@ -71,8 +69,8 @@ def 创建阶段三复用模块(控制器: RealArmController):
     """复用阶段三姿态库和动作播放器。"""
 
     files = 控制器.config.get("files", {})
-    pose_path = (当前目录 / files.get("stage3_pose_library", "../仿真控制系统/姿态管理/姿态库.json")).resolve()
-    action_dir = (当前目录 / files.get("stage3_action_dir", "../仿真控制系统/姿态管理/动作库")).resolve()
+    pose_path = resolve_real_path(files.get("stage3_pose_library", "../仿真控制系统/姿态管理/姿态库.json"))
+    action_dir = resolve_real_path(files.get("stage3_action_dir", "../仿真控制系统/姿态管理/动作库"))
 
     姿态管理 = None
     动作播放 = None
@@ -257,16 +255,16 @@ def 标准化命令(命令: str) -> str:
 
 
 def 执行移动(参数: list[str], 控制器: RealArmController) -> None:
-    """执行：移动 0 20 30 10 0。"""
+    """执行：移动 0 0 20 30 10 0。"""
 
-    if len(参数) != 5:
-        print("移动失败：格式应为：移动 角度1 角度2 角度3 角度4 角度5")
-        print("顺序固定：J1_底座旋转 J2_肩部抬升 J3_肘部弯曲 J4_腕部俯仰 J5_腕部旋转")
+    if len(参数) != len(JOINT_ORDER):
+        print("移动失败：格式应为：移动 J10_mm J11_deg J12_deg J13_deg J14_deg J15_deg")
+        print("顺序固定：J10_底盘导轨 J11_底座旋转 J12_肩部抬升 J13_肘部弯曲 J14_腕部俯仰 J15_腕部旋转")
         return
     try:
         angles = [float(value) for value in 参数]
     except ValueError:
-        print("移动失败：角度必须是数字。示例：移动 0 20 30 10 0")
+        print("移动失败：目标值必须是数字。示例：移动 0 0 20 30 10 0")
         return
 
     target = {joint_key: angles[index] for index, joint_key in enumerate(JOINT_ORDER)}
@@ -286,21 +284,22 @@ def 执行移动单关节(参数: list[str], 控制器: RealArmController) -> No
     except ValueError:
         print("移动单关节失败：关节编号必须是整数，角度必须是数字。")
         return
-    if joint_no < 1 or joint_no > len(JOINT_ORDER):
-        print("移动单关节失败：关节编号必须是 1 到 5。")
+    joint_key = 解析关节编号(joint_no)
+    if not joint_key:
+        print("移动单关节失败：关节编号必须是 10 到 15；也可用 1 到 6 按顺序快速选择。")
         return
 
-    joint_key = JOINT_ORDER[joint_no - 1]
-    print(f"移动单关节是绝对角度命令：{joint_label(joint_key)} 将移动到 {target_deg:.2f} 度。")
+    unit = "mm" if joint_key == "j10" else "度"
+    print(f"移动单关节是绝对目标命令：{joint_label(joint_key)} 将移动到 {target_deg:.2f} {unit}。")
     打印结果(控制器.move_joint(joint_key, target_deg))
 
 
 def 执行微调(参数: list[str], 控制器: RealArmController) -> None:
-    """执行：微调 1 1，表示 J1 在当前角度基础上加 1 度。"""
+    """执行：微调 10 1，表示 J10 在当前目标基础上加 1mm。"""
 
     if len(参数) != 2:
         print("微调失败：格式应为：微调 关节编号 增量角度")
-        print("示例：微调 1 1 表示 J1 当前角度 +1 度；微调 1 -1 表示 J1 当前角度 -1 度。")
+        print("示例：微调 10 1 表示 J10 当前目标 +1mm；微调 11 -1 表示 J11 当前角度 -1 度。")
         return
     try:
         joint_no = int(参数[0])
@@ -308,11 +307,19 @@ def 执行微调(参数: list[str], 控制器: RealArmController) -> None:
     except ValueError:
         print("微调失败：关节编号必须是整数，增量角度必须是数字。")
         return
-    if joint_no < 1 or joint_no > len(JOINT_ORDER):
-        print("微调失败：关节编号必须是 1 到 5。")
+    joint_key = 解析关节编号(joint_no)
+    if not joint_key:
+        print("微调失败：关节编号必须是 10 到 15；也可用 1 到 6 按顺序快速选择。")
         return
-    joint_key = JOINT_ORDER[joint_no - 1]
     打印结果(控制器.jog_joint(joint_key, delta_deg))
+
+
+def 解析关节编号(joint_no: int) -> str | None:
+    if 10 <= joint_no <= 15:
+        return f"j{joint_no}"
+    if 1 <= joint_no <= len(JOINT_ORDER):
+        return JOINT_ORDER[joint_no - 1]
+    return None
 
 
 def 执行夹爪(参数: list[str], 控制器: RealArmController) -> None:
@@ -500,14 +507,10 @@ def 打印标定说明() -> None:
         """
 标定说明：
   重新标定请退出当前程序后运行：
-    mamba activate arm_rebot
-    cd 真实舵机控制
-    python 标定程序_calibrate.py
+    mamba run -n momo_rebot python 真实舵机控制/标定程序_calibrate.py
 
   只应用已有标定请运行：
-    mamba activate arm_rebot
-    cd 真实舵机控制
-    python 标定应用_apply_calibration.py
+    mamba run -n momo_rebot python 真实舵机控制/标定应用_apply_calibration.py
 
 区别：
   dry-run：不需要真实依赖，不连接硬件。
@@ -523,9 +526,7 @@ def 打印应用标定提示() -> None:
     print(
         """
 应用标定需要退出当前交互控制程序后单独运行：
-  mamba activate arm_rebot
-  cd 真实舵机控制
-  python 标定应用_apply_calibration.py
+  mamba run -n momo_rebot python 真实舵机控制/标定应用_apply_calibration.py
 
 该脚本会把已有 标定文件.json 中的寄存器配置写入真实舵机。
 第一版不在交互控制过程中直接应用标定，避免误操作。
@@ -571,10 +572,11 @@ def 打印帮助() -> None:
   标定状态
   标定说明
   应用标定
-  移动 0 20 30 10 0
-  移动单关节 2 2      # 绝对角度：J2 移动到 2 度
-  微调 2 1             # 相对角度：J2 在当前角度基础上 +1 度
-  微调 2 -1            # 相对角度：J2 在当前角度基础上 -1 度
+  移动 0 0 20 30 10 0
+  移动单关节 10 5     # 绝对目标：J10 导轨移动到 5mm
+  移动单关节 12 2     # 绝对角度：J12 移动到 2 度
+  微调 10 1            # 相对目标：J10 在当前目标基础上 +1mm
+  微调 12 -1           # 相对角度：J12 在当前角度基础上 -1 度
   夹爪 50
   张开夹爪
   闭合夹爪
@@ -591,11 +593,12 @@ def 打印帮助() -> None:
   退出
 
 关节顺序固定：
-  J1 shoulder_pan  = 底座旋转
-  J2 shoulder_lift = 肩部抬升，多圈
-  J3 elbow_flex    = 肘部弯曲，多圈
-  J4 wrist_flex    = 腕部俯仰
-  J5 wrist_roll    = 腕部旋转，多圈
+  J10 j10 = 底盘导轨，多圈，单位 mm
+  J11 j11 = 底座旋转，多圈，1:5 行星减速
+  J12 j12 = 肩部抬升，多圈
+  J13 j13 = 肘部弯曲，多圈
+  J14 j14 = 腕部俯仰
+  J15 j15 = 腕部旋转，多圈
 """.strip()
     )
 

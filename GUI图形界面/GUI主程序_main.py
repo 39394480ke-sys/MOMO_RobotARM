@@ -2,26 +2,17 @@
 
 from __future__ import annotations
 
-import json
 import sys
-from pathlib import Path
 
+from gui_app.path_utils import GUI_ROOT as BASE_DIR, ensure_project_root_on_path
 
-BASE_DIR = Path(__file__).resolve().parent
-if str(BASE_DIR) not in sys.path:
-    sys.path.insert(0, str(BASE_DIR))
+ensure_project_root_on_path()
 
 
 def load_gui_config() -> dict:
-    path = BASE_DIR / "GUI配置.yaml"
-    text = path.read_text(encoding="utf-8")
-    try:
-        import yaml  # type: ignore
+    from 通用_io import read_config
 
-        data = yaml.safe_load(text) or {}
-    except Exception:
-        data = json.loads(text)
-    return data if isinstance(data, dict) else {}
+    return read_config(BASE_DIR / "GUI配置.yaml")
 
 
 def main() -> int:
@@ -29,8 +20,8 @@ def main() -> int:
         from PyQt5.QtWidgets import QApplication
     except Exception as exc:
         print(f"PyQt5 未安装，无法启动 GUI：{exc}")
-        print("请在 arm_rebot 环境安装：mamba install -n arm_rebot pyqt")
-        print("如果 mamba 没找到包，可用：mamba run -n arm_rebot python -m pip install PyQt5")
+        print("请在 momo_rebot 环境安装：mamba install -n momo_rebot pyqt")
+        print("如果 mamba 没找到包，可用：mamba run -n momo_rebot python -m pip install PyQt5")
         return 1
 
     from gui_app.主题_theme import build_stylesheet

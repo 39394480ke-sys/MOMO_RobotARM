@@ -4,12 +4,20 @@ from __future__ import annotations
 
 import base64
 import io
+import json
 import re
 import wave
 from typing import Any
 
 import numpy as np
-import requests
+
+from .path_utils import ensure_project_root_on_path
+
+ensure_project_root_on_path()
+
+from 通用_http import HTTPJsonError, request_bytes  # noqa: E402
+from 通用_io import resolve_secret_value  # noqa: E402
+from .配置_config import secret_env_paths
 
 
 def speak_text(text: str, config: dict[str, Any]) -> None:
@@ -21,13 +29,13 @@ def speak_text(text: str, config: dict[str, Any]) -> None:
         return
     for chunk in _split_text(content):
         try:
-            audio_bytes, content_type = _request_tts(chunk, tts_cfg)
+            audio_bytes, content_type = _request_tts(chunk, tts_cfg, config)
             _play_audio(audio_bytes, content_type, config)
         except Exception as exc:
             print(f"TTS 播放警告：{exc}")
 
 
-def _request_tts(text: str, tts_cfg: dict[str, Any]) -> tuple[bytes, str]:
+def _request_tts(text: str, tts_cfg: dict[str, Any], config: dict[str, Any] | None = None) -> tuple[bytes, str]:
     provider = str(tts_cfg.get("provider", "http")).lower()
     if provider != "http":
         raise RuntimeError(f"不支持的 TTS provider：{provider}")
@@ -35,7 +43,7 @@ def _request_tts(text: str, tts_cfg: dict[str, Any]) -> tuple[bytes, str]:
     if not url:
         raise RuntimeError("TTS 服务地址未配置。")
     headers = {}
-    api_key = str(tts_cfg.get("api_key", "")).strip()
+    api_key = resolve_secret_value(tts_cfg.get("api_key", ""), env_paths=secret_env_paths(config or {}))
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
     payload = {
@@ -43,12 +51,19 @@ def _request_tts(text: str, tts_cfg: dict[str, Any]) -> tuple[bytes, str]:
         "voice": tts_cfg.get("voice", "default"),
         "input": text,
     }
-    response = requests.post(url, headers=headers, json=payload, timeout=float(tts_cfg.get("timeout_sec", 30)))
-    if response.status_code >= 400:
-        raise RuntimeError(f"TTS 服务返回错误：HTTP {response.status_code} {response.text[:200]}")
-    content_type = response.headers.get("content-type", "")
+    try:
+        response = request_bytes(
+            url,
+            method="POST",
+            headers=headers,
+            payload=payload,
+            timeout=float(tts_cfg.get("timeout_sec", 30)),
+        )
+    except HTTPJsonError as exc:
+        raise RuntimeError(f"TTS 服务返回错误：{exc}") from exc
+    content_type = response.content_type
     if "json" in content_type:
-        data = response.json()
+        data = json.loads(response.content.decode("utf-8"))
         audio = _extract_audio_from_json(data)
         return audio, str(data.get("format") or data.get("content_type") or "audio/wav")
     return response.content, content_type
@@ -117,4 +132,3 @@ def _split_text(text: str, limit: int = 180) -> list[str]:
     if current.strip():
         chunks.append(current.strip())
     return chunks or [text[:limit]]
-

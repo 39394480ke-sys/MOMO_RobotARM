@@ -11,45 +11,66 @@
 
 from __future__ import annotations
 
-import json
-import math
 import shutil
-import sys
-import tempfile
 import time
 import traceback
 from pathlib import Path
 from typing import Any, Mapping
 
+from .path_utils import WEB_DIR, ensure_project_root_on_path
 
-JOINT_ORDER = ["shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll"]
-MULTI_TURN_JOINTS = ["shoulder_lift", "elbow_flex", "wrist_roll"]
-JOINT_LABELS = {
-    "shoulder_pan": "J1 底座旋转",
-    "shoulder_lift": "J2 肩部抬升",
-    "elbow_flex": "J3 肘部弯曲",
-    "wrist_flex": "J4 腕部俯仰",
-    "wrist_roll": "J5 腕部旋转",
-}
+ensure_project_root_on_path()
 
-
-def bridge_ok(message: str = "成功", data: Any | None = None) -> dict[str, Any]:
-    return {"ok": True, "message": message, "data": data if data is not None else {}}
-
-
-def bridge_fail(message: str, error: Any | None = None, data: Any | None = None) -> dict[str, Any]:
-    return {"ok": False, "message": str(message), "error": str(error or message), "data": data if data is not None else {}}
+from 控制桥接_common import (  # noqa: E402
+    JOINT_ORDER,
+    build_exception_context,
+    check_python_modules,
+    clamp_percent,
+    clamp_symmetric,
+    compute_fk_payload,
+    compute_ik_payload,
+    compute_tcp_pose_payload,
+    current_joints_for_controller,
+    delete_pose_from_manager,
+    install_stage_paths,
+    load_action_library,
+    load_calibration_raw_items,
+    load_calibration_report,
+    load_kinematics_model,
+    list_action_items,
+    list_pose_items,
+    load_action_detail,
+    load_pose_manager,
+    load_real_controller,
+    load_sequence_player,
+    load_sim_controller,
+    make_config_resolver,
+    normalize_bridge_result,
+    normalize_control_mode,
+    normalize_joint_key,
+    normalize_joint_targets,
+    normalize_playback_speed,
+    normalize_robot_state_payload,
+    play_action_from_library,
+    read_controller_state,
+    result_fail as bridge_fail,
+    result_ok as bridge_ok,
+    save_pose_from_state,
+    set_controller_gripper,
+    state_tcp_pose,
+)
 
 
 class ControllerBridge:
     """Web 后端统一控制入口。"""
 
     def __init__(self, config: dict[str, Any], base_dir: str | Path | None = None, logger: Any | None = None):
-        self.base_dir = Path(base_dir or Path(__file__).resolve().parents[1]).resolve()
+        self.base_dir = Path(base_dir or WEB_DIR).resolve()
         self.project_root = self.base_dir.parent
         self.config = config
+        self._config_resolver = make_config_resolver(self.config, self.base_dir, "Web", require_exists=True)
         self.logger = logger
-        self.mode = self._normalize_mode(config.get("app", {}).get("default_mode", "dry_run"))
+        self.mode = normalize_control_mode(config.get("app", {}).get("default_mode", "dry_run"), simulation_value="sim")
         self.connected = False
         self.controller: Any | None = None
         self.pose_manager: Any | None = None
@@ -64,8 +85,7 @@ class ControllerBridge:
             "started_at": None,
             "finished_at": None,
         }
-        self._runtime_real_config_path: Path | None = None
-        self._install_stage_paths()
+        install_stage_paths(self.project_root)
 
     # ------------------------------------------------------------------
     # 会话 / 控制器生命周期
@@ -84,7 +104,7 @@ class ControllerBridge:
                 return bridge_fail("控制器创建失败。")
             if hasattr(self.controller, "connect"):
                 result = self.controller.connect()
-                normalized = self._normalize_result(result, "连接完成。")
+                normalized = normalize_bridge_result(result, "连接完成。")
             else:
                 normalized = bridge_ok("仿真控制器已就绪。")
             self.connected = bool(normalized["ok"])
@@ -102,7 +122,7 @@ class ControllerBridge:
                     pass
             if self.controller is not None and hasattr(self.controller, "disconnect"):
                 result = self.controller.disconnect()
-                normalized = self._normalize_result(result, "已断开。")
+                normalized = normalize_bridge_result(result, "已断开。")
             else:
                 normalized = bridge_ok("已断开。")
             self.connected = False
@@ -114,7 +134,7 @@ class ControllerBridge:
 
     def set_mode(self, mode: str) -> dict[str, Any]:
         try:
-            normalized_mode = self._normalize_mode(mode)
+            normalized_mode = normalize_control_mode(mode, simulation_value="sim")
         except ValueError as exc:
             return bridge_fail(str(exc))
         if normalized_mode == self.mode and self.controller is not None and not self.is_connected():
@@ -140,18 +160,9 @@ class ControllerBridge:
         try:
             if self.controller is None:
                 self._ensure_controller()
-            state: Any = {}
-            if self.controller is not None:
-                if hasattr(self.controller, "get_state"):
-                    state = self.controller.get_state()
-                elif hasattr(self.controller, "获取详细状态"):
-                    state = self.controller.获取详细状态()
-                elif hasattr(self.controller, "获取当前状态"):
-                    state = self.controller.获取当前状态()
+            state = read_controller_state(self.controller, prefer_detailed=True)
             normalized = self._normalize_state(state)
-            tcp_result = self.get_tcp_pose()
-            if tcp_result.get("ok"):
-                normalized["tcp_pose"] = tcp_result.get("data", {}).get("tcp_pose")
+            normalized["tcp_pose"] = state_tcp_pose(self.kinematics_model, normalized.get("joints_deg", {}))
             normalized["mode"] = self.mode
             normalized["connected"] = self.is_connected()
             normalized["action"] = dict(self.action_status)
@@ -162,14 +173,8 @@ class ControllerBridge:
     def get_tcp_pose(self) -> dict[str, Any]:
         try:
             model = self._get_kinematics_model()
-            joints = self._current_joints_for_tcp()
-            q_rad = [math.radians(float(joints.get(joint, 0.0))) for joint in JOINT_ORDER]
-            if model is not None:
-                pose = model.forward(q_rad)
-                pose["source"] = pose.get("source", "stage5_fk")
-            else:
-                pose = self._approximate_tcp_pose(joints)
-            return bridge_ok("TCP 已计算。", {"tcp_pose": pose})
+            joints = current_joints_for_controller(self.controller, prefer_detailed=False)
+            return bridge_ok("TCP 已计算。", compute_tcp_pose_payload(model, joints))
         except Exception as exc:
             return bridge_fail("TCP 计算失败。", exc)
 
@@ -180,12 +185,12 @@ class ControllerBridge:
                 if self.controller is not None and hasattr(self.controller, "calibration_report"):
                     report = self.controller.calibration_report()
                 else:
-                    report = self._load_calibration_report_from_file()
+                    report = load_calibration_report(self._resolve_config("real_config_path"))
             else:
-                report = self._load_calibration_report_from_file()
+                report = load_calibration_report(self._resolve_config("real_config_path"))
 
             # 前端需要展示每个关节的 id / range / phase 等原始标定字段，这里补充 raw_items。
-            raw_items = self._load_calibration_raw_items()
+            raw_items = load_calibration_raw_items(self._resolve_config("real_config_path"))
             report["raw_items"] = raw_items
             return bridge_ok("标定状态已刷新。", {"calibration": report})
         except Exception as exc:
@@ -195,13 +200,7 @@ class ControllerBridge:
         """检查依赖；dry-run 不要求 lerobot 可用。"""
 
         modules = ["fastapi", "uvicorn", "pydantic", "yaml", "numpy", "pybullet", "lerobot", "serial"]
-        data: dict[str, Any] = {}
-        for module_name in modules:
-            try:
-                __import__(module_name)
-                data[module_name] = {"available": True, "message": "可用"}
-            except Exception as exc:
-                data[module_name] = {"available": False, "message": str(exc)}
+        data: dict[str, Any] = check_python_modules(modules)
         data["dry_run_requires_real_deps"] = False
         data["real_mode_requires"] = ["lerobot", "feetech-servo-sdk", "pyserial"]
         return bridge_ok("依赖检查完成。", data)
@@ -212,13 +211,14 @@ class ControllerBridge:
     def move_joint_delta(self, joint_key: str, delta_deg: float) -> dict[str, Any]:
         try:
             self._ensure_connected_for_motion()
-            joint = self._normalize_joint_key(joint_key)
-            max_step = self._max_step_deg()
-            delta = max(-max_step, min(max_step, float(delta_deg)))
+            joint = normalize_joint_key(joint_key)
+            max_step_key = "max_real_step_deg" if self.mode == "real" else "max_manual_step_deg"
+            max_step = float(self.config.get("safety", {}).get(max_step_key, 5.0))
+            delta = clamp_symmetric(float(delta_deg), max_step)
             self._ensure_controller()
             if self.mode in {"dry_run", "real"} and hasattr(self.controller, "jog_joint"):
                 result = self.controller.jog_joint(joint, delta)
-                normalized = self._normalize_result(result, "关节微调完成。", {"joint_key": joint, "delta_deg": delta})
+                normalized = normalize_bridge_result(result, "关节微调完成。", {"joint_key": joint, "delta_deg": delta})
             else:
                 state_result = self.get_state()
                 if not state_result.get("ok"):
@@ -236,14 +236,14 @@ class ControllerBridge:
         try:
             self._ensure_connected_for_motion()
             self._ensure_controller()
-            targets = self._normalize_targets(targets_deg)
+            targets = normalize_joint_targets(targets_deg)
             if self.mode in {"dry_run", "real"} and hasattr(self.controller, "move_joints"):
                 result = self.controller.move_joints(targets)
             elif hasattr(self.controller, "移动到关节角度"):
                 result = self.controller.移动到关节角度([targets[joint] for joint in JOINT_ORDER])
             else:
                 return bridge_fail("当前控制器不支持关节移动。")
-            normalized = self._normalize_result(result, "关节移动完成。", {"targets_deg": targets})
+            normalized = normalize_bridge_result(result, "关节移动完成。", {"targets_deg": targets})
             self._log("info" if normalized["ok"] else "error", "move_joints", normalized["message"], targets_deg=targets)
             return normalized
         except Exception as exc:
@@ -301,7 +301,7 @@ class ControllerBridge:
                 result = self.controller.回到默认姿态()
             else:
                 return bridge_fail("当前控制器不支持 Home。")
-            normalized = self._normalize_result(result, "Home 完成。")
+            normalized = normalize_bridge_result(result, "Home 完成。")
             self._log("info" if normalized["ok"] else "error", "home", normalized["message"])
             return normalized
         except Exception as exc:
@@ -318,7 +318,7 @@ class ControllerBridge:
                     pass
             if self.controller is not None and hasattr(self.controller, "stop") and self.is_connected():
                 result = self.controller.stop()
-                normalized = self._normalize_result(result, "已急停。")
+                normalized = normalize_bridge_result(result, "已急停。")
             else:
                 normalized = bridge_ok("已急停：当前未连接真实硬件或无需下发停止。")
             self._set_action_status("stopped", self.action_status.get("name", ""), "已停止")
@@ -333,14 +333,15 @@ class ControllerBridge:
         try:
             self._ensure_connected_for_motion()
             self._ensure_controller()
-            open_percent = max(0.0, min(100.0, float(open_ratio) * 100.0))
-            if hasattr(self.controller, "set_gripper"):
-                result = self.controller.set_gripper(open_percent)
-            elif hasattr(self.controller, "设置夹爪"):
-                result = self.controller.设置夹爪(open_percent)
-            else:
-                return bridge_fail("当前控制器不支持夹爪控制。")
-            normalized = self._normalize_result(result, "夹爪控制完成。", {"open_ratio": open_percent / 100.0, "open_percent": open_percent})
+            open_percent = clamp_percent(float(open_ratio) * 100.0)
+            normalized = set_controller_gripper(
+                self.controller,
+                open_percent,
+                connected=self.is_connected(),
+                mode=self.mode,
+                real_config_path=self._resolve_config("real_config_path"),
+                include_open_ratio=True,
+            )
             self._log("info" if normalized["ok"] else "error", "gripper", normalized["message"], open_percent=open_percent)
             return normalized
         except Exception as exc:
@@ -351,12 +352,7 @@ class ControllerBridge:
     # ------------------------------------------------------------------
     def list_poses(self) -> dict[str, Any]:
         try:
-            manager = self._get_pose_manager()
-            poses = []
-            for name in manager.列出姿态():
-                pose = manager.获取姿态(name)
-                poses.append({"name": name, "pose": pose, "description": (pose or {}).get("说明", "")})
-            return bridge_ok("姿态列表已加载。", {"poses": poses})
+            return bridge_ok("姿态列表已加载。", {"poses": list_pose_items(self._get_pose_manager(), include_description=True)})
         except Exception as exc:
             return self._exception("读取姿态列表失败", exc)
 
@@ -366,11 +362,7 @@ class ControllerBridge:
             if not state_result.get("ok"):
                 return state_result
             state = state_result["data"]
-            payload = {
-                "关节角度": [float(state.get("joints_deg", {}).get(joint, 0.0)) for joint in JOINT_ORDER],
-                "夹爪": float(state.get("gripper", {}).get("open_percent", 50.0)),
-            }
-            self._get_pose_manager().保存姿态(name, payload, description or "Web 控制台保存的当前姿态")
+            payload = save_pose_from_state(self._get_pose_manager(), name, state, description or "Web 控制台保存的当前姿态")
             self._log("info", "save_pose", f"已保存姿态：{name}", name=name)
             return bridge_ok(f"已保存姿态：{name}", {"pose": payload})
         except Exception as exc:
@@ -385,11 +377,11 @@ class ControllerBridge:
             self._ensure_controller()
             if self.mode in {"dry_run", "real"} and hasattr(self.controller, "apply_pose"):
                 result = self.controller.apply_pose(pose)
-                normalized = self._normalize_result(result, f"已前往姿态：{name}", {"pose": pose})
+                normalized = normalize_bridge_result(result, f"已前往姿态：{name}", {"pose": pose})
             elif hasattr(self.controller, "应用姿态"):
-                normalized = self._normalize_result(self.controller.应用姿态(pose), f"已前往姿态：{name}", {"pose": pose})
+                normalized = normalize_bridge_result(self.controller.应用姿态(pose), f"已前往姿态：{name}", {"pose": pose})
             else:
-                normalized = self.move_joints(self._pose_to_targets(pose))
+                normalized = self.move_joints(normalize_joint_targets(pose.get("关节角度", [])))
             self._log("info" if normalized["ok"] else "error", "goto_pose", normalized["message"], name=name)
             return normalized
         except Exception as exc:
@@ -397,7 +389,7 @@ class ControllerBridge:
 
     def delete_pose(self, name: str) -> dict[str, Any]:
         try:
-            deleted = self._get_pose_manager().删除姿态(name)
+            deleted = delete_pose_from_manager(self._get_pose_manager(), name)
             if not deleted:
                 return bridge_fail(f"姿态不存在：{name}")
             self._log("info", "delete_pose", f"已删除姿态：{name}", name=name)
@@ -410,21 +402,13 @@ class ControllerBridge:
     # ------------------------------------------------------------------
     def list_actions(self) -> dict[str, Any]:
         try:
-            library = self._get_action_library()
-            actions = []
-            for name in library.list_actions():
-                summary = library.summarize_action(name)
-                actions.append({"name": name, "summary": summary})
-            return bridge_ok("动作列表已加载。", {"actions": actions})
+            return bridge_ok("动作列表已加载。", {"actions": list_action_items(self._get_action_library())})
         except Exception as exc:
             return self._exception("读取动作库失败", exc)
 
     def get_action(self, name: str) -> dict[str, Any]:
         try:
-            library = self._get_action_library()
-            action = library.load_action(name)
-            summary = library.summarize_action(action)
-            return bridge_ok("动作已加载。", {"name": name, "summary": summary, "action": action})
+            return bridge_ok("动作已加载。", load_action_detail(self._get_action_library(), name))
         except Exception as exc:
             return self._exception("读取动作详情失败", exc)
 
@@ -432,17 +416,18 @@ class ControllerBridge:
         """阻塞式动作播放；service 会把它放到后台线程里执行。"""
 
         try:
+            playback_speed = normalize_playback_speed(speed)
             self._ensure_connected_for_motion()
             self._ensure_controller()
             library = self._get_action_library()
-            sequence = library.load_action(name)
             player = self._get_sequence_player()
             self._set_action_status("playing", name, f"播放中：{name}")
-            ok = bool(player.play(sequence, loop=loop, speed=float(speed)))
+            ok = play_action_from_library(library, player, name, speed=playback_speed, loop=loop)
             message = f"动作播放完成：{name}" if ok else f"动作播放未完成：{name}"
             self._set_action_status("idle" if ok else "stopped", name, message)
-            self._log("info" if ok else "warning", "play_action", message, name=name, speed=speed, loop=loop)
-            return bridge_ok(message, {"name": name}) if ok else bridge_fail(message, data={"name": name})
+            self._log("info" if ok else "warning", "play_action", message, name=name, speed=playback_speed, loop=loop)
+            data = {"name": name, "speed": playback_speed}
+            return bridge_ok(message, data) if ok else bridge_fail(message, data=data)
         except Exception as exc:
             self._set_action_status("error", name, f"动作播放失败：{exc}")
             return self._exception("动作播放失败", exc)
@@ -472,14 +457,7 @@ class ControllerBridge:
     def compute_fk(self, joints_deg: list[float]) -> dict[str, Any]:
         try:
             model = self._get_kinematics_model()
-            targets = self._normalize_targets(joints_deg)
-            q_rad = [math.radians(float(targets[joint])) for joint in JOINT_ORDER]
-            if model is not None:
-                pose = model.forward(q_rad)
-                pose["source"] = pose.get("source", "stage5_fk")
-            else:
-                pose = self._approximate_tcp_pose(targets)
-            return bridge_ok("FK 计算完成。", {"tcp_pose": pose})
+            return bridge_ok("FK 计算完成。", compute_fk_payload(model, joints_deg, allow_approx=True))
         except Exception as exc:
             return self._exception("FK 计算失败", exc)
 
@@ -488,15 +466,8 @@ class ControllerBridge:
             model = self._get_kinematics_model()
             if model is None:
                 return bridge_fail("运动学模型不可用，无法计算 IK。")
-            current = self._current_joints_for_tcp()
-            seed = [math.radians(float(current.get(joint, 0.0))) for joint in JOINT_ORDER]
-            ik = model.inverse(
-                target_xyz=[float(value) for value in xyz[:3]],
-                target_rpy=[float(value) for value in rpy] if rpy is not None else None,
-                seed_q_user=seed,
-            )
-            targets = {joint: math.degrees(float(ik["q_user_rad"][idx])) for idx, joint in enumerate(JOINT_ORDER)}
-            return bridge_ok("IK 计算完成。", {"ik": ik, "target_joints_deg": targets})
+            current = current_joints_for_controller(self.controller, prefer_detailed=False)
+            return bridge_ok("IK 计算完成。", compute_ik_payload(model, xyz, rpy, current))
         except Exception as exc:
             return self._exception("IK 计算失败", exc)
 
@@ -512,261 +483,63 @@ class ControllerBridge:
         self.controller = self._create_real_controller(dry_run=(self.mode == "dry_run"))
 
     def _create_sim_controller(self) -> Any:
-        from 机械臂模型_robot_arm import 机械臂模型
-
         config_path = self._resolve_config("sim_config_path", fallback_names=["配置_config.yaml"])
-        config = self._read_structured(config_path)
-        return 机械臂模型(config)
+        return load_sim_controller(config_path)
 
     def _create_real_controller(self, dry_run: bool) -> Any:
-        from 真实机械臂控制器_real_arm_controller import RealArmController
-
         config_path = self._resolve_config("real_config_path")
-        runtime_config = self._make_runtime_real_config(config_path, dry_run=dry_run)
-        return RealArmController(runtime_config)
+        runtime_name = "dry_run_hardware_state.json" if dry_run else "real_hardware_state.json"
+        return load_real_controller(
+            config_path,
+            dry_run=dry_run,
+            runtime_state_path=self.base_dir / "runtime" / "state" / runtime_name,
+            temp_dir_name="arm_web_control",
+        )
 
     def _get_pose_manager(self) -> Any:
         if self.pose_manager is None:
-            from 姿态管理_pose_manager import 姿态管理器
-
             sim_config_path = self._resolve_config("sim_config_path", fallback_names=["配置_config.yaml"])
-            sim_config = self._read_structured(sim_config_path)
-            pose_path = self.project_root / "仿真控制系统" / sim_config.get("文件", {}).get("姿态库", "姿态管理/姿态库.json")
-            self.pose_manager = 姿态管理器(pose_path, sim_config.get("默认姿态", {}))
+            self.pose_manager = load_pose_manager(self.project_root, sim_config_path)
         return self.pose_manager
 
     def _get_action_library(self) -> Any:
         if self.action_library is None:
-            from 动作文件管理_action_library import ActionLibrary
-            from 动作工具_common import load_config
-
-            action_config = load_config(self._resolve_config("action_config_path"))
-            self.action_library = ActionLibrary(action_config)
+            self.action_library = load_action_library(self._resolve_config("action_config_path"))
         return self.action_library
 
     def _get_sequence_player(self) -> Any:
         if self.sequence_player is None:
-            from 动作回放器_sequence_player import SequencePlayer
-            from 动作工具_common import load_config
-
-            action_config = load_config(self._resolve_config("action_config_path"))
-            # Web/service 已经做真实模式确认，禁止在后台线程 input() 阻塞服务。
-            action_config.setdefault("safety", {})["require_confirm_before_real_replay"] = False
-            self.sequence_player = SequencePlayer(self.controller, action_config)
+            self.sequence_player = load_sequence_player(self.controller, self._resolve_config("action_config_path"))
         return self.sequence_player
 
     def _get_kinematics_model(self) -> Any | None:
         if self.kinematics_model is not None:
             return self.kinematics_model
-        try:
-            from 运动学模型_kinematics_model import 创建运动学模型
-
-            self.kinematics_model = 创建运动学模型(self._resolve_config("kinematics_config_path"), use_gui=False)
-            return self.kinematics_model
-        except Exception as exc:
-            # 运动学依赖缺失不应该让 Web 控制台整体不可用。
-            self.last_error = str(exc)
-            return None
+        self.kinematics_model, self.last_error = load_kinematics_model(self._resolve_config("kinematics_config_path"))
+        return self.kinematics_model
 
     # ------------------------------------------------------------------
     # 数据整理
     # ------------------------------------------------------------------
     def _normalize_state(self, state: Any) -> dict[str, Any]:
-        if not isinstance(state, dict):
-            state = {}
-        joints_raw = state.get("关节角度", state.get("joints_deg", state.get("joint_targets_deg", {})))
-        if isinstance(joints_raw, Mapping):
-            joints = {joint: float(joints_raw.get(joint, 0.0)) for joint in JOINT_ORDER}
-        elif isinstance(joints_raw, list):
-            joints = {joint: float(joints_raw[idx]) if idx < len(joints_raw) else 0.0 for idx, joint in enumerate(JOINT_ORDER)}
-        else:
-            joints = {joint: 0.0 for joint in JOINT_ORDER}
-
-        gripper_raw = state.get("夹爪", state.get("gripper", state.get("gripper_state", {})))
-        if isinstance(gripper_raw, Mapping):
-            open_percent = gripper_raw.get("open_percent", gripper_raw.get("open_value", gripper_raw.get("开合", 50.0)))
-        elif gripper_raw is None:
-            open_percent = 50.0
-        else:
-            open_percent = gripper_raw
-
-        return {
-            "mode": self.mode,
-            "connected": self.is_connected(),
-            "joints_deg": joints,
-            "joint_labels": dict(JOINT_LABELS),
-            "gripper": {
-                "open_percent": float(open_percent),
-                "open_ratio": max(0.0, min(1.0, float(open_percent) / 100.0)),
-            },
-            "raw_present_position": state.get("raw_present_position", {}),
-            "multi_turn_state": state.get("multi_turn_state", {}),
-            "raw": state,
-        }
-
-    def _normalize_targets(self, targets: Mapping[str, float] | list[float]) -> dict[str, float]:
-        if isinstance(targets, Mapping):
-            return {self._normalize_joint_key(str(key)): float(value) for key, value in targets.items()}
-        return {joint: float(targets[idx]) if idx < len(targets) else 0.0 for idx, joint in enumerate(JOINT_ORDER)}
-
-    def _pose_to_targets(self, pose: Mapping[str, Any]) -> dict[str, float]:
-        angles = pose.get("关节角度", [])
-        return self._normalize_targets(angles)
-
-    def _normalize_joint_key(self, value: str) -> str:
-        text = str(value).strip()
-        if text in JOINT_ORDER:
-            return text
-        mapping = {
-            "J1": "shoulder_pan",
-            "J2": "shoulder_lift",
-            "J3": "elbow_flex",
-            "J4": "wrist_flex",
-            "J5": "wrist_roll",
-            "1": "shoulder_pan",
-            "2": "shoulder_lift",
-            "3": "elbow_flex",
-            "4": "wrist_flex",
-            "5": "wrist_roll",
-        }
-        upper = text.upper()
-        if upper in mapping:
-            return mapping[upper]
-        raise ValueError(f"未知关节：{value}")
-
-    def _normalize_result(self, result: Any, default_message: str, data: Any | None = None) -> dict[str, Any]:
-        if isinstance(result, dict) and "ok" in result:
-            return result
-        if hasattr(result, "成功"):
-            success = bool(getattr(result, "成功"))
-            message = str(getattr(result, "消息", default_message))
-            return bridge_ok(message, data) if success else bridge_fail(message, data=data)
-        if isinstance(result, bool):
-            return bridge_ok(default_message, data) if result else bridge_fail(default_message, data=data)
-        return bridge_ok(default_message, data)
-
-    def _current_joints_for_tcp(self) -> dict[str, float]:
-        try:
-            if self.controller is not None:
-                if hasattr(self.controller, "get_state"):
-                    state = self.controller.get_state()
-                elif hasattr(self.controller, "获取当前状态"):
-                    state = self.controller.获取当前状态()
-                else:
-                    state = {}
-                return self._normalize_state(state).get("joints_deg", {})
-        except Exception:
-            pass
-        return {joint: 0.0 for joint in JOINT_ORDER}
-
-    @staticmethod
-    def _approximate_tcp_pose(joints: Mapping[str, float]) -> dict[str, Any]:
-        """没有 pybullet / numpy 时的只读兜底，不能替代阶段五 IK。"""
-
-        base = math.radians(float(joints.get("shoulder_pan", 0.0)))
-        shoulder = math.radians(float(joints.get("shoulder_lift", 0.0)))
-        elbow = math.radians(float(joints.get("elbow_flex", 0.0)))
-        wrist = math.radians(float(joints.get("wrist_flex", 0.0)))
-        l1, l2, l3 = 0.12, 0.12, 0.08
-        reach = l1 * math.cos(shoulder) + l2 * math.cos(shoulder + elbow) + l3 * math.cos(shoulder + elbow + wrist)
-        z = 0.08 + l1 * math.sin(shoulder) + l2 * math.sin(shoulder + elbow) + l3 * math.sin(shoulder + elbow + wrist)
-        return {
-            "xyz": [round(reach * math.cos(base), 6), round(reach * math.sin(base), 6), round(z, 6)],
-            "rpy": [0.0, round(shoulder + elbow + wrist, 6), round(base + math.radians(float(joints.get("wrist_roll", 0.0))), 6)],
-            "source": "approximate_fk_without_stage5",
-        }
+        state = state if isinstance(state, dict) else {}
+        payload = normalize_robot_state_payload(
+            state,
+            self.mode,
+            self.is_connected(),
+            self._resolve_config("real_config_path"),
+            include_gripper_state=True,
+            include_open_ratio=True,
+        )
+        payload["raw_present_position"] = state.get("raw_present_position", {})
+        payload["multi_turn_state"] = state.get("multi_turn_state", {})
+        return payload
 
     # ------------------------------------------------------------------
     # 配置 / 路径 / 标定
     # ------------------------------------------------------------------
     def _resolve_config(self, key: str, fallback_names: list[str] | None = None) -> Path:
-        value = self.config.get("controller", {}).get(key)
-        if not value:
-            raise KeyError(f"Web 配置缺少 controller.{key}")
-        path = Path(value)
-        if not path.is_absolute():
-            path = (self.base_dir / path).resolve()
-        if path.exists():
-            return path
-        for name in fallback_names or []:
-            fallback = path.parent / name
-            if fallback.exists():
-                return fallback
-        raise FileNotFoundError(f"配置文件不存在：{path}")
-
-    def _read_structured(self, path: str | Path) -> dict[str, Any]:
-        text = Path(path).read_text(encoding="utf-8")
-        try:
-            data = json.loads(text)
-        except json.JSONDecodeError:
-            import yaml  # type: ignore
-
-            data = yaml.safe_load(text) or {}
-        if not isinstance(data, dict):
-            raise ValueError(f"配置最外层必须是对象：{path}")
-        return data
-
-    def _write_json(self, path: str | Path, data: Any) -> None:
-        path = Path(path)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with path.open("w", encoding="utf-8") as file:
-            json.dump(data, file, ensure_ascii=False, indent=2)
-            file.write("\n")
-
-    def _make_runtime_real_config(self, real_config_path: Path, dry_run: bool) -> Path:
-        data = self._read_structured(real_config_path)
-        data.setdefault("transport", {})["dry_run"] = bool(dry_run)
-        calibration = data.setdefault("calibration", {})
-        calibration_path = Path(calibration.get("path", "标定文件.json"))
-        if not calibration_path.is_absolute():
-            calibration["path"] = str((real_config_path.parent / calibration_path).resolve())
-        runtime_name = "dry_run_hardware_state.json" if dry_run else "real_hardware_state.json"
-        data.setdefault("files", {})["runtime_state"] = str(self.base_dir / "runtime" / "state" / runtime_name)
-        temp_dir = Path(tempfile.gettempdir()) / "arm_web_control"
-        temp_dir.mkdir(parents=True, exist_ok=True)
-        target = temp_dir / ("dry_run_真实配置_runtime.json" if dry_run else "real_真实配置_runtime.json")
-        self._write_json(target, data)
-        self._runtime_real_config_path = target
-        return target
-
-    def _load_calibration_report_from_file(self) -> dict[str, Any]:
-        from 标定管理_calibration_manager import CalibrationManager
-        from 真实机械臂控制器_real_arm_controller import 读取配置
-
-        real_config_path = self._resolve_config("real_config_path")
-        config = 读取配置(real_config_path)
-        cal_path = Path(config.get("calibration", {}).get("path", "标定文件.json"))
-        if not cal_path.is_absolute():
-            cal_path = real_config_path.parent / cal_path
-        return CalibrationManager(cal_path, config).calibration_report()
-
-    def _load_calibration_raw_items(self) -> dict[str, Any]:
-        real_config_path = self._resolve_config("real_config_path")
-        real_config = self._read_structured(real_config_path)
-        cal_path = Path(real_config.get("calibration", {}).get("path", "标定文件.json"))
-        if not cal_path.is_absolute():
-            cal_path = real_config_path.parent / cal_path
-        if not cal_path.exists():
-            return {}
-        try:
-            data = json.loads(cal_path.read_text(encoding="utf-8"))
-        except Exception:
-            return {}
-        if not isinstance(data, dict):
-            return {}
-        return {key: value for key, value in data.items() if isinstance(value, dict)}
-
-    def _install_stage_paths(self) -> None:
-        for path in (
-            self.project_root / "仿真控制系统",
-            self.project_root / "仿真控制系统" / "姿态管理",
-            self.project_root / "真实舵机控制",
-            self.project_root / "URDF运动学仿真",
-            self.project_root / "动作录制与回放增强",
-        ):
-            path_text = str(path)
-            if path_text not in sys.path:
-                sys.path.insert(0, path_text)
+        return self._config_resolver(key, fallback_names)
 
     # ------------------------------------------------------------------
     # 安全 / 日志
@@ -774,19 +547,6 @@ class ControllerBridge:
     def _ensure_connected_for_motion(self) -> None:
         if not self.is_connected():
             raise RuntimeError("尚未连接。请先通过 session/connect 连接控制器。")
-
-    def _max_step_deg(self) -> float:
-        key = "max_real_step_deg" if self.mode == "real" else "max_manual_step_deg"
-        return float(self.config.get("safety", {}).get(key, 5.0))
-
-    @staticmethod
-    def _normalize_mode(mode: str) -> str:
-        value = str(mode).strip().lower()
-        aliases = {"simulation": "sim", "模拟": "sim", "仿真": "sim", "dryrun": "dry_run", "dry-run": "dry_run", "真实": "real"}
-        value = aliases.get(value, value)
-        if value not in {"sim", "dry_run", "real"}:
-            raise ValueError(f"未知模式：{mode}")
-        return value
 
     def _set_action_status(self, state: str, name: str, message: str) -> None:
         now = time.time()
@@ -806,9 +566,10 @@ class ControllerBridge:
             self.logger.log(level, event, message, **extra)
 
     def _exception(self, message: str, exc: Exception) -> dict[str, Any]:
-        self.last_error = str(exc)
-        self._log("error", "exception", f"{message}：{exc}", traceback=traceback.format_exc())
-        return bridge_fail(f"{message}：{exc}", exc)
+        context = build_exception_context(message, exc)
+        self.last_error = context["last_error"]
+        self._log("error", "exception", context["message"], traceback=context["traceback"])
+        return bridge_fail(context["message"], context["error"])
 
     def copy_log_path_to(self, target: str | Path) -> Path:
         if self.logger is None:

@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
-import json
-import time
-from pathlib import Path
 from typing import Any
 
+from .path_utils import ensure_project_root_on_path
 from .配置_config import config_base_dir, resolve_path
+
+ensure_project_root_on_path()
+
+from 通用_io import log_json_line  # noqa: E402
 
 
 class AgentLogger:
@@ -17,17 +19,8 @@ class AgentLogger:
         self.path.parent.mkdir(parents=True, exist_ok=True)
 
     def log(self, level: str, event: str, message: str, **extra: Any) -> None:
-        payload = {
-            "time": time.time(),
-            "level": str(level),
-            "event": str(event),
-            "message": str(message),
-            **extra,
-        }
-        with self.path.open("a", encoding="utf-8") as file:
-            file.write(json.dumps(payload, ensure_ascii=False) + "\n")
+        log_json_line(self.path, level, event, message, time_style="epoch", **extra)
 
 
 def get_logger(config: dict[str, Any]) -> AgentLogger:
     return AgentLogger(config)
-

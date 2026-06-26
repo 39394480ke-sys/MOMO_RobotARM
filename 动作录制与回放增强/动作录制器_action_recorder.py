@@ -12,6 +12,7 @@ from typing import Any
 from 动作工具_common import (
     JOINT_ORDER,
     MULTI_TURN_JOINTS,
+    append_sequence_pose,
     build_empty_sequence,
     compute_tcp_pose_if_possible,
     extract_state,
@@ -19,10 +20,12 @@ from 动作工具_common import (
     normalize_gripper_state,
     normalize_joint_targets,
     normalize_multi_turn_state,
+    normalize_raw_present_position,
     now_text,
+    refresh_sequence_pose_count,
     state_joint_targets,
-    write_json,
 )
+from 通用_io import atomic_write_json
 
 
 class ActionRecorder:
@@ -36,13 +39,7 @@ class ActionRecorder:
     def capture_current_pose(self, index: int | None = None, name: str | None = None) -> dict[str, Any]:
         state = extract_state(self.controller)
         joint_targets = state_joint_targets(state, self.joint_order)
-        raw_present_position = state.get("raw_present_position")
-        if raw_present_position is not None:
-            raw_present_position = {
-                key: int(round(float(value)))
-                for key, value in dict(raw_present_position).items()
-                if value is not None
-            }
+        raw_present_position = normalize_raw_present_position(state.get("raw_present_position"))
         tcp_pose = state.get("tcp_pose")
         if self.config.get("recording", {}).get("include_tcp_pose", True):
             tcp_pose = compute_tcp_pose_if_possible(joint_targets, tcp_pose)
@@ -55,7 +52,7 @@ class ActionRecorder:
             "index": int(index or 1),
             "name": name or f"pose_{int(index or 1)}",
             "recorded_at": now_text(),
-            "duration_sec": float(self.config.get("playback", {}).get("default_duration_sec", 1.5)),
+            "duration_sec": float(self.config.get("recording", {}).get("recorded_pose_duration_sec", 0.0)),
             "hold_sec": float(self.config.get("playback", {}).get("default_interval_sec", 0.3)),
             "joint_targets_deg": joint_targets,
             "tcp_pose": tcp_pose,
@@ -73,15 +70,14 @@ class ActionRecorder:
             if wait_for_enter:
                 input(f"请摆好第 {index} 个姿态后按 Enter 录制...")
             pose = self.capture_current_pose(index=index, name=f"pose_{index}")
-            sequence["poses"].append(pose)
-            sequence["pose_count"] = len(sequence["poses"])
+            append_sequence_pose(sequence, pose)
             self._print_pose(pose)
         self.save_sequence(sequence, output_path)
         return sequence
 
     def save_sequence(self, action_payload: dict[str, Any], output_path: str | Path) -> None:
-        action_payload["pose_count"] = len(action_payload.get("poses", []))
-        write_json(output_path, action_payload)
+        refresh_sequence_pose_count(action_payload)
+        atomic_write_json(output_path, action_payload)
 
     def build_replay_metadata(self, pose: dict[str, Any]) -> dict[str, Any]:
         joint_targets = normalize_joint_targets(pose.get("joint_targets_deg", {}), self.joint_order)

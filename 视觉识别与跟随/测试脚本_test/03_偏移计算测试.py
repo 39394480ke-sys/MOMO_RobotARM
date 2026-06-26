@@ -3,12 +3,8 @@
 from __future__ import annotations
 
 import json
-import sys
-from pathlib import Path
 
-BASE_DIR = Path(__file__).resolve().parents[1]
-if str(BASE_DIR) not in sys.path:
-    sys.path.insert(0, str(BASE_DIR))
+from 视觉测试路径_test_paths import VISION_ROOT as BASE_DIR
 
 from vision.偏移计算_offset_calculator import OffsetCalculator
 from 视觉主程序_main import load_config

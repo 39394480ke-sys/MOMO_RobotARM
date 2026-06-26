@@ -42,8 +42,8 @@ follow:
   move_duration_sec: 0.25
   speed_percent: 60
   command_mode: stream
-  pan_joint: shoulder_pan
-  tilt_joint: elbow_flex
+  pan_joint: j11
+  tilt_joint: j13
   pan_sign: 1.0
   tilt_sign: -1.0
   pan_gain_deg_per_norm: 4.8
@@ -58,5 +58,12 @@ follow:
   tilt_min_step_zone_norm: 0.12
   max_pan_step_deg: 3.0
   max_tilt_step_deg: 3.0
+  rail_cinematic:
+    enabled: false
+    joint: j10
+    start_mm: -140
+    end_mm: 140
+    speed_mm_s: 5.0
+    bounce: false
   real_mode_requires_confirm: true
   dry_run_default: true

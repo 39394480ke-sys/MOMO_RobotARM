@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
 
+from .path_utils import INTEGRATION_DIR, PROJECT_ROOT, ensure_project_root_on_path
 
-INTEGRATION_DIR = Path(__file__).resolve().parents[1]
-PROJECT_ROOT = INTEGRATION_DIR.parent
 DEFAULT_CONFIG_PATH = INTEGRATION_DIR / "总配置.yaml"
 
 
@@ -20,18 +18,31 @@ class ConfigLoader:
     def load(self) -> dict[str, Any]:
         if not self.config_path.exists():
             raise FileNotFoundError(f"配置文件不存在：{self.config_path}")
-        text = self.config_path.read_text(encoding="utf-8")
-        try:
-            import yaml  # type: ignore
+        ensure_project_root_on_path()
+        from 通用_io import env_int, env_value, read_config
 
-            data = yaml.safe_load(text) or {}
-        except Exception:
-            data = json.loads(text)
-        if not isinstance(data, dict):
-            raise ValueError("总配置.yaml 最外层必须是对象。")
-        data["_config_path"] = str(self.config_path)
-        data["_base_dir"] = str(self.base_dir)
-        data["_project_root"] = str(PROJECT_ROOT)
+        data = read_config(self.config_path, _project_root=PROJECT_ROOT)
+        env_paths = (PROJECT_ROOT / ".env", INTEGRATION_DIR / "环境变量.env")
+
+        web_host = str(env_value("ARM_WEB_HOST", "", env_paths=env_paths) or "").strip()
+        web_port = env_int("ARM_WEB_PORT", 8010, env_paths=env_paths)
+        if web_host:
+            web = data.setdefault("services", {}).setdefault("web_api", {})
+            web["command"] = f"python 启动Web服务.py --host {web_host} --port {web_port}"
+            shown_host = "127.0.0.1" if web_host == "0.0.0.0" else web_host
+            web["health_url"] = f"http://{shown_host}:{web_port}/api/v1/health"
+
+        vision_host = str(env_value("ARM_VISION_HOST", "", env_paths=env_paths) or "").strip()
+        vision_port = env_int("ARM_VISION_PORT", 8000, env_paths=env_paths)
+        if vision_host:
+            vision = data.setdefault("services", {}).setdefault("vision", {})
+            vision["command"] = f"python 视觉主程序_main.py service --host {vision_host} --port {vision_port}"
+            shown_host = "127.0.0.1" if vision_host == "0.0.0.0" else vision_host
+            vision["health_url"] = f"http://{shown_host}:{vision_port}/health"
+
+        mode = str(env_value("ARM_DEFAULT_MODE", "", env_paths=env_paths) or "").strip()
+        if mode:
+            data.setdefault("project", {})["default_mode"] = mode
         ensure_runtime_dirs(data)
         return data
 
@@ -41,10 +52,10 @@ def load_config(config_path: str | Path | None = None) -> dict[str, Any]:
 
 
 def resolve_path(path_value: str | Path, base_dir: str | Path | None = None) -> Path:
-    path = Path(path_value)
-    if path.is_absolute():
-        return path.resolve()
-    return (Path(base_dir or INTEGRATION_DIR).resolve() / path).resolve()
+    ensure_project_root_on_path()
+    from 通用_io import resolve_path as resolve_common_path
+
+    return resolve_common_path(path_value, base_dir or INTEGRATION_DIR)
 
 
 def ensure_runtime_dirs(config: dict[str, Any] | None = None) -> None:

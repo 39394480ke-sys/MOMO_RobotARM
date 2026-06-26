@@ -1,0 +1,202 @@
+{
+  "schema_version": "arm_replay_sequence_v1",
+  "name": "0337",
+  "description": "通过示教模式录制的动作",
+  "created_at": "2026-06-25 03:37:54",
+  "source": "gui_record",
+  "joint_order": [
+    "j10",
+    "j11",
+    "j12",
+    "j13",
+    "j14",
+    "j15"
+  ],
+  "pose_count": 2,
+  "playback": {
+    "default_duration_sec": 1.5,
+    "default_interval_sec": 0.3
+  },
+  "poses": [
+    {
+      "index": 1,
+      "name": "pose_1",
+      "recorded_at": "2026-06-25 03:38:15",
+      "duration_sec": 0.0,
+      "hold_sec": 0.3,
+      "joint_targets_deg": {
+        "j10": -60.24169921875,
+        "j11": -30.392578125,
+        "j12": 12.586600825471699,
+        "j13": 55.873325892857146,
+        "j14": -29.70703125,
+        "j15": 0.087890625
+      },
+      "tcp_pose": {
+        "xyz": [
+          -0.11676429957151413,
+          0.0845605656504631,
+          0.31320539116859436
+        ],
+        "rpy": [
+          0.010526167192820427,
+          1.4260867594959494,
+          -1.0297084515080528
+        ]
+      },
+      "raw_present_position": {
+        "j10": -7335,
+        "j11": 1440,
+        "j12": 8447,
+        "j13": 10977,
+        "j14": 2385,
+        "j15": 1370
+      },
+      "multi_turn_state": {
+        "j10": {
+          "startup_raw": 12405,
+          "current_raw": -7335,
+          "continuous_raw": -19740,
+          "relative_raw": -19740,
+          "motor_deg": null,
+          "joint_deg": -60.24169921875,
+          "goal_raw": -7335
+        },
+        "j12": {
+          "startup_raw": 9206,
+          "current_raw": 8447,
+          "continuous_raw": -759,
+          "relative_raw": -759,
+          "motor_deg": null,
+          "joint_deg": 12.586600825471699,
+          "goal_raw": 8447
+        },
+        "j13": {
+          "startup_raw": 7417,
+          "current_raw": 10977,
+          "continuous_raw": 3560,
+          "relative_raw": 3560,
+          "motor_deg": null,
+          "joint_deg": 55.873325892857146,
+          "goal_raw": 10977
+        },
+        "j15": {
+          "startup_raw": 1369,
+          "current_raw": 1370,
+          "continuous_raw": 1,
+          "relative_raw": 1,
+          "motor_deg": null,
+          "joint_deg": 0.087890625,
+          "goal_raw": 1370
+        }
+      },
+      "gripper": {
+        "available": false
+      },
+      "replay_joint_targets_deg": {
+        "j10": -60.24169921875,
+        "j11": -30.392578125,
+        "j12": 12.586600825471699,
+        "j13": 55.873325892857146,
+        "j14": -29.70703125,
+        "j15": 0.087890625
+      },
+      "replay_multi_turn_continuous_raw": {
+        "j10": -19740.0,
+        "j12": -759.0,
+        "j13": 3560.0,
+        "j15": 1.0
+      }
+    },
+    {
+      "index": 2,
+      "name": "pose_2",
+      "recorded_at": "2026-06-25 03:38:39",
+      "duration_sec": 0.0,
+      "hold_sec": 0.3,
+      "joint_targets_deg": {
+        "j10": 40.5487060546875,
+        "j11": 48.779296875,
+        "j12": 12.586600825471699,
+        "j13": 55.873325892857146,
+        "j14": -29.70703125,
+        "j15": 0.087890625
+      },
+      "tcp_pose": {
+        "xyz": [
+          0.11817391961812973,
+          0.06710334122180939,
+          0.31320539116859436
+        ],
+        "rpy": [
+          0.01052652080006875,
+          1.4260869173043966,
+          -2.4115179712353596
+        ]
+      },
+      "raw_present_position": {
+        "j10": 25692,
+        "j11": 5944,
+        "j12": 8447,
+        "j13": 10977,
+        "j14": 2385,
+        "j15": 1370
+      },
+      "multi_turn_state": {
+        "j10": {
+          "startup_raw": 12405,
+          "current_raw": 25692,
+          "continuous_raw": 13287,
+          "relative_raw": 13287,
+          "motor_deg": null,
+          "joint_deg": 40.5487060546875,
+          "goal_raw": 25692
+        },
+        "j12": {
+          "startup_raw": 9206,
+          "current_raw": 8447,
+          "continuous_raw": -759,
+          "relative_raw": -759,
+          "motor_deg": null,
+          "joint_deg": 12.586600825471699,
+          "goal_raw": 8447
+        },
+        "j13": {
+          "startup_raw": 7417,
+          "current_raw": 10977,
+          "continuous_raw": 3560,
+          "relative_raw": 3560,
+          "motor_deg": null,
+          "joint_deg": 55.873325892857146,
+          "goal_raw": 10977
+        },
+        "j15": {
+          "startup_raw": 1369,
+          "current_raw": 1370,
+          "continuous_raw": 1,
+          "relative_raw": 1,
+          "motor_deg": null,
+          "joint_deg": 0.087890625,
+          "goal_raw": 1370
+        }
+      },
+      "gripper": {
+        "available": false
+      },
+      "replay_joint_targets_deg": {
+        "j10": 40.5487060546875,
+        "j11": 48.779296875,
+        "j12": 12.586600825471699,
+        "j13": 55.873325892857146,
+        "j14": -29.70703125,
+        "j15": 0.087890625
+      },
+      "replay_multi_turn_continuous_raw": {
+        "j10": 13287.0,
+        "j12": -759.0,
+        "j13": 3560.0,
+        "j15": 1.0
+      }
+    }
+  ]
+}

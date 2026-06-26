@@ -1,14 +1,10 @@
-from pathlib import Path
-import sys
+import 动作测试路径_test_paths  # noqa: F401
 
-BASE = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(BASE))
-
-from 动作工具_common import MULTI_TURN_JOINTS, read_json
+from 动作工具_common import MULTI_TURN_JOINTS
+from 动作测试工具_test_utils import make_test_sequence
 
 
-path = BASE / "动作库" / "示例_录制动作.json"
-sequence = read_json(path)
+sequence = make_test_sequence("多圈关节检查测试")
 ok = True
 for pose in sequence["poses"]:
     replay = pose.get("replay_multi_turn_continuous_raw") or {}

@@ -3,20 +3,29 @@
 from __future__ import annotations
 
 import html
-import json
 from pathlib import Path
 
-from PyQt5.QtCore import pyqtSignal
+from gui_app.path_utils import ensure_project_root_on_path
+
+ensure_project_root_on_path()
+
+from 通用_io import parse_json_line, tail_lines, write_text  # noqa: E402
+from gui_app.结果格式化_result_format import result_message
+
 from PyQt5.QtCore import QTimer
-from PyQt5.QtWidgets import QComboBox, QHBoxLayout, QLabel, QLineEdit, QPushButton, QTextEdit, QVBoxLayout, QWidget
+from PyQt5.QtWidgets import QComboBox, QLabel, QLineEdit, QPushButton, QTextEdit, QVBoxLayout, QWidget
+
+from gui_app.组件_widgets.布局工具_layout_tools import make_hbox_layout
 
 
 class LogPage(QWidget):
-    refresh_requested = pyqtSignal()
+    VISIBLE_LINES = 300
+    FILTER_SCAN_LINES = 5000
 
     def __init__(self, log_path: Path, parent=None):
         super().__init__(parent)
         self.log_path = Path(log_path)
+        self._refresh_pending = False
         layout = QVBoxLayout(self)
         layout.setContentsMargins(10, 10, 10, 10)
         layout.setSpacing(8)
@@ -25,7 +34,7 @@ class LogPage(QWidget):
         self.path_label = QLineEdit(str(self.log_path))
         self.path_label.setObjectName("PathLabel")
         self.path_label.setReadOnly(True)
-        filter_row = QHBoxLayout()
+        filter_row = make_hbox_layout()
         self.level_combo = QComboBox()
         self.level_combo.addItem("全部级别", "")
         self.level_combo.addItem("INFO", "info")
@@ -44,7 +53,7 @@ class LogPage(QWidget):
         self.open_button = QPushButton("追加路径")
         for button in (self.refresh_button, self.clear_button, self.clear_file_button, self.open_button):
             button.setObjectName("TinyButton")
-        button_row = QHBoxLayout()
+        button_row = make_hbox_layout()
         button_row.addWidget(self.refresh_button)
         button_row.addWidget(self.clear_button)
         button_row.addWidget(self.clear_file_button)
@@ -62,18 +71,34 @@ class LogPage(QWidget):
         self.search_input.textChanged.connect(self.refresh)
         self.refresh()
 
+    def request_refresh(self, delay_ms: int = 250) -> None:
+        if self._refresh_pending:
+            return
+        self._refresh_pending = True
+        QTimer.singleShot(max(0, int(delay_ms)), self._refresh_if_pending)
+
+    def _refresh_if_pending(self) -> None:
+        self._refresh_pending = False
+        self.refresh()
+
     def refresh(self) -> None:
         if not self.log_path.exists():
             self.text.setHtml("<span style='color:#94a3b8;'>暂无日志。</span>")
             self._scroll_to_bottom()
             return
-        lines = self.log_path.read_text(encoding="utf-8", errors="replace").splitlines()
-        filtered = [line for line in lines if self._line_matches_filter(line)]
-        self.text.setHtml("<br>".join(self._format_log_line(line) for line in filtered[-300:]))
+        level_filter = str(self.level_combo.currentData() or "").lower()
+        search = self.search_input.text().strip().lower()
+        if level_filter or search:
+            lines = tail_lines(self.log_path, self.FILTER_SCAN_LINES, errors="replace")
+            filtered = [line for line in lines if self._line_matches_filter(line)]
+            visible = filtered[-self.VISIBLE_LINES :]
+        else:
+            visible = tail_lines(self.log_path, self.VISIBLE_LINES, errors="replace")
+        self.text.setHtml("<br>".join(self._format_log_line(line) for line in visible))
         self._scroll_to_bottom()
 
     def append_result(self, result: dict) -> None:
-        message = str(result.get("message", result))
+        message = result_message(result)
         level = "INFO" if result.get("ok", True) else "ERROR"
         self._append_html_line(level, message)
         self._scroll_to_bottom()
@@ -82,15 +107,12 @@ class LogPage(QWidget):
         self.text.append(self._format_parts(time_text, level, message))
 
     def _format_log_line(self, line: str) -> str:
-        try:
-            payload = json.loads(line)
-            if isinstance(payload, dict):
-                time_text = self._short_time(str(payload.get("time", "")))
-                level = str(payload.get("level", "info")).upper()
-                message = str(payload.get("message", payload.get("event", line)))
-                return self._format_parts(time_text, level, message)
-        except Exception:
-            pass
+        payload = parse_json_line(line)
+        if payload is not None:
+            time_text = self._short_time(str(payload.get("time", "")))
+            level = str(payload.get("level", "info")).upper()
+            message = str(payload.get("message", payload.get("event", line)))
+            return self._format_parts(time_text, level, message)
         return self._format_parts("", "INFO", line)
 
     def _line_matches_filter(self, line: str) -> bool:
@@ -98,18 +120,14 @@ class LogPage(QWidget):
         search = self.search_input.text().strip().lower()
         haystack = line.lower()
         if level_filter:
-            try:
-                payload = json.loads(line)
-                level = str(payload.get("level", "")).lower() if isinstance(payload, dict) else ""
-            except Exception:
-                level = ""
+            payload = parse_json_line(line)
+            level = str(payload.get("level", "")).lower() if payload is not None else ""
             if level != level_filter:
                 return False
         return not search or search in haystack
 
     def clear_log_file(self) -> None:
-        self.log_path.parent.mkdir(parents=True, exist_ok=True)
-        self.log_path.write_text("", encoding="utf-8")
+        write_text(self.log_path, "")
         self.text.setHtml("<span style='color:#94a3b8;'>日志文件已清空。</span>")
 
     def _format_parts(self, time_text: str, level: str, message: str) -> str:

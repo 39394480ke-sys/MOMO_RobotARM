@@ -1,14 +1,11 @@
-from pathlib import Path
-import sys
 import threading
 import time
 
-BASE = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(BASE))
+import 动作测试路径_test_paths  # noqa: F401
 
 from 动作录制器_action_recorder import ActionRecorder
 from 动作回放器_sequence_player import SequencePlayer
-from 动作工具_common import SimulatedStage6Controller, build_empty_sequence, load_config
+from 动作工具_common import SimulatedStage6Controller, append_sequence_pose, build_empty_sequence, load_config
 
 
 class SlowController(SimulatedStage6Controller):
@@ -26,16 +23,15 @@ controller = SlowController()
 recorder = ActionRecorder(controller, config)
 sequence = build_empty_sequence("暂停停止测试", source="test", config=config)
 targets = [
-    {"shoulder_pan": 0, "shoulder_lift": 0, "elbow_flex": 0, "wrist_flex": 0, "wrist_roll": 0},
-    {"shoulder_pan": 30, "shoulder_lift": 30, "elbow_flex": 30, "wrist_flex": 30, "wrist_roll": 30},
-    {"shoulder_pan": -30, "shoulder_lift": -30, "elbow_flex": -30, "wrist_flex": -30, "wrist_roll": -30},
+    {"j10": 0, "j11": 0, "j12": 0, "j13": 0, "j14": 0, "j15": 0},
+    {"j10": 5, "j11": 30, "j12": 30, "j13": 30, "j14": 30, "j15": 30},
+    {"j10": -5, "j11": -30, "j12": -30, "j13": -30, "j14": -30, "j15": -30},
 ]
 for index, target in enumerate(targets, start=1):
     controller.move_joints(target)
     pose = recorder.capture_current_pose(index=index)
     pose["duration_sec"] = 1.0
-    sequence["poses"].append(pose)
-sequence["pose_count"] = len(sequence["poses"])
+    append_sequence_pose(sequence, pose)
 
 player = SequencePlayer(controller, config)
 thread = threading.Thread(target=lambda: player.play(sequence, speed=1.0), daemon=True)

@@ -6,9 +6,9 @@ agent:
   warmup_prompt: 请只回复“就绪”。
 
 openai_compatible:
-  api_base: http://127.0.0.1:1234/v1
-  api_key: ""
-  model: qwen/qwen3.5-35b-a3b
+  api_base: https://api.siliconflow.cn/v1
+  api_key: ${SILICONFLOW_API_KEY}
+  model: THUDM/GLM-4-9B-0414
   temperature: 0.3
   max_tokens: 800
 

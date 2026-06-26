@@ -1,22 +1,26 @@
 robot:
   sdk_joint_names:
-    - shoulder_pan
-    - shoulder_lift
-    - elbow_flex
-    - wrist_flex
-    - wrist_roll
+    - j10
+    - j11
+    - j12
+    - j13
+    - j14
+    - j15
 
   中文关节名:
-    shoulder_pan: 底座旋转
-    shoulder_lift: 肩部抬升
-    elbow_flex: 肘部弯曲
-    wrist_flex: 腕部俯仰
-    wrist_roll: 腕部旋转
+    j10: 底盘导轨
+    j11: 底座旋转
+    j12: 肩部抬升
+    j13: 肘部弯曲
+    j14: 腕部俯仰
+    j15: 腕部旋转
 
   multi_turn_joints:
-    - shoulder_lift
-    - elbow_flex
-    - wrist_roll
+    - j10
+    - j11
+    - j12
+    - j13
+    - j15
 
   gripper_key: gripper
 
@@ -32,12 +36,25 @@ recording:
   include_raw_position: true
   include_multi_turn_state: true
   include_gripper: true
+  recorded_pose_duration_sec: 0.0
 
 playback:
   default_duration_sec: 1.5
   default_interval_sec: 0.3
   update_hz: 25.0
+  auto_duration_from_distance: true
+  joint_speed_limits:
+    j10: 20.0
+    j11: 45.0
+    j12: 35.0
+    j13: 45.0
+    j14: 45.0
+    j15: 60.0
   real_mode_min_duration_sec: 2.0
+  real_mode_wait_until_reached: true
+  real_mode_reach_timeout_sec: 12.0
+  real_mode_reach_tolerance_deg: 2.0
+  real_mode_reach_tolerance_mm: 2.0
   dry_run_default: true
   clamp_to_limits: true
   stop_on_limit_violation: true

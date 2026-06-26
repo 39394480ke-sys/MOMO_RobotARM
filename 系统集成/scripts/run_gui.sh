@@ -2,11 +2,10 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
-mamba run -n "${ARM_ENV_NAME:-arm_rebot}" python - <<'PY'
+mamba run -n "${ARM_ENV_NAME:-momo_rebot}" python - <<'PY'
 from integration.config_loader import load_config
 from integration.process_manager import ProcessManager
 config = load_config()
 config["services"]["gui"]["enabled"] = True
 print(ProcessManager(config).start_service("gui"))
 PY
-

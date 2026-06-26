@@ -3,88 +3,102 @@
   "说明": "阶段四配置。默认 dry_run 为 true，不会真实写入舵机。",
   "transport": {
     "type": "serial",
-    "port": "/dev/tty.usbmodem5B141127021",
+    "port": "/dev/cu.usbmodem5B140306681",
     "timeout": 2.0,
     "robot_id": "soarmmoce",
-    "dry_run": false,
+    "dry_run": true,
     "gripper_available": true,
     "arm_p_coefficient": 16,
     "arm_d_coefficient": 8,
     "update_hz": 25.0
   },
   "robot": {
-    "dof": 5,
-    "end_link": "wrist_roll",
+    "dof": 6,
+    "end_link": "j15",
     "joint_order": [
-      "shoulder_pan",
-      "shoulder_lift",
-      "elbow_flex",
-      "wrist_flex",
-      "wrist_roll"
+      "j10",
+      "j11",
+      "j12",
+      "j13",
+      "j14",
+      "j15"
     ],
     "joint_name_aliases": {
-      "shoulder_pan": "shoulder",
-      "shoulder_lift": "shoulder_lift",
-      "elbow_flex": "elbow",
-      "wrist_flex": "wrist",
-      "wrist_roll": "wrist_roll"
+      "j10": "j10",
+      "j11": "j11",
+      "j12": "j12",
+      "j13": "j13",
+      "j14": "j14",
+      "j15": "j15"
     },
     "joints": [
       {
-        "key": "shoulder_pan",
-        "key_注释": "shoulder_pan = J1_底座旋转",
-        "中文名": "底座旋转",
-        "编号": 1,
-        "关节编号": "J1",
-        "舵机ID": 1,
-        "模式": "单圈",
-        "最小角度": -90,
-        "最大角度": 90,
+        "key": "j10",
+        "key_注释": "j10 = J10_底盘导轨（线性导轨，GUI/Web 数值单位为 mm）",
+        "中文名": "底盘导轨",
+        "编号": 0,
+        "关节编号": "J10",
+        "舵机ID": 10,
+        "模式": "多圈",
+        "最小角度": -140,
+        "最大角度": 140,
         "默认角度": 0
       },
       {
-        "key": "shoulder_lift",
-        "key_注释": "shoulder_lift = J2_肩部抬升",
+        "key": "j11",
+        "key_注释": "j11 = J11_底座旋转（1:5 行星减速，多圈；GUI/Web 数值单位为底盘输出端 deg）",
+        "中文名": "底座旋转",
+        "编号": 1,
+        "关节编号": "J11",
+        "舵机ID": 11,
+        "模式": "多圈",
+        "最小角度": -360,
+        "最大角度": 360,
+        "默认角度": 0
+      },
+      {
+        "key": "j12",
+        "key_注释": "j12 = J12_肩部抬升",
         "中文名": "肩部抬升",
         "编号": 2,
-        "关节编号": "J2",
-        "舵机ID": 2,
+        "关节编号": "J12",
+        "舵机ID": 12,
         "模式": "多圈",
         "最小角度": -45,
         "最大角度": 180,
         "默认角度": 0
       },
       {
-        "key": "elbow_flex",
-        "key_注释": "elbow_flex = J3_肘部弯曲",
+        "key": "j13",
+        "key_注释": "j13 = J13_肘部弯曲",
         "中文名": "肘部弯曲",
         "编号": 3,
-        "关节编号": "J3",
-        "舵机ID": 3,
+        "关节编号": "J13",
+        "舵机ID": 13,
         "模式": "多圈",
         "最小角度": -180,
         "最大角度": 180,
         "默认角度": 0
       },
       {
-        "key": "wrist_flex",
-        "key_注释": "wrist_flex = J4_腕部俯仰",
+        "key": "j14",
+        "key_注释": "j14 = J14_腕部俯仰",
         "中文名": "腕部俯仰",
         "编号": 4,
-        "关节编号": "J4",
-        "舵机ID": 4,
+        "关节编号": "J14",
+        "舵机ID": 14,
         "模式": "单圈",
         "最小角度": -90,
         "最大角度": 90,
         "默认角度": 0
       },
       {
-        "key": "wrist_roll",
-        "key_注释": "wrist_roll = J5_腕部旋转",
+        "key": "j15",
+        "key_注释": "j15 = J15_腕部旋转",
         "中文名": "腕部旋转",
         "编号": 5,
-        "关节编号": "J5",
-        "舵机ID": 5,
+        "关节编号": "J15",
+        "舵机ID": 15,
         "模式": "多圈",
         "最小角度": -180,
         "最大角度": 180,
@@ -92,27 +106,30 @@
       }
     ],
     "joint_scales": {
-      "shoulder_pan": 1.0,
-      "shoulder_lift": -5.3,
-      "elbow_flex": 5.6,
-      "wrist_flex": -1.0,
-      "wrist_roll": 1.0
+      "j10": 28.8,
+      "j11": 5.0,
+      "j12": -5.3,
+      "j13": 5.6,
+      "j14": -1.0,
+      "j15": 1.0
     },
     "关节减速比_joint_scales": {
-      "shoulder_pan": 1.0,
-      "shoulder_lift": -5.3,
-      "elbow_flex": 5.6,
-      "wrist_flex": -1.0,
-      "wrist_roll": 1.0
+      "j10": 28.8,
+      "j11": 5.0,
+      "j12": -5.3,
+      "j13": 5.6,
+      "j14": -1.0,
+      "j15": 1.0
     },
     "multi_turn_joints": [
-      "shoulder_lift",
-      "elbow_flex",
-      "wrist_roll"
+      "j10",
+      "j11",
+      "j12",
+      "j13",
+      "j15"
     ],
     "single_turn_joints": [
-      "shoulder_pan",
-      "wrist_flex"
+      "j14"
     ]
   },
   "control": {
@@ -166,8 +183,8 @@
   },
   "gripper": {
     "key": "gripper",
-    "key_注释": "gripper = 夹爪_舵机ID6",
-    "舵机ID": 6,
+    "key_注释": "gripper = j16_夹爪_预留舵机ID16",
+    "舵机ID": 16,
     "最小开合": 0,
     "最大开合": 100,
     "默认开合": 50,

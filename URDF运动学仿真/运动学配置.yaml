@@ -1,35 +1,52 @@
 robot:
-  name: soarmmoce
+  name: soarmmoce_with_linear_rail
   urdf_path: urdf/soarmoce_urdf.urdf
-  target_frame: wrist_roll
+  target_frame: Link_6
 
   sdk_joint_names:
-    - shoulder_pan
-    - shoulder_lift
-    - elbow_flex
-    - wrist_flex
-    - wrist_roll
+    - j10
+    - j11
+    - j12
+    - j13
+    - j14
+    - j15
 
   joint_name_aliases:
-    shoulder_pan: shoulder
-    shoulder_lift: shoulder_lift
-    elbow_flex: elbow
-    wrist_flex: wrist
-    wrist_roll: wrist_roll
+    j10: J10
+    j11: J11
+    j12: J12
+    j13: J13
+    j14: J14
+    j15: J15
+    shoulder_pan: J11
+    shoulder_lift: J12
+    elbow_flex: J13
+    wrist_flex: J14
+    wrist_roll: J15
+
+  joint_user_units:
+    j10: mm
+    j11: deg
+    j12: deg
+    j13: deg
+    j14: deg
+    j15: deg
 
   joint_scales:
-    shoulder_pan: 1.0
-    shoulder_lift: -5.3
-    elbow_flex: 5.6
-    wrist_flex: -1.0
-    wrist_roll: 1.0
+    j10: 1.0
+    j11: 5.0
+    j12: -5.3
+    j13: 5.6
+    j14: -1.0
+    j15: 1.0
 
   model_offsets_deg:
-    shoulder_pan: 0.0
-    shoulder_lift: 0.0
-    elbow_flex: 0.0
-    wrist_flex: 0.0
-    wrist_roll: 0.0
+    j10: 0.0
+    j11: 0.0
+    j12: 0.0
+    j13: 0.0
+    j14: 0.0
+    j15: 0.0
 
 kinematics:
   backend: pybullet

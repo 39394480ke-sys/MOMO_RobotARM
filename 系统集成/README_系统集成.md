@@ -34,7 +34,7 @@
 
 ## 安装依赖
 
-统一使用 `arm_rebot` 环境里的 Python，不使用 `python3`：
+统一使用 `momo_rebot` 环境里的 Python，不使用 `python3`：
 
 ```bash
 cd 系统集成
@@ -58,23 +58,23 @@ bash scripts/bootstrap.sh --real
 默认 dry-run：
 
 ```bash
-mamba run -n arm_rebot python 一键启动.py
+mamba run -n momo_rebot python 一键启动.py
 ```
 
 指定模式：
 
 ```bash
-mamba run -n arm_rebot python 一键启动.py --mode dry_run
-mamba run -n arm_rebot python 一键启动.py --mode sim
-mamba run -n arm_rebot python 一键启动.py --mode real
+mamba run -n momo_rebot python 一键启动.py --mode dry_run
+mamba run -n momo_rebot python 一键启动.py --mode sim
+mamba run -n momo_rebot python 一键启动.py --mode real
 ```
 
 可选组件：
 
 ```bash
-mamba run -n arm_rebot python 一键启动.py --with-gui
-mamba run -n arm_rebot python 一键启动.py --with-agent
-mamba run -n arm_rebot python 一键启动.py --no-vision
+mamba run -n momo_rebot python 一键启动.py --with-gui
+mamba run -n momo_rebot python 一键启动.py --with-agent
+mamba run -n momo_rebot python 一键启动.py --no-vision
 ```
 
 启动成功后会打印：
@@ -94,7 +94,7 @@ bash scripts/run_all.sh
 ## 一键停止
 
 ```bash
-mamba run -n arm_rebot python 一键停止.py
+mamba run -n momo_rebot python 一键停止.py
 bash scripts/stop_all.sh
 ```
 
@@ -103,7 +103,7 @@ bash scripts/stop_all.sh
 ## 查看状态
 
 ```bash
-mamba run -n arm_rebot python 系统状态.py
+mamba run -n momo_rebot python 系统状态.py
 ```
 
 输出当前模式、服务运行状态、Web/Vision health、标定状态、依赖状态、Web 地址和最近错误。
@@ -111,7 +111,7 @@ mamba run -n arm_rebot python 系统状态.py
 ## 健康检查
 
 ```bash
-mamba run -n arm_rebot python 健康检查.py
+mamba run -n momo_rebot python 健康检查.py
 ```
 
 健康检查覆盖 Web API health、Vision health、Web session status、Web robot state、Vision latest、Agent 配置、GUI 配置和标定状态。服务未启动时会返回失败 JSON，但程序不会崩溃。
@@ -119,9 +119,9 @@ mamba run -n arm_rebot python 健康检查.py
 ## 查看日志
 
 ```bash
-mamba run -n arm_rebot python 日志查看.py
-mamba run -n arm_rebot python 日志查看.py web_api --lines 200
-mamba run -n arm_rebot python 日志查看.py vision --lines 200
+mamba run -n momo_rebot python 日志查看.py
+mamba run -n momo_rebot python 日志查看.py web_api --lines 200
+mamba run -n momo_rebot python 日志查看.py vision --lines 200
 ```
 
 系统日志使用 JSONL 格式写入 `runtime/logs/system.log`。服务日志分别写入：
@@ -134,7 +134,7 @@ mamba run -n arm_rebot python 日志查看.py vision --lines 200
 ## 进入真实模式
 
 ```bash
-mamba run -n arm_rebot python 一键启动.py --mode real
+mamba run -n momo_rebot python 一键启动.py --mode real
 ```
 
 流程：
@@ -163,10 +163,10 @@ mamba run -n arm_rebot python 一键启动.py --mode real
 ## Smoke Test
 
 ```bash
-mamba run -n arm_rebot python 测试脚本_test/01_配置加载测试.py
-mamba run -n arm_rebot python 测试脚本_test/02_依赖检查测试.py
-mamba run -n arm_rebot python 测试脚本_test/03_健康检查测试.py
-mamba run -n arm_rebot python 测试脚本_test/04_dry_run全链路测试.py
-mamba run -n arm_rebot python 测试脚本_test/05_服务启动停止测试.py
+mamba run -n momo_rebot python 测试脚本_test/01_配置加载测试.py
+mamba run -n momo_rebot python 测试脚本_test/02_依赖检查测试.py
+mamba run -n momo_rebot python 测试脚本_test/03_健康检查测试.py
+mamba run -n momo_rebot python 测试脚本_test/04_dry_run全链路测试.py
+mamba run -n momo_rebot python 测试脚本_test/05_服务启动停止测试.py
 ```
 

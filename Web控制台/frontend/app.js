@@ -1,11 +1,12 @@
 const API_BASE = "";
 const SAFE_TEXT = "我确认机械臂周围安全";
 const JOINTS = [
-  ["shoulder_pan", "J1 底座旋转"],
-  ["shoulder_lift", "J2 肩部抬升"],
-  ["elbow_flex", "J3 肘部弯曲"],
-  ["wrist_flex", "J4 腕部俯仰"],
-  ["wrist_roll", "J5 腕部旋转"],
+  ["j10", "J10 底盘导轨"],
+  ["j11", "J11 底座旋转"],
+  ["j12", "J12 肩部抬升"],
+  ["j13", "J13 肘部弯曲"],
+  ["j14", "J14 腕部俯仰"],
+  ["j15", "J15 腕部旋转"],
 ];
 const CART_AXES = ["+X", "-X", "+Y", "-Y", "+Z", "-Z", "+RX", "-RX", "+RY", "-RY", "+RZ", "-RZ"];
 
@@ -19,6 +20,7 @@ const state = {
   wsOnline: false,
   pending: new Set(),
   lastIkTargets: null,
+  follow: null,
 };
 
 document.addEventListener("DOMContentLoaded", init);
@@ -48,6 +50,9 @@ function bindEvents() {
   $("#pauseActionBtn").addEventListener("click", () => postJsonLogged("/api/v1/actions/pause", {}));
   $("#resumeActionBtn").addEventListener("click", () => postJsonLogged("/api/v1/actions/resume", {}));
   $("#stopActionBtn").addEventListener("click", () => postJsonLogged("/api/v1/actions/stop", {}));
+  $("#refreshFollowBtn").addEventListener("click", refreshFollow);
+  $("#startFollowBtn").addEventListener("click", startFollow);
+  $("#stopFollowBtn").addEventListener("click", stopFollow);
   $("#kinRefreshBtn").addEventListener("click", refreshState);
   $("#fkBtn").addEventListener("click", computeFk);
   $("#ikBtn").addEventListener("click", computeIk);
@@ -125,7 +130,7 @@ async function loadConfig() {
 }
 
 async function refreshAll() {
-  await Promise.allSettled([refreshSession(), refreshState(), loadPoses(), loadActions(), loadCalibration(), loadDependencies()]);
+  await Promise.allSettled([refreshSession(), refreshState(), refreshFollow(), loadPoses(), loadActions(), loadCalibration(), loadDependencies()]);
 }
 
 async function refreshSession() {
@@ -177,6 +182,15 @@ async function loadDependencies() {
   try {
     const data = await getJson("/api/v1/robot/dependencies");
     renderDependencies(data);
+  } catch (error) {
+    showError(error);
+  }
+}
+
+async function refreshFollow() {
+  try {
+    state.follow = await getJson("/api/v1/follow/status");
+    renderFollow();
   } catch (error) {
     showError(error);
   }
@@ -258,7 +272,7 @@ function selectedJointStep() {
   if ((state.session.mode || state.robot?.mode) === "real" && value > 2) {
     value = 2;
     $("#jointStepSelect").value = "2";
-    log("info", "真实模式步长已限制为 2 deg");
+    log("info", "真实模式步长已限制为 2 deg/mm");
   }
   return value;
 }
@@ -270,6 +284,10 @@ async function jointStep(jointKey, delta) {
 }
 
 async function setGripper(openRatio) {
+  if (state.robot?.gripper?.available === false) {
+    showError(new ApiError("GRIPPER_UNAVAILABLE", "当前没有安装夹爪舵机。"));
+    return;
+  }
   updateGripperLabel(openRatio * 100);
   $("#gripperSlider").value = Math.round(openRatio * 100);
   const body = await withSafety({ open_ratio: openRatio, wait: true });
@@ -392,6 +410,39 @@ async function switchMode() {
   await refreshSession();
 }
 
+async function startFollow() {
+  const dryRun = $("#followDryRun").checked;
+  const body = await withSafety(
+    {
+      latest_url: $("#followLatestUrl").value.trim() || "http://127.0.0.1:8000/latest",
+      poll_interval: Number($("#followPollInterval").value || 0.05),
+      speed_percent: Number($("#followSpeedPercent").value || 60),
+      dry_run: dryRun,
+      pan_joint: "j11",
+      tilt_joint: "j13",
+      rail_enabled: $("#railEnabled").checked,
+      rail_start_mm: Number($("#railStartMm").value || -140),
+      rail_end_mm: Number($("#railEndMm").value || 140),
+      rail_speed_mm_s: Number($("#railSpeedMmS").value || 5),
+    },
+    !dryRun
+  );
+  if (!body) return;
+  try {
+    const data = await postJsonLogged("/api/v1/follow/start", body);
+    state.follow = data.follow || null;
+    renderFollow();
+  } catch (_) {}
+}
+
+async function stopFollow() {
+  try {
+    const data = await postJsonLogged("/api/v1/follow/stop", {});
+    state.follow = data.follow || null;
+    renderFollow();
+  } catch (_) {}
+}
+
 async function stopNow() {
   try {
     await postJson("/api/v1/motion/stop", {});
@@ -433,6 +484,22 @@ function renderWs() {
   $("#wsPill").className = `status-pill ${state.wsOnline ? "good" : "bad"}`;
 }
 
+function renderFollow() {
+  const follow = state.follow || {};
+  const rail = follow.rail || {};
+  const last = follow.last_command || {};
+  const commands = Array.isArray(last.commands) ? last.commands : [];
+  $("#followRunning").textContent = follow.running ? "运行" : "停止";
+  $("#followDryRunState").textContent = follow.dry_run === false ? "真实" : "dry-run";
+  $("#followStepCount").textContent = String(follow.step_count ?? 0);
+  $("#followRailState").textContent = rail.enabled
+    ? `${rail.running ? "运行" : rail.phase || "停止"} ${formatNum(rail.virtual_pos_mm, 2)}mm`
+    : "关闭";
+  $("#followLastCommand").textContent = commands.length
+    ? commands.map((cmd) => `${cmd.joint_key}:${formatNum(cmd.delta_deg, 2)}`).join(", ")
+    : last.message || "--";
+}
+
 function renderRobot() {
   if (!state.robot) return;
   state.session.mode = state.robot.mode || state.session.mode;
@@ -446,9 +513,20 @@ function renderRobot() {
     if (input && input.value === "") input.value = formatNum(joints[key] ?? 0, 2);
   });
   const gripper = state.robot.gripper || {};
-  updateGripperLabel(gripper.open_percent ?? 50);
-  $("#gripperSlider").value = Math.round(gripper.open_percent ?? 50);
+  renderGripper(gripper);
   renderTcp(state.robot.tcp_pose || {});
+}
+
+function renderGripper(gripper) {
+  const available = gripper.available !== false;
+  const value = gripper.open_percent ?? 50;
+  updateGripperLabel(available ? value : "未安装");
+  $("#gripperSlider").value = Math.round(value);
+  $("#gripperSlider").disabled = !available;
+  $("#gripperOpenBtn").disabled = !available;
+  $("#gripperCloseBtn").disabled = !available;
+  $("#gripperApplyBtn").disabled = !available;
+  $("#gripperPanel").classList.toggle("disabled-panel", !available);
 }
 
 function renderTcp(tcp) {
@@ -464,6 +542,10 @@ function renderTcp(tcp) {
 }
 
 function updateGripperLabel(value) {
+  if (typeof value === "string") {
+    $("#gripperValue").textContent = value;
+    return;
+  }
   $("#gripperValue").textContent = `${Math.round(Number(value || 0))}%`;
 }
 
@@ -572,6 +654,7 @@ function showPage(name) {
   $(`#page${capitalize(name)}`).classList.add("active");
   if (name === "poses") loadPoses();
   if (name === "actions") loadActions();
+  if (name === "follow") refreshFollow();
   if (name === "calibration") loadCalibration();
   if (name === "settings") loadDependencies();
 }

@@ -9,10 +9,23 @@
 from __future__ import annotations
 
 import math
-from pathlib import Path
 from typing import Any, Sequence
 
 from 运动学模型_kinematics_model import SDK_JOINT_NAMES, KinematicsModel, 加载运动学配置
+
+
+def _targets_to_model_q(joint_names: Sequence[str], values: Sequence[float]) -> list[float]:
+    return [
+        float(value) / 1000.0 if str(joint_names[idx]) == "j10" else math.radians(float(value))
+        for idx, value in enumerate(values)
+    ]
+
+
+def _model_q_to_targets(joint_names: Sequence[str], values: Sequence[float]) -> dict[str, float]:
+    return {
+        name: float(values[idx]) * 1000.0 if str(name) == "j10" else math.degrees(float(values[idx]))
+        for idx, name in enumerate(joint_names)
+    }
 
 
 class CartesianController:
@@ -59,7 +72,7 @@ class CartesianController:
         return [0.0 for _ in self.joint_names]
 
     def get_end_effector_pose(self) -> dict[str, list[float]]:
-        q_rad = [math.radians(value) for value in self.get_current_joints_deg()]
+        q_rad = _targets_to_model_q(self.joint_names, self.get_current_joints_deg())
         return self.kinematics_model.forward(q_rad)
 
     def move_pose(
@@ -78,7 +91,7 @@ class CartesianController:
         else:
             seed_source_deg = [float(value) for value in seed_joints_deg]
             seed_source = "custom"
-        seed_q = [math.radians(value) for value in seed_source_deg]
+        seed_q = _targets_to_model_q(self.joint_names, seed_source_deg)
         ik = self.kinematics_model.inverse(
             target_xyz=xyz,
             target_rpy=rpy,
@@ -105,10 +118,7 @@ class CartesianController:
                     "ik": ik,
                 }
 
-        target_deg = {
-            name: math.degrees(float(ik["q_user_rad"][idx]))
-            for idx, name in enumerate(self.joint_names)
-        }
+        target_deg = _model_q_to_targets(self.joint_names, ik["q_user_rad"])
         should_dry_run = self.dry_run if dry_run is None else bool(dry_run)
         output: dict[str, Any] = {
             "ok": True,

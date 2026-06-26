@@ -4,29 +4,35 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 import time
 from pathlib import Path
 from typing import Any
 
+from vision.路径工具_path_utils import PROJECT_ROOT, VISION_ROOT as BASE_DIR, ensure_project_root_on_path
 
-BASE_DIR = Path(__file__).resolve().parent
-if str(BASE_DIR) not in sys.path:
-    sys.path.insert(0, str(BASE_DIR))
+ensure_project_root_on_path()
+
+from 通用_io import env_int, env_value, read_structured  # noqa: E402
 
 
 def load_config(path: str | Path | None = None) -> dict[str, Any]:
     config_path = Path(path) if path else BASE_DIR / "视觉配置.yaml"
-    text = config_path.read_text(encoding="utf-8")
-    try:
-        import yaml  # type: ignore
-
-        data = yaml.safe_load(text) or {}
-    except Exception:
-        data = json.loads(text)
-    if not isinstance(data, dict):
-        raise ValueError("视觉配置.yaml 最外层必须是对象。")
-    return data
+    config = read_structured(config_path)
+    env_paths = (PROJECT_ROOT / ".env", BASE_DIR / "环境变量.env", PROJECT_ROOT / "系统集成" / "环境变量.env")
+    service = config.setdefault("service", {})
+    follow = config.setdefault("follow", {})
+    service["host"] = env_value("ARM_VISION_HOST", service.get("host", "127.0.0.1"), env_paths=env_paths)
+    service["port"] = env_int("ARM_VISION_PORT", int(service.get("port", 8000)), env_paths=env_paths)
+    web_host = str(env_value("ARM_WEB_HOST", "127.0.0.1", env_paths=env_paths))
+    web_port = env_int("ARM_WEB_PORT", 8010, env_paths=env_paths)
+    default_api = f"http://127.0.0.1:{web_port}" if web_host == "0.0.0.0" else f"http://{web_host}:{web_port}"
+    web_env_changed = any(env_value(name, "", env_paths=env_paths) for name in ("ARM_WEB_HOST", "ARM_WEB_PORT"))
+    follow["robot_api_base"] = env_value(
+        "ARM_ROBOT_API_BASE",
+        default_api if web_env_changed else follow.get("robot_api_base", default_api),
+        env_paths=env_paths,
+    )
+    return config
 
 
 def run_preview(config: dict[str, Any]) -> None:

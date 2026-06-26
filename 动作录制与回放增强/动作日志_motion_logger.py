@@ -5,10 +5,14 @@
 
 from __future__ import annotations
 
-import json
-import time
 from pathlib import Path
 from typing import Any
+
+from 动作路径工具_motion_path_utils import ensure_project_root_on_path
+
+ensure_project_root_on_path()
+
+from 通用_io import log_event_json_line  # noqa: E402
 
 
 class MotionLogger:
@@ -19,14 +23,7 @@ class MotionLogger:
         self.log_path.parent.mkdir(parents=True, exist_ok=True)
 
     def log(self, event: str, **payload: Any) -> None:
-        record = {
-            "time": time.strftime("%Y-%m-%d %H:%M:%S"),
-            "event": event,
-            **payload,
-        }
-        with self.log_path.open("a", encoding="utf-8") as file:
-            json.dump(record, file, ensure_ascii=False)
-            file.write("\n")
+        log_event_json_line(self.log_path, event, time_style="local_string", **payload)
 
 
 动作日志 = MotionLogger

@@ -7,13 +7,15 @@ from __future__ import annotations
 
 from typing import Any
 
-import requests
-
 from .工具定义_robot_tools import ALLOWED_JOINT_NAMES, JOINT_ALIAS, SUPPORTED_BEHAVIORS
+from .path_utils import ensure_project_root_on_path
+
+ensure_project_root_on_path()
+
+from 通用_http import HTTPJsonError, request_json_object  # noqa: E402
 
 
 ALWAYS_ALLOWED = {"get_robot_state", "stop_robot"}
-MOTION_TOOLS = {"set_gripper", "rotate_joint", "run_robot_behavior", "play_action", "start_face_follow"}
 
 
 def normalize_joint_name(name: str) -> str:
@@ -60,11 +62,9 @@ class SafetyPolicy:
         base_url = str(self.config.get("robot_api", {}).get("base_url", "http://127.0.0.1:8010")).rstrip("/")
         timeout = float(self.config.get("robot_api", {}).get("timeout_sec", 6))
         try:
-            response = requests.get(f"{base_url}/api/v1/health", timeout=timeout)
-            if response.status_code >= 400:
-                return False, "机器人控制 API 不可用，请先启动阶段八 Web 服务。"
+            request_json_object(f"{base_url}/api/v1/health", timeout=timeout, trust_env=False)
             return True, ""
-        except requests.RequestException:
+        except (HTTPJsonError, OSError, TimeoutError, ValueError):
             return False, "机器人控制 API 不可用，请先启动阶段八 Web 服务。"
 
     def _check_gripper(self, arguments: dict[str, Any]) -> dict[str, Any]:
@@ -115,4 +115,3 @@ class SafetyPolicy:
         elif isinstance(value, list):
             return any(self._contains_forbidden_raw(item) for item in value)
         return False
-

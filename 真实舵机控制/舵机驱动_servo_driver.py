@@ -540,6 +540,7 @@ class 轻量_FeetechSDKServoDriver(BaseServoDriver):
         found_ids = set(found)
         missing_ids = sorted(expected_ids - found_ids)
         if missing_ids:
+            self._disconnect_after_failed_connect()
             raise RuntimeError(
                 f"Missing motor IDs: {missing_ids}. Full found motor list: {found}. "
                 f"Expected motor IDs: {sorted(expected_ids)}."
@@ -550,6 +551,7 @@ class 轻量_FeetechSDKServoDriver(BaseServoDriver):
             if motor_id in expected_ids and int(model) != EXPECTED_STS3215_MODEL
         }
         if wrong_model:
+            self._disconnect_after_failed_connect()
             raise RuntimeError(f"发现非 STS3215 型号：{wrong_model}，期望型号号 {EXPECTED_STS3215_MODEL}。")
         self.joint_keys = list(joint_keys)
 

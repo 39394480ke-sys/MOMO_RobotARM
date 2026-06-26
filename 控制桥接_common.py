@@ -1270,6 +1270,7 @@ def make_runtime_real_config(
     data = read_structured(source)
     transport = data.setdefault("transport", {})
     transport["dry_run"] = bool(dry_run)
+    transport["runtime_mode_locked"] = True
     if serial_port:
         transport["port"] = serial_port
 

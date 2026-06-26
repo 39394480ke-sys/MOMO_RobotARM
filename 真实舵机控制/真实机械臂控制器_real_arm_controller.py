@@ -656,7 +656,8 @@ def 读取配置(path: str | Path) -> dict[str, Any]:
     backend = str(env_value("ARM_SERVO_BACKEND", "", env_paths=env_paths) or "").strip()
     if backend:
         transport["driver_backend"] = backend
-    transport["dry_run"] = env_bool("ARM_REAL_DRY_RUN", bool(transport.get("dry_run", True)), env_paths=env_paths)
+    if not bool(transport.get("runtime_mode_locked", False)):
+        transport["dry_run"] = env_bool("ARM_REAL_DRY_RUN", bool(transport.get("dry_run", True)), env_paths=env_paths)
     return config
 
 

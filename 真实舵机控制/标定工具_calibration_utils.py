@@ -55,6 +55,9 @@ def load_config(config_path: str | Path) -> dict[str, Any]:
     port = str(env_value("ARM_ROBOT_PORT", "", env_paths=env_paths) or "").strip()
     if port:
         config.setdefault("transport", {})["port"] = port
+    backend = str(env_value("ARM_SERVO_BACKEND", "", env_paths=env_paths) or "").strip()
+    if backend:
+        config.setdefault("transport", {})["driver_backend"] = backend
     return config
 
 

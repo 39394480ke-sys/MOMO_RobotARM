@@ -16,6 +16,11 @@ from abc import ABC, abstractmethod
 from typing import Any
 
 from 标定工具_calibration_utils import ARM_MOTOR_IDS, build_feetech_connect_error
+from 轻量舵机驱动_lightweight_feetech_driver import (
+    EXPECTED_STS3215_MODEL,
+    LightweightFeetechBus,
+    build_motor_ids,
+)
 from 角度映射_angle_mapper import JOINT_ORDER, joint_label
 
 
@@ -413,5 +418,161 @@ class 真实_FeetechServoDriver(BaseServoDriver):
         return Motor, MotorNormMode, FeetechMotorsBus
 
 
+class 轻量_FeetechSDKServoDriver(BaseServoDriver):
+    """不依赖 LeRobot/Torch 的 Feetech STS3215 驱动。"""
+
+    def __init__(self, config: dict[str, Any], calibration_data: dict[str, Any]):
+        self.config = config
+        self.calibration_data = calibration_data
+        self.port = str(config.get("transport", {}).get("port", ""))
+        self.baudrate = int(config.get("transport", {}).get("baudrate", 1_000_000))
+        self.bus: LightweightFeetechBus | None = None
+        self.joint_keys = self._build_joint_keys()
+        self.motor_ids_by_joint = build_motor_ids(config, calibration_data, self.joint_keys)
+        self.gripper_available = "gripper" in self.joint_keys
+        self.gripper_detection_message = "夹爪参与连接。" if self.gripper_available else "夹爪未配置或未标定。"
+
+    def connect(self) -> None:
+        try:
+            self._connect_with_joint_keys(self.joint_keys)
+        except Exception as error:
+            if "gripper" in self.joint_keys:
+                self._disconnect_after_failed_connect()
+                arm_joint_keys = [joint_key for joint_key in self.joint_keys if joint_key != "gripper"]
+                try:
+                    self._connect_with_joint_keys(arm_joint_keys)
+                except Exception as arm_error:
+                    raise RuntimeError(
+                        build_feetech_connect_error(arm_error, self.port, include_gripper=False)
+                    ) from arm_error
+                self.joint_keys = arm_joint_keys
+                self.motor_ids_by_joint = build_motor_ids(self.config, self.calibration_data, self.joint_keys)
+                self.gripper_available = False
+                self.gripper_detection_message = "未检测到 J16 夹爪，已自动切换为无夹爪模式。"
+                print(self.gripper_detection_message)
+                print(f"轻量 Feetech SDK 总线已连接：{self.port}")
+                return
+            raise RuntimeError(
+                build_feetech_connect_error(
+                    error,
+                    self.port,
+                    include_gripper=self.config.get("transport", {}).get("gripper_available", True),
+                )
+            ) from error
+        self.gripper_available = "gripper" in self.joint_keys
+        self.gripper_detection_message = "已检测到 J16 夹爪。" if self.gripper_available else "夹爪未参与连接。"
+        print(f"轻量 Feetech SDK 总线已连接：{self.port}")
+
+    def disconnect(self, disable_torque: bool = True) -> None:
+        if self.bus is not None:
+            if disable_torque:
+                try:
+                    self.disable_torque()
+                except Exception:
+                    pass
+            self.bus.disconnect()
+        self.bus = None
+        print("轻量 Feetech SDK 总线已断开。")
+
+    def read_present_position(self, joint_key: str) -> int:
+        self._ensure_connected()
+        self._ensure_known_joint(joint_key)
+        return int(self.bus.read("Present_Position", joint_key))
+
+    def read_all_present_positions(self) -> dict[str, int]:
+        self._ensure_connected()
+        return {
+            joint_key: int(value)
+            for joint_key, value in self.bus.read_many("Present_Position", self.joint_keys).items()
+        }
+
+    def write_goal_position(self, joint_key: str, goal_raw: int) -> None:
+        self._ensure_connected()
+        self._ensure_known_joint(joint_key)
+        self.bus.write("Goal_Position", joint_key, int(goal_raw))
+
+    def write_many_goal_positions(self, goal_raw_by_joint: dict[str, int]) -> None:
+        self._ensure_connected()
+        for joint_key in goal_raw_by_joint:
+            self._ensure_known_joint(joint_key)
+        self.bus.write_many("Goal_Position", {joint_key: int(value) for joint_key, value in goal_raw_by_joint.items()})
+
+    def read_register(self, register_name: str, joint_key: str) -> int:
+        self._ensure_connected()
+        self._ensure_known_joint(joint_key)
+        return int(self.bus.read(register_name, joint_key))
+
+    def write_register(self, register_name: str, joint_key: str, raw_value: int) -> None:
+        self._ensure_connected()
+        self._ensure_known_joint(joint_key)
+        self.bus.write(register_name, joint_key, int(raw_value))
+
+    def enable_torque(self, joint_key: str | None = None) -> None:
+        self._ensure_connected()
+        targets = [joint_key] if joint_key else self.joint_keys
+        for key in targets:
+            self._ensure_known_joint(key)
+            self.bus.write("Torque_Enable", key, 1)
+
+    def disable_torque(self, joint_key: str | None = None) -> None:
+        self._ensure_connected()
+        targets = [joint_key] if joint_key else self.joint_keys
+        for key in targets:
+            self._ensure_known_joint(key)
+            self.bus.write("Torque_Enable", key, 0)
+
+    def stop(self) -> None:
+        current = self.read_all_present_positions()
+        self.write_many_goal_positions(current)
+        print("已把当前位置写回 Goal_Position，机械臂保持当前位置。")
+
+    def _build_joint_keys(self) -> list[str]:
+        joint_keys = list(self.config.get("robot", {}).get("joint_order", JOINT_ORDER))
+        if self.config.get("transport", {}).get("gripper_available", True) and "gripper" in self.calibration_data:
+            joint_keys.append("gripper")
+        return joint_keys
+
+    def _connect_with_joint_keys(self, joint_keys: list[str]) -> None:
+        self.motor_ids_by_joint = build_motor_ids(self.config, self.calibration_data, joint_keys)
+        self.bus = LightweightFeetechBus(self.port, self.motor_ids_by_joint, baudrate=self.baudrate)
+        found = self.bus.connect()
+        expected_ids = set(self.motor_ids_by_joint.values())
+        found_ids = set(found)
+        missing_ids = sorted(expected_ids - found_ids)
+        if missing_ids:
+            raise RuntimeError(
+                f"Missing motor IDs: {missing_ids}. Full found motor list: {found}. "
+                f"Expected motor IDs: {sorted(expected_ids)}."
+            )
+        wrong_model = {
+            motor_id: model
+            for motor_id, model in found.items()
+            if motor_id in expected_ids and int(model) != EXPECTED_STS3215_MODEL
+        }
+        if wrong_model:
+            raise RuntimeError(f"发现非 STS3215 型号：{wrong_model}，期望型号号 {EXPECTED_STS3215_MODEL}。")
+        self.joint_keys = list(joint_keys)
+
+    def _disconnect_after_failed_connect(self) -> None:
+        if self.bus is None:
+            return
+        try:
+            self.bus.disconnect()
+        except Exception:
+            pass
+        self.bus = None
+
+    def _ensure_connected(self) -> None:
+        if self.bus is None:
+            raise RuntimeError("轻量 Feetech SDK 驱动尚未连接。")
+
+    def _ensure_known_joint(self, joint_key: str | None) -> None:
+        if joint_key is None:
+            return
+        if joint_key not in self.joint_keys:
+            raise KeyError(f"未知舵机：{joint_key}")
+
+
 MockServoDriver = 仿真_MockServoDriver
 RealServoDriver = 真实_FeetechServoDriver
+LightweightFeetechServoDriver = 轻量_FeetechSDKServoDriver

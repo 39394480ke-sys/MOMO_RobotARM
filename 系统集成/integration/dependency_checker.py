@@ -23,9 +23,15 @@ class DependencyChecker:
         return self._check_many(self.config.get("dependencies", {}).get("optional", []))
 
     def check_real_hardware_dependencies(self) -> dict[str, bool]:
-        names = ["lerobot", "feetech-servo-sdk", "pyserial"]
+        backend = str(self.config.get("transport", {}).get("driver_backend", "sdk")).strip().lower()
+        names = ["feetech-servo-sdk", "pyserial"]
+        if backend in {"lerobot", "legacy"}:
+            names.insert(0, "lerobot")
         result = self._check_many(names)
-        result["lerobot.motors.feetech"] = self._can_import_lerobot_feetech()
+        if backend in {"lerobot", "legacy"}:
+            result["lerobot.motors.feetech"] = self._can_import_lerobot_feetech()
+        else:
+            result["scservo_sdk"] = self._can_import("scservo_sdk")
         return result
 
     def check_all(self) -> dict[str, Any]:
@@ -45,8 +51,12 @@ class DependencyChecker:
 
     @staticmethod
     def _can_import_lerobot_feetech() -> bool:
+        return DependencyChecker._can_import("lerobot.motors.feetech")
+
+    @staticmethod
+    def _can_import(module_name: str) -> bool:
         try:
-            importlib.import_module("lerobot.motors.feetech")
+            importlib.import_module(module_name)
         except Exception:
             return False
         return True

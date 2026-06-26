@@ -19,7 +19,7 @@ from 通用_io import atomic_write_json, env_bool, env_value, read_json_object_o
 
 from 安全检查_safety_checker import SafetyChecker
 from 标定管理_calibration_manager import CalibrationManager
-from 舵机驱动_servo_driver import BaseServoDriver, RealServoDriver, MockServoDriver
+from 舵机驱动_servo_driver import BaseServoDriver, RealServoDriver, MockServoDriver, LightweightFeetechServoDriver
 from 角度映射_angle_mapper import (
     JOINT_ORDER,
     MULTI_TURN_JOINTS,
@@ -425,7 +425,12 @@ class RealArmController:
     def _create_driver(self) -> BaseServoDriver:
         if self.is_dry_run():
             return MockServoDriver(self.config, self.calibration_manager.data)
-        return RealServoDriver(self.config, self.calibration_manager.data)
+        backend = str(self.config.get("transport", {}).get("driver_backend", "sdk")).strip().lower()
+        if backend in {"sdk", "lightweight", "scservo", "feetech-sdk"}:
+            return LightweightFeetechServoDriver(self.config, self.calibration_manager.data)
+        if backend in {"lerobot", "legacy"}:
+            return RealServoDriver(self.config, self.calibration_manager.data)
+        raise RuntimeError(f"未知真实舵机后端：{backend}。可选：sdk / lerobot。")
 
     def _reload_config_and_calibration(self) -> None:
         """连接前重新读取配置和标定文件。
@@ -648,6 +653,9 @@ def 读取配置(path: str | Path) -> dict[str, Any]:
     port = str(env_value("ARM_ROBOT_PORT", "", env_paths=env_paths) or "").strip()
     if port:
         transport["port"] = port
+    backend = str(env_value("ARM_SERVO_BACKEND", "", env_paths=env_paths) or "").strip()
+    if backend:
+        transport["driver_backend"] = backend
     transport["dry_run"] = env_bool("ARM_REAL_DRY_RUN", bool(transport.get("dry_run", True)), env_paths=env_paths)
     return config
 

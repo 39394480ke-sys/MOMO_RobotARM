@@ -4,6 +4,8 @@
   "transport": {
     "type": "serial",
     "port": "/dev/cu.usbmodem5B140306681",
+    "driver_backend": "sdk",
+    "baudrate": 1000000,
     "timeout": 2.0,
     "robot_id": "soarmmoce",
     "dry_run": true,

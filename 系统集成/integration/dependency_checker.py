@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 from typing import Any
 
 from .path_utils import ensure_project_root_on_path
@@ -23,7 +24,9 @@ class DependencyChecker:
 
     def check_real_hardware_dependencies(self) -> dict[str, bool]:
         names = ["lerobot", "feetech-servo-sdk", "pyserial"]
-        return self._check_many(names)
+        result = self._check_many(names)
+        result["lerobot.motors.feetech"] = self._can_import_lerobot_feetech()
+        return result
 
     def check_all(self) -> dict[str, Any]:
         required = self.check_required()
@@ -39,3 +42,11 @@ class DependencyChecker:
 
     def _check_many(self, names: list[str]) -> dict[str, bool]:
         return check_python_packages(names)
+
+    @staticmethod
+    def _can_import_lerobot_feetech() -> bool:
+        try:
+            importlib.import_module("lerobot.motors.feetech")
+        except Exception:
+            return False
+        return True

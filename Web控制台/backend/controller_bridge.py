@@ -59,6 +59,7 @@ from 控制桥接_common import (  # noqa: E402
     set_controller_gripper,
     state_tcp_pose,
 )
+from 系统集成.integration.dependency_checker import DependencyChecker  # noqa: E402
 
 
 class ControllerBridge:
@@ -201,8 +202,11 @@ class ControllerBridge:
 
         modules = ["fastapi", "uvicorn", "pydantic", "yaml", "numpy", "pybullet", "lerobot", "serial"]
         data: dict[str, Any] = check_python_modules(modules)
+        real_hardware = DependencyChecker(self.config).check_real_hardware_dependencies()
         data["dry_run_requires_real_deps"] = False
-        data["real_mode_requires"] = ["lerobot", "feetech-servo-sdk", "pyserial"]
+        data["real_hardware"] = real_hardware
+        data["real_mode_ready"] = all(real_hardware.values())
+        data["real_mode_requires"] = list(real_hardware.keys())
         return bridge_ok("依赖检查完成。", data)
 
     # ------------------------------------------------------------------

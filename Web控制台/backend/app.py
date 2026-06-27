@@ -17,6 +17,7 @@ from .path_utils import PROJECT_ROOT, WEB_DIR, ensure_project_root_on_path
 from 控制桥接_common import api_error, api_success
 from .errors import WebAPIError
 from .schemas import (
+    AgentAskRequest,
     CartesianJogRequest,
     CalibrationCurrentAngleRequest,
     ConnectRequest,
@@ -131,6 +132,24 @@ async def health() -> dict[str, Any]:
 @app.get("/api/v1/config")
 async def config() -> dict[str, Any]:
     return api_success(service.public_config())
+
+
+# ----------------------------------------------------------------------
+# AI Agent
+# ----------------------------------------------------------------------
+@app.get("/api/v1/agent/status")
+async def agent_status() -> dict[str, Any]:
+    return api_success(service.agent_status())
+
+
+@app.post("/api/v1/agent/ask")
+async def agent_ask(request: AgentAskRequest) -> dict[str, Any]:
+    return await _call(service.agent_ask, request, broadcast=False)
+
+
+@app.post("/api/v1/agent/reset-session")
+async def agent_reset_session() -> dict[str, Any]:
+    return await _call(service.agent_reset_session, broadcast=False)
 
 
 # ----------------------------------------------------------------------

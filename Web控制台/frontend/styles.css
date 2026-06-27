@@ -572,9 +572,59 @@ th {
   grid-column: span 8;
 }
 
+.agent-chat-panel {
+  grid-column: span 8;
+}
+
+.agent-config-panel {
+  grid-column: span 4;
+}
+
 .motion-tuning-panel,
 .module-links-panel {
   grid-column: span 6;
+}
+
+.agent-chat-log {
+  min-height: 360px;
+  max-height: 520px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px;
+  background: #111827;
+}
+
+.agent-message {
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  gap: 8px;
+  margin-bottom: 10px;
+  color: #e5e7eb;
+  line-height: 1.55;
+}
+
+.agent-message strong {
+  color: #93c5fd;
+}
+
+.agent-message.ai strong {
+  color: #34d399;
+}
+
+.agent-message.error strong {
+  color: #f87171;
+}
+
+.agent-message.system strong {
+  color: #c4b5fd;
+}
+
+.agent-input-row {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: 1fr 88px;
+  gap: 8px;
 }
 
 .calibration-diagnostics-panel {
@@ -694,6 +744,8 @@ th {
   .vision-preview-panel,
   .settings-grid > .panel,
   .hardware-panel,
+  .agent-chat-panel,
+  .agent-config-panel,
   .motion-tuning-panel,
   .module-links-panel {
     grid-column: span 12;

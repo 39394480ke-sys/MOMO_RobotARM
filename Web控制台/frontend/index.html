@@ -31,6 +31,7 @@
           <button class="nav-item" data-page="poses">姿态</button>
           <button class="nav-item" data-page="actions">动作</button>
           <button class="nav-item" data-page="follow">视觉跟随</button>
+          <button class="nav-item" data-page="agent">AI 对话</button>
           <button class="nav-item" data-page="kinematics">运动学</button>
           <button class="nav-item" data-page="calibration">标定</button>
           <button class="nav-item" data-page="settings">设置</button>
@@ -225,6 +226,45 @@
                   <dt>状态</dt><dd id="visionPreviewState">等待刷新</dd>
                   <dt>服务</dt><dd id="visionHealthState">--</dd>
                   <dt>目标</dt><dd id="visionLatestState">--</dd>
+                  <dt>画面</dt><dd id="visionFrameSize">--</dd>
+                  <dt>偏移</dt><dd id="visionOffsetState">--</dd>
+                  <dt>方向</dt><dd id="visionDirectionState">--</dd>
+                  <dt>检测器</dt><dd id="visionDetectorState">--</dd>
+                </dl>
+                <pre id="visionLatestJson" class="result-box"></pre>
+              </section>
+            </div>
+          </section>
+
+          <section id="pageAgent" class="page">
+            <div class="section-head">
+              <h2>AI 对话</h2>
+              <div class="inline-actions">
+                <button id="refreshAgentBtn">刷新状态</button>
+                <button id="resetAgentBtn">重置会话</button>
+              </div>
+            </div>
+            <div class="settings-grid">
+              <section class="panel agent-chat-panel">
+                <div class="panel-head">
+                  <h3>对话</h3>
+                  <span id="agentStatusState" class="status-pill warn">未检查</span>
+                </div>
+                <div id="agentChatLog" class="agent-chat-log"></div>
+                <div class="agent-input-row">
+                  <input id="agentInput" placeholder="输入要问机械臂助手的话" />
+                  <button id="sendAgentBtn" class="primary">发送</button>
+                </div>
+              </section>
+              <section class="panel agent-config-panel">
+                <div class="panel-head"><h3>Agent 配置</h3></div>
+                <dl class="kv wide">
+                  <dt>backend</dt><dd id="agentBackend">--</dd>
+                  <dt>model</dt><dd id="agentModel">--</dd>
+                  <dt>API</dt><dd id="agentApiBase">--</dd>
+                  <dt>Web API</dt><dd id="agentRobotApi">--</dd>
+                  <dt>STT</dt><dd id="agentSttUrl">--</dd>
+                  <dt>TTS</dt><dd id="agentTtsEnabled">--</dd>
                 </dl>
               </section>
             </div>
@@ -287,8 +327,8 @@
                 <dt>允许真实移动</dt><dd id="calibAllowed">--</dd>
               </dl>
               <div class="command-box">
-                <code>python ../04_真实舵机控制/标定程序_calibrate.py</code>
-                <code>python ../04_真实舵机控制/标定应用_apply_calibration.py</code>
+                <code>python 真实舵机控制/标定当前角度_calibrate_current_angle.py --port /dev/momo-servo --joint-angle j12=0 --dry-run</code>
+                <code>python 真实舵机控制/标定当前角度_calibrate_current_angle.py --port /dev/momo-servo --joint-angle j12=0 --joint-angle j13=0 --yes</code>
               </div>
             </div>
             <div class="panel calibration-diagnostics-panel">
@@ -370,6 +410,7 @@
                 <div class="module-link-grid">
                   <a href="/api/v1/vision/frame.jpg" target="_blank" rel="noreferrer">视觉画面</a>
                   <a href="/api/v1/vision/latest" target="_blank" rel="noreferrer">视觉 latest</a>
+                  <a href="http://127.0.0.1:8000/debug" target="_blank" rel="noreferrer">视觉调试</a>
                   <a href="/docs" target="_blank" rel="noreferrer">Web API</a>
                   <a href="/api/v1/robot/calibration-status" target="_blank" rel="noreferrer">标定 JSON</a>
                 </div>

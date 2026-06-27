@@ -15,6 +15,7 @@ import time
 import traceback
 import urllib.error
 import urllib.request
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -38,6 +39,7 @@ from .controller_bridge import ControllerBridge
 from .errors import WebAPIError
 from .logger import JsonLineLogger
 from .schemas import (
+    AgentAskRequest,
     CalibrationCurrentAngleRequest,
     CartesianJogRequest,
     ConnectRequest,
@@ -80,6 +82,7 @@ class WebControlService:
         self._continuous_jog_stop = threading.Event()
         self._continuous_jog_status: dict[str, Any] = {"running": False, "message": "连续控制未启动。"}
         self.recent_error: dict[str, Any] | None = None
+        self._agent_app: Any | None = None
 
     # ------------------------------------------------------------------
     # 基础信息
@@ -109,6 +112,56 @@ class WebControlService:
             "motion": self.config.get("motion", {}),
             "follow": self.config.get("follow", {}),
         }
+
+    # ------------------------------------------------------------------
+    # AI Agent
+    # ------------------------------------------------------------------
+    def agent_status(self) -> dict[str, Any]:
+        try:
+            config = self._load_agent_config()
+            agent = config.get("agent", {})
+            backend = str(agent.get("backend", "openai_compatible"))
+            openai_cfg = config.get("openai_compatible", {})
+            robot_api = config.get("robot_api", {})
+            stt = config.get("stt", {})
+            tts = config.get("tts", {})
+            return {
+                "available": True,
+                "backend": backend,
+                "model": str(openai_cfg.get("model", "")),
+                "api_base": str(openai_cfg.get("api_base", "")),
+                "robot_api_base": str(robot_api.get("base_url", "")),
+                "stt_url": str(stt.get("url", "")),
+                "tts_enabled": bool(tts.get("enabled", True)),
+            }
+        except Exception as exc:
+            return {"available": False, "message": str(exc)}
+
+    def agent_ask(self, request: AgentAskRequest) -> dict[str, Any]:
+        content = str(request.text or "").strip()
+        if not content:
+            raise WebAPIError("BAD_INPUT", "请输入要发送给 AI 的内容。")
+        try:
+            app = self._get_agent_app(force_new_session=bool(request.force_new_session))
+            reply = app.ask_text(content, speak=bool(request.speak))
+            return {
+                "message": "AI 对话完成。",
+                "reply": reply.text,
+                "session_id": reply.session_id,
+                "raw_payload": reply.raw_payload,
+            }
+        except Exception as exc:
+            self._remember_error("AGENT_ASK_FAILED", str(exc))
+            raise WebAPIError("AGENT_ASK_FAILED", f"AI 对话失败：{exc}") from exc
+
+    def agent_reset_session(self) -> dict[str, Any]:
+        try:
+            app = self._get_agent_app(force_new_session=True)
+            app.reset_session()
+            return {"message": "AI 会话已重置。"}
+        except Exception as exc:
+            self._remember_error("AGENT_RESET_FAILED", str(exc))
+            raise WebAPIError("AGENT_RESET_FAILED", f"AI 会话重置失败：{exc}") from exc
 
     # ------------------------------------------------------------------
     # 会话
@@ -568,6 +621,28 @@ class WebControlService:
         message = str(result.get("message") or result.get("error") or "操作失败")
         self._remember_error(code, message)
         raise WebAPIError(code, message)
+
+    def _load_agent_config(self) -> dict[str, Any]:
+        agent_root = self.base_dir.parent / "语音Agent"
+        if str(agent_root) not in sys.path:
+            sys.path.insert(0, str(agent_root))
+        from agent.配置_config import load_config
+
+        return load_config(agent_root / "Agent配置.yaml")
+
+    def _get_agent_app(self, force_new_session: bool = False) -> Any:
+        if force_new_session:
+            self._agent_app = None
+        if self._agent_app is None:
+            agent_root = self.base_dir.parent / "语音Agent"
+            if str(agent_root) not in sys.path:
+                sys.path.insert(0, str(agent_root))
+            from agent.对话应用_agent_app import AgentApp
+
+            config = self._load_agent_config()
+            config.setdefault("tts", {})["enabled"] = False
+            self._agent_app = AgentApp(config, force_new_session=force_new_session)
+        return self._agent_app
 
     def _remember_error(self, code: str, message: str) -> None:
         self.recent_error = {"code": str(code), "message": str(message), "time": time.time()}

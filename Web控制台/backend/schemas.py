@@ -43,6 +43,12 @@ class CalibrationCurrentAngleRequest(BaseModel):
     confirm_text: str = ""
 
 
+class AgentAskRequest(BaseModel):
+    text: str = Field(..., min_length=1)
+    speak: bool = False
+    force_new_session: bool = False
+
+
 class MoveJointsRequest(BaseModel):
     targets_deg: dict[str, float]
     speed_percent: int = Field(50, ge=1, le=100)

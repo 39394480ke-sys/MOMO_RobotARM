@@ -23,6 +23,8 @@ const state = {
   follow: null,
   hardware: null,
   motionTuning: null,
+  agent: null,
+  agentMessages: [],
   jointControlMode: "step",
   continuousJogActive: false,
   continuousJogStopping: false,
@@ -69,6 +71,12 @@ function bindEvents() {
     renderVisionPreviewUrl();
   });
   $("#refreshVisionPreviewBtn").addEventListener("click", refreshVisionPreview);
+  $("#refreshAgentBtn").addEventListener("click", loadAgentStatus);
+  $("#sendAgentBtn").addEventListener("click", sendAgentMessage);
+  $("#resetAgentBtn").addEventListener("click", resetAgentSession);
+  $("#agentInput").addEventListener("keydown", (event) => {
+    if (event.key === "Enter") sendAgentMessage();
+  });
   $("#kinRefreshBtn").addEventListener("click", refreshState);
   $("#fkBtn").addEventListener("click", computeFk);
   $("#ikBtn").addEventListener("click", computeIk);
@@ -239,6 +247,15 @@ async function refreshFollow() {
   try {
     state.follow = await getJson("/api/v1/follow/status");
     renderFollow();
+  } catch (error) {
+    showError(error);
+  }
+}
+
+async function loadAgentStatus() {
+  try {
+    state.agent = await getJson("/api/v1/agent/status");
+    renderAgentStatus();
   } catch (error) {
     showError(error);
   }
@@ -585,6 +602,33 @@ async function stopFollow() {
   } catch (_) {}
 }
 
+async function sendAgentMessage() {
+  const input = $("#agentInput");
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = "";
+  appendAgentMessage("我", text, "user");
+  try {
+    const data = await postJson("/api/v1/agent/ask", { text, speak: false }, { timeout: 70000 });
+    appendAgentMessage("AI", data.reply || data.message || "已完成。", "ai");
+    log("info", "AI 对话完成");
+  } catch (error) {
+    appendAgentMessage("ERROR", error.message || String(error), "error");
+    showError(error);
+  }
+}
+
+async function resetAgentSession() {
+  try {
+    await postJson("/api/v1/agent/reset-session", {}, { timeout: 10000 });
+    state.agentMessages = [];
+    renderAgentMessages();
+    appendAgentMessage("SYSTEM", "AI 会话已重置。", "system");
+  } catch (error) {
+    showError(error);
+  }
+}
+
 async function stopNow() {
   try {
     await postJson("/api/v1/motion/stop", {});
@@ -649,6 +693,36 @@ function renderFollow() {
     : last.message || "--";
 }
 
+function renderAgentStatus() {
+  const agent = state.agent || {};
+  $("#agentStatusState").textContent = agent.available ? "可用" : "不可用";
+  $("#agentStatusState").className = `status-pill ${agent.available ? "good" : "bad"}`;
+  $("#agentBackend").textContent = agent.backend || "--";
+  $("#agentModel").textContent = agent.model || "--";
+  $("#agentApiBase").textContent = agent.api_base || "--";
+  $("#agentRobotApi").textContent = agent.robot_api_base || "--";
+  $("#agentSttUrl").textContent = agent.stt_url || "--";
+  $("#agentTtsEnabled").textContent = agent.tts_enabled ? "开启" : "关闭";
+}
+
+function appendAgentMessage(role, text, kind) {
+  state.agentMessages.push({ role, text, kind, time: new Date().toLocaleTimeString() });
+  state.agentMessages = state.agentMessages.slice(-80);
+  renderAgentMessages();
+}
+
+function renderAgentMessages() {
+  $("#agentChatLog").innerHTML = state.agentMessages
+    .map(
+      (item) => `<div class="agent-message ${escapeAttr(item.kind)}">
+        <strong>[${escapeHtml(item.role)}]</strong>
+        <span>${escapeHtml(item.text).replace(/\n/g, "<br>")}</span>
+      </div>`
+    )
+    .join("");
+  $("#agentChatLog").scrollTop = $("#agentChatLog").scrollHeight;
+}
+
 function refreshVisionPreview() {
   const image = $("#visionPreviewFrame");
   const url = renderVisionPreviewUrl();
@@ -691,11 +765,40 @@ async function refreshVisionProxyStatus() {
     $("#visionHealthState").className = health.camera_available ? "ok-text" : "bad-text";
     $("#visionLatestState").textContent = latest.detected ? "检测到目标" : latest.message || "未检测";
     $("#visionLatestState").className = latest.detected ? "ok-text" : "";
+    renderVisionLatestDebug(latest);
   } catch (error) {
     $("#visionHealthState").textContent = "视觉服务不可用";
     $("#visionHealthState").className = "bad-text";
     $("#visionLatestState").textContent = error.message || String(error);
+    $("#visionLatestJson").textContent = "";
   }
+}
+
+function renderVisionLatestDebug(latest) {
+  const camera = latest.camera || {};
+  const offset = latest.offset || {};
+  const smoothed = latest.smoothed_offset || {};
+  const direction = latest.direction || {};
+  const detector = latest.detector || {};
+  $("#visionFrameSize").textContent = camera.width && camera.height ? `${camera.width} x ${camera.height} @ ${formatNum(latest.fps, 1)}fps` : "--";
+  $("#visionOffsetState").textContent = `ndx=${formatNum(offset.ndx, 4)}, ndy=${formatNum(offset.ndy, 4)} | smooth=${formatNum(smoothed.ndx, 4)},${formatNum(smoothed.ndy, 4)}`;
+  $("#visionDirectionState").textContent = direction.combined || "--";
+  $("#visionDetectorState").textContent = detector.face_backend ? `${detector.face_backend}${detector.face_available === false ? " unavailable" : ""}` : "--";
+  $("#visionLatestJson").textContent = JSON.stringify(
+    {
+      detected: latest.detected,
+      target_source: latest.target_source,
+      tracking_state: latest.tracking_state,
+      target: latest.target,
+      offset: latest.offset,
+      smoothed_offset: latest.smoothed_offset,
+      direction: latest.direction,
+      gesture: latest.gesture,
+      detector: latest.detector,
+    },
+    null,
+    2
+  );
 }
 
 function renderRobot() {
@@ -972,6 +1075,7 @@ function showPage(name) {
     refreshFollow();
     refreshVisionPreview();
   }
+  if (name === "agent") loadAgentStatus();
   if (name === "calibration") loadCalibration();
   if (name === "calibration") diagnoseJ12();
   if (name === "settings") {

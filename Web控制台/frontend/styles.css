@@ -694,6 +694,21 @@ th {
   margin-top: 12px;
 }
 
+.debug-output-panel {
+  margin-top: 14px;
+}
+
+.debug-output-panel summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.debug-output-panel .result-box {
+  margin-top: 10px;
+}
+
 .agent-chat-panel {
   grid-column: span 8;
 }

@@ -8,7 +8,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Callable
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
@@ -159,6 +159,11 @@ async def agent_reset_session() -> dict[str, Any]:
 @app.get("/api/v1/cinematic/status")
 async def cinematic_status() -> dict[str, Any]:
     return api_success(service.cinematic_status())
+
+
+@app.get("/api/v1/cinematic/project")
+async def cinematic_project(project_path: str = Query(default="")) -> dict[str, Any]:
+    return api_success(service.cinematic_project(project_path))
 
 
 @app.post("/api/v1/cinematic/analyze")

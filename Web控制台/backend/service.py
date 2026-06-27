@@ -32,8 +32,9 @@ from 控制桥接_common import (  # noqa: E402
     real_confirm_matches,
     real_confirm_required,
     real_confirm_text,
+    resolve_base_path,
 )
-from 通用_io import read_structured_section  # noqa: E402
+from 通用_io import read_json_object, read_structured_section  # noqa: E402
 
 from .controller_bridge import ControllerBridge
 from .errors import WebAPIError
@@ -187,6 +188,31 @@ class WebControlService:
             "rail": rail,
             "two_step": two_step,
             "message": "AI 运镜状态已读取。",
+        }
+
+    def cinematic_project(self, project_path: str = "") -> dict[str, Any]:
+        vision_root = self.base_dir.parent / "视觉识别与跟随"
+        project_dir = (vision_root / "runtime" / "cinematic_director_projects").resolve()
+        if str(project_path).strip():
+            path = resolve_base_path(project_path, self.base_dir.parent)
+        else:
+            latest = self._latest_files(project_dir, "*.json", limit=1)
+            if not latest:
+                return {"available": False, "project": None, "project_path": "", "message": "暂无 AI 运镜导演项目。"}
+            path = Path(latest[0]["path"])
+        path = path.resolve()
+        try:
+            path.relative_to(project_dir)
+        except ValueError as exc:
+            raise WebAPIError("CINEMATIC_PROJECT_PATH_INVALID", "导演项目路径必须位于 cinematic_director_projects 目录。") from exc
+        if not path.exists():
+            raise WebAPIError("CINEMATIC_PROJECT_NOT_FOUND", f"导演项目不存在：{path}")
+        project = read_json_object(path)
+        return {
+            "available": True,
+            "project_path": str(path),
+            "project": project,
+            "message": "AI 运镜导演项目已读取。",
         }
 
     def cinematic_analyze(self, request: CinematicAnalyzeRequest) -> dict[str, Any]:

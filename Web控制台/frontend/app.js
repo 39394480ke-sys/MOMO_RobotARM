@@ -26,6 +26,7 @@ const state = {
   agent: null,
   agentMessages: [],
   cinematic: null,
+  cinematicProject: null,
   jointControlMode: "step",
   continuousJogActive: false,
   continuousJogStopping: false,
@@ -271,7 +272,27 @@ async function loadCinematicStatus() {
   try {
     state.cinematic = await getJson("/api/v1/cinematic/status", { timeout: 8000 });
     renderCinematicStatus();
+    await loadCinematicProject();
   } catch (error) {
+    showError(error);
+  }
+}
+
+async function loadCinematicProject(projectPath = "") {
+  const selectedPath = projectPath || state.cinematic?.latest_project?.path || "";
+  if (!selectedPath) {
+    state.cinematicProject = null;
+    renderCinematicProject(null);
+    return;
+  }
+  try {
+    const query = new URLSearchParams({ project_path: selectedPath });
+    const data = await getJson(`/api/v1/cinematic/project?${query.toString()}`, { timeout: 8000 });
+    state.cinematicProject = data.project || null;
+    renderCinematicProject(state.cinematicProject);
+  } catch (error) {
+    state.cinematicProject = null;
+    renderCinematicProject(null);
     showError(error);
   }
 }
@@ -285,6 +306,7 @@ async function analyzeCinematicLatest() {
   try {
     const data = await postJson("/api/v1/cinematic/analyze", { record_path: recordPath }, { timeout: 30000 });
     $("#cinematicResultJson").textContent = JSON.stringify(summarizeCinematicResult(data), null, 2);
+    renderCinematicProject(data.project || null);
     await loadCinematicStatus();
     log("info", "AI 运镜试拍分析完成");
   } catch (error) {
@@ -301,6 +323,7 @@ async function generateCinematicKeyframes() {
   try {
     const data = await postJson("/api/v1/cinematic/keyframes", { project_path: projectPath, min_count: 3, max_count: 8 }, { timeout: 30000 });
     $("#cinematicResultJson").textContent = JSON.stringify(summarizeCinematicResult(data), null, 2);
+    renderCinematicProject(data.project || null);
     await loadCinematicStatus();
     log("info", "AI 运镜关键帧已生成");
   } catch (error) {
@@ -321,6 +344,7 @@ async function generateCinematicAction() {
       { timeout: 30000 }
     );
     $("#cinematicResultJson").textContent = JSON.stringify(summarizeCinematicResult(data), null, 2);
+    renderCinematicProject(data.project || null);
     await Promise.allSettled([loadCinematicStatus(), loadActions()]);
     log("info", "AI 运镜动作已生成");
   } catch (error) {
@@ -801,6 +825,61 @@ function renderCinematicStatus() {
   $("#cinematicConfigJson").textContent = JSON.stringify({ rail: data.rail || {}, two_step: data.two_step || {} }, null, 2);
   renderCompactFileList("#cinematicRecordsList", data.records || []);
   renderCompactFileList("#cinematicProjectsList", data.projects || []);
+}
+
+function renderCinematicProject(project) {
+  const item = project || {};
+  $("#cinematicAnalysisText").textContent = item.motion_analysis ? formatCinematicAnalysis(item) : "等待试拍分析。";
+  $("#cinematicKeyframesText").textContent = Array.isArray(item.director_keyframes) ? formatCinematicKeyframes(item.director_keyframes) : "等待关键帧生成。";
+  $("#cinematicTrajectoryText").textContent = item.trajectory_plan || item.generated_action ? formatCinematicTrajectory(item) : "等待轨迹生成。";
+}
+
+function formatCinematicAnalysis(project) {
+  const analysis = project.motion_analysis || {};
+  const lines = ["视频运动质量分析", "", JSON.stringify(analysis.summary || {}, null, 2), "", "抖动区间"];
+  for (const item of analysis.jitter_intervals || []) {
+    lines.push(`- ${item.start_time}s -> ${item.end_time}s | frame ${item.start_frame}..${item.end_frame}`);
+  }
+  lines.push("", "稳定区间");
+  for (const item of analysis.stable_intervals || []) {
+    lines.push(`- ${item.start_time}s -> ${item.end_time}s | frame ${item.start_frame}..${item.end_frame}`);
+  }
+  lines.push("", "候选关键帧");
+  for (const item of analysis.candidate_keyframes || []) {
+    lines.push(`- frame ${item.frame_index} / ${item.time}s | score ${item.score}: ${item.reason}`);
+  }
+  return lines.join("\n");
+}
+
+function formatCinematicKeyframes(keyframes) {
+  const lines = ["Keyframe List", ""];
+  for (const item of keyframes || []) {
+    if (!item || typeof item !== "object") continue;
+    lines.push(
+      `${item.id || "K?"}:`,
+      `- time: ${item.time}s / frame ${item.frame_index}`,
+      `- pose: ${JSON.stringify(item.pose || {})}`,
+      `- composition: ${item.composition || ""}`,
+      `- reason: ${item.reason || ""}`,
+      `- dwell_time: ${item.dwell_time || 0}`,
+      ""
+    );
+  }
+  return lines.join("\n");
+}
+
+function formatCinematicTrajectory(project) {
+  const trajectory = project.trajectory_plan || {};
+  const generated = project.generated_action || {};
+  return [
+    "Trajectory",
+    `- type: ${trajectory.type || "--"}`,
+    `- action: ${generated.name || "--"} (${generated.pose_count || 0} points)`,
+    `- action_path: ${generated.path || "--"}`,
+    `- blending strategy: ${JSON.stringify(trajectory.blending_strategy || {})}`,
+    `- speed profile: ${JSON.stringify(trajectory.speed_profile || {})}`,
+    `- recommended execution: ${JSON.stringify(trajectory.recommended_execution || {})}`,
+  ].join("\n");
 }
 
 function summarizeCinematicResult(data) {

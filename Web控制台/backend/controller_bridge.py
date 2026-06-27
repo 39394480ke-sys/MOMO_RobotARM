@@ -911,6 +911,14 @@ class ControllerBridge:
         except Exception as exc:
             return self._exception("读取动作详情失败", exc)
 
+    def delete_action(self, name: str) -> dict[str, Any]:
+        try:
+            self._get_action_library().delete_action(name)
+            self._log("info", "delete_action", f"已删除动作：{name}", name=name)
+            return bridge_ok(f"已删除动作：{name}")
+        except Exception as exc:
+            return self._exception("删除动作失败", exc)
+
     def play_action(self, name: str, speed: float = 1.0, loop: bool = False) -> dict[str, Any]:
         """阻塞式动作播放；service 会把它放到后台线程里执行。"""
 

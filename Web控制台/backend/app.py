@@ -428,6 +428,11 @@ async def action_detail(name: str) -> dict[str, Any]:
     return api_success(service.get_action(name))
 
 
+@app.delete("/api/v1/actions/{name}")
+async def action_delete(name: str) -> dict[str, Any]:
+    return await _call(service.delete_action, name)
+
+
 @app.post("/api/v1/actions/play")
 async def actions_play(request: PlayActionRequest) -> dict[str, Any]:
     return await _call(service.play_action, request)

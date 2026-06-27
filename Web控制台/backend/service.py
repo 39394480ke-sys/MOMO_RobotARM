@@ -571,6 +571,15 @@ class WebControlService:
     def get_action(self, name: str) -> dict[str, Any]:
         return self._unwrap_bridge(self.bridge.get_action(name), code="ACTION_DETAIL_FAILED")
 
+    def delete_action(self, name: str) -> dict[str, Any]:
+        with self._lock:
+            current = self.bridge.action_status
+            if current.get("state") == "playing" and current.get("name") == name:
+                self.bridge.stop_action()
+                if self._action_thread and self._action_thread.is_alive():
+                    self._action_thread.join(timeout=0.5)
+            return self._unwrap_bridge(self.bridge.delete_action(name), code="ACTION_DELETE_FAILED")
+
     def action_recording_status(self) -> dict[str, Any]:
         return self._unwrap_bridge(self.bridge.get_recording_status(), code="ACTION_RECORDING_STATUS_FAILED")
 

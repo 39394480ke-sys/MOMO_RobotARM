@@ -1243,6 +1243,7 @@ function renderActions(actions) {
           <div class="button-row">
             <button data-action-play="${escapeAttr(item.name)}">播放</button>
             <button data-action-detail="${escapeAttr(item.name)}">详情</button>
+            <button data-action-delete="${escapeAttr(item.name)}">删除</button>
           </div>
         </article>`;
     })
@@ -1250,8 +1251,10 @@ function renderActions(actions) {
   $("#actionsList").onclick = async (event) => {
     const playBtn = event.target.closest("button[data-action-play]");
     const detailBtn = event.target.closest("button[data-action-detail]");
+    const deleteBtn = event.target.closest("button[data-action-delete]");
     if (playBtn) playAction(playBtn.dataset.actionPlay);
     if (detailBtn) showActionDetail(detailBtn.dataset.actionDetail);
+    if (deleteBtn) deleteAction(deleteBtn.dataset.actionDelete);
   };
 }
 
@@ -1288,6 +1291,20 @@ async function showActionDetail(name) {
     const data = await getJson(`/api/v1/actions/${encodeURIComponent(name)}`);
     renderActionDetail(name, data);
     log("info", `动作详情已加载：${name}`);
+  } catch (error) {
+    showError(error);
+  }
+}
+
+async function deleteAction(name) {
+  try {
+    const typed = window.prompt(`输入动作名确认删除：${name}`);
+    if (typed !== name) return;
+    await deleteJson(`/api/v1/actions/${encodeURIComponent(name)}`, { timeout: 8000 });
+    $("#actionDetailName").textContent = "未选择";
+    $("#actionDetailResult").textContent = "";
+    log("warning", `动作已删除：${name}`);
+    await loadActions();
   } catch (error) {
     showError(error);
   }

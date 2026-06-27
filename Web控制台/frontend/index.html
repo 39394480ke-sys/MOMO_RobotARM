@@ -146,6 +146,32 @@
                 <button id="stopActionBtn">停止</button>
               </div>
             </div>
+            <section class="panel action-recording-panel">
+              <div class="panel-head">
+                <h3>动作录制</h3>
+                <span id="recordingStatus" class="status-pill warn">未开始</span>
+              </div>
+              <div class="recording-grid">
+                <label class="field">
+                  <span>动作名称</span>
+                  <input id="recordingNameInput" placeholder="例如：Web录制_抓取演示" />
+                </label>
+                <label class="field">
+                  <span>录制模式</span>
+                  <select id="recordingSourceSelect">
+                    <option value="web_record" selected>普通录制</option>
+                    <option value="web_teach_mode">示教录制</option>
+                  </select>
+                </label>
+                <div class="button-row">
+                  <button id="startRecordingBtn" class="primary">开始录制</button>
+                  <button id="captureRecordingBtn">采集当前帧</button>
+                  <button id="saveRecordingBtn" class="primary">保存录制</button>
+                  <button id="cancelRecordingBtn">取消录制</button>
+                </div>
+              </div>
+              <pre id="recordingDetail" class="result-box"></pre>
+            </section>
             <div id="actionsList" class="list-grid"></div>
           </section>
 

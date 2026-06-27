@@ -23,6 +23,7 @@ const state = {
   follow: null,
   hardware: null,
   motionTuning: null,
+  recording: null,
   agent: null,
   agentMessages: [],
   cinematic: null,
@@ -65,6 +66,10 @@ function bindEvents() {
   $("#pauseActionBtn").addEventListener("click", () => postJsonLogged("/api/v1/actions/pause", {}));
   $("#resumeActionBtn").addEventListener("click", () => postJsonLogged("/api/v1/actions/resume", {}));
   $("#stopActionBtn").addEventListener("click", () => postJsonLogged("/api/v1/actions/stop", {}));
+  $("#startRecordingBtn").addEventListener("click", startActionRecording);
+  $("#captureRecordingBtn").addEventListener("click", captureActionRecording);
+  $("#saveRecordingBtn").addEventListener("click", saveActionRecording);
+  $("#cancelRecordingBtn").addEventListener("click", cancelActionRecording);
   $("#refreshFollowBtn").addEventListener("click", refreshFollow);
   $("#startFollowBtn").addEventListener("click", startFollow);
   $("#stopFollowBtn").addEventListener("click", stopFollow);
@@ -209,6 +214,17 @@ async function loadActions() {
   try {
     const data = await getJson("/api/v1/actions");
     renderActions(data.actions || []);
+    await loadRecordingStatus();
+  } catch (error) {
+    showError(error);
+  }
+}
+
+async function loadRecordingStatus() {
+  try {
+    const data = await getJson("/api/v1/actions/recording/status");
+    state.recording = data.recording || {};
+    renderRecordingStatus();
   } catch (error) {
     showError(error);
   }
@@ -586,6 +602,46 @@ async function playAction(name) {
   });
   if (!body) return;
   await postJsonLogged("/api/v1/actions/play", body, { timeout: 10000 });
+}
+
+async function startActionRecording() {
+  const fallback = `Web录制_${new Date().toTimeString().slice(0, 8).replaceAll(":", "")}`;
+  const name = $("#recordingNameInput").value.trim() || fallback;
+  const source = $("#recordingSourceSelect").value || "web_record";
+  const body = await withSafety({ name, source }, source === "web_teach_mode");
+  if (!body) return;
+  try {
+    const data = await postJsonLogged("/api/v1/actions/recording/start", body);
+    state.recording = data.recording || {};
+    renderRecordingStatus();
+  } catch (_) {}
+}
+
+async function captureActionRecording() {
+  const body = await withSafety({});
+  if (!body) return;
+  try {
+    const data = await postJsonLogged("/api/v1/actions/recording/capture", body);
+    state.recording = data.recording || {};
+    renderRecordingStatus(data.pose || null);
+  } catch (_) {}
+}
+
+async function saveActionRecording() {
+  try {
+    const data = await postJsonLogged("/api/v1/actions/recording/save", {});
+    state.recording = data.recording || {};
+    renderRecordingStatus();
+    await loadActions();
+  } catch (_) {}
+}
+
+async function cancelActionRecording() {
+  try {
+    const data = await postJsonLogged("/api/v1/actions/recording/cancel", {});
+    state.recording = data.recording || {};
+    renderRecordingStatus();
+  } catch (_) {}
 }
 
 async function computeFk() {
@@ -1090,6 +1146,34 @@ function renderActions(actions) {
     if (playBtn) playAction(playBtn.dataset.actionPlay);
     if (detailBtn) showActionDetail(detailBtn.dataset.actionDetail);
   };
+}
+
+function renderRecordingStatus(latestPose = null) {
+  const rec = state.recording || {};
+  const active = Boolean(rec.active);
+  const count = Number(rec.pose_count || 0);
+  $("#recordingStatus").textContent = active ? `录制中 ${count} 帧` : "未开始";
+  $("#recordingStatus").className = `status-pill ${active ? "good" : "warn"}`;
+  $("#recordingNameInput").disabled = active;
+  $("#recordingSourceSelect").disabled = active;
+  $("#startRecordingBtn").disabled = active;
+  $("#captureRecordingBtn").disabled = !active;
+  $("#saveRecordingBtn").disabled = !active || count <= 0;
+  $("#cancelRecordingBtn").disabled = !active;
+  $("#recordingDetail").textContent = JSON.stringify(
+    {
+      recording: rec,
+      latest_pose: latestPose
+        ? {
+            name: latestPose.name,
+            joints_deg: latestPose.joints_deg || latestPose["关节角度"],
+            duration_sec: latestPose.duration_sec,
+          }
+        : undefined,
+    },
+    null,
+    2
+  );
 }
 
 async function showActionDetail(name) {

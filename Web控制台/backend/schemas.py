@@ -114,6 +114,16 @@ class PlayActionRequest(BaseModel):
     confirm_text: str = ""
 
 
+class ActionRecordingStartRequest(BaseModel):
+    name: str = Field(..., min_length=1)
+    source: Literal["web_record", "web_teach_mode"] = "web_record"
+    confirm_text: str = ""
+
+
+class ActionRecordingCaptureRequest(BaseModel):
+    confirm_text: str = ""
+
+
 class MovePoseRequest(BaseModel):
     xyz: list[float]
     rpy: list[float] | None = None

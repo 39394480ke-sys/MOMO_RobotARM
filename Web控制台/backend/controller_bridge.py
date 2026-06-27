@@ -25,6 +25,8 @@ ensure_project_root_on_path()
 
 from 控制桥接_common import (  # noqa: E402
     JOINT_ORDER,
+    append_action_pose,
+    build_recording_sequence,
     build_exception_context,
     check_python_modules,
     cinematic_real_speed_percent,
@@ -37,6 +39,7 @@ from 控制桥接_common import (  # noqa: E402
     delete_pose_from_manager,
     install_stage_paths,
     load_action_library,
+    load_action_recorder,
     load_calibration_raw_items,
     load_calibration_report,
     load_kinematics_model,
@@ -56,6 +59,7 @@ from 控制桥接_common import (  # noqa: E402
     normalize_robot_state_payload,
     play_action_from_library,
     read_controller_state,
+    refresh_action_pose_count,
     resolve_base_path,
     result_fail as bridge_fail,
     result_ok as bridge_ok,
@@ -84,6 +88,9 @@ class ControllerBridge:
         self.action_library: Any | None = None
         self.sequence_player: Any | None = None
         self.kinematics_model: Any | None = None
+        self.recording_sequence: dict[str, Any] | None = None
+        self.recording_name = ""
+        self.recording_source = "web_record"
         self.last_error = ""
         self.action_status: dict[str, Any] = {
             "state": "idle",
@@ -942,6 +949,67 @@ class ControllerBridge:
         self._set_action_status("stopped", self.action_status.get("name", ""), "动作已停止。")
         return bridge_ok("动作已停止。")
 
+    def start_action_recording(self, name: str, source: str = "web_record") -> dict[str, Any]:
+        try:
+            action_name = sanitize_action_name(name)
+            self.recording_sequence = build_recording_sequence(action_name, source, self._resolve_config("action_config_path"))
+            self.recording_name = action_name
+            self.recording_source = source
+            self._ensure_controller()
+            self._set_action_status("recording", action_name, f"录制中：{action_name}")
+            self._log("info", "start_recording", f"已开始动作录制：{action_name}", name=action_name, source=source)
+            return bridge_ok(f"已开始动作录制：{action_name}", {"recording": self._recording_summary()})
+        except Exception as exc:
+            return self._exception("开始动作录制失败", exc)
+
+    def capture_recording_pose(self) -> dict[str, Any]:
+        try:
+            if self.recording_sequence is None:
+                return bridge_fail("没有正在进行的动作录制。")
+            self._ensure_controller()
+            recorder = load_action_recorder(self.controller, self._resolve_config("action_config_path"))
+            index = len(self.recording_sequence.get("poses", [])) + 1
+            pose = recorder.capture_current_pose(index=index, name=f"pose_{index}")
+            append_action_pose(self.recording_sequence, pose)
+            self._log("info", "capture_recording_pose", f"已采集录制帧 {index}。", name=self.recording_name, pose_index=index)
+            return bridge_ok(f"已采集第 {index} 帧。", {"recording": self._recording_summary(), "pose": pose})
+        except Exception as exc:
+            return self._exception("采集动作帧失败", exc)
+
+    def save_recording_action(self) -> dict[str, Any]:
+        try:
+            if self.recording_sequence is None:
+                return bridge_fail("没有正在进行的动作录制。")
+            if not self.recording_sequence.get("poses"):
+                return bridge_fail("当前录制没有任何姿态帧，不能保存。")
+            name = self.recording_name
+            refresh_action_pose_count(self.recording_sequence)
+            path = self._get_action_library().save_action(name, self.recording_sequence)
+            count = int(self.recording_sequence.get("pose_count", 0))
+            self.recording_sequence = None
+            self.recording_name = ""
+            self.recording_source = "web_record"
+            self._set_action_status("idle", "", "空闲")
+            self._log("info", "save_recording_action", f"动作录制已保存：{name}", name=name, pose_count=count, action_path=str(path))
+            return bridge_ok(
+                f"动作录制已保存：{name}（{count} 帧）",
+                {"action_name": name, "path": str(path), "pose_count": count, "recording": self._recording_summary()},
+            )
+        except Exception as exc:
+            return self._exception("保存录制动作失败", exc)
+
+    def cancel_recording_action(self) -> dict[str, Any]:
+        name = self.recording_name
+        self.recording_sequence = None
+        self.recording_name = ""
+        self.recording_source = "web_record"
+        self._set_action_status("idle", "", "空闲")
+        self._log("warning", "cancel_recording_action", "已取消动作录制。", name=name)
+        return bridge_ok("已取消动作录制。", {"recording": self._recording_summary()})
+
+    def get_recording_status(self) -> dict[str, Any]:
+        return bridge_ok("录制状态已读取。", {"recording": self._recording_summary()})
+
     # ------------------------------------------------------------------
     # AI 运镜
     # ------------------------------------------------------------------
@@ -1125,6 +1193,15 @@ class ControllerBridge:
 
     def _resolve_project_path(self, path_value: str | Path) -> Path:
         return resolve_base_path(path_value, self.project_root)
+
+    def _recording_summary(self) -> dict[str, Any]:
+        sequence = self.recording_sequence or {}
+        return {
+            "active": self.recording_sequence is not None,
+            "name": self.recording_name,
+            "source": self.recording_source,
+            "pose_count": len(sequence.get("poses", [])) if isinstance(sequence, dict) else 0,
+        }
 
     # ------------------------------------------------------------------
     # 安全 / 日志

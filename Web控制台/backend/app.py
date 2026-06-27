@@ -17,6 +17,8 @@ from .path_utils import PROJECT_ROOT, WEB_DIR, ensure_project_root_on_path
 from 控制桥接_common import api_error, api_success
 from .errors import WebAPIError
 from .schemas import (
+    ActionRecordingCaptureRequest,
+    ActionRecordingStartRequest,
     AgentAskRequest,
     CartesianJogRequest,
     CalibrationBatchCurrentAngleRequest,
@@ -378,6 +380,31 @@ async def poses_delete(name: str) -> dict[str, Any]:
 @app.get("/api/v1/actions")
 async def actions() -> dict[str, Any]:
     return api_success(service.list_actions())
+
+
+@app.get("/api/v1/actions/recording/status")
+async def actions_recording_status() -> dict[str, Any]:
+    return api_success(service.action_recording_status())
+
+
+@app.post("/api/v1/actions/recording/start")
+async def actions_recording_start(request: ActionRecordingStartRequest) -> dict[str, Any]:
+    return await _call(service.start_action_recording, request)
+
+
+@app.post("/api/v1/actions/recording/capture")
+async def actions_recording_capture(request: ActionRecordingCaptureRequest) -> dict[str, Any]:
+    return await _call(service.capture_action_recording_pose, request)
+
+
+@app.post("/api/v1/actions/recording/save")
+async def actions_recording_save() -> dict[str, Any]:
+    return await _call(service.save_action_recording)
+
+
+@app.post("/api/v1/actions/recording/cancel")
+async def actions_recording_cancel() -> dict[str, Any]:
+    return await _call(service.cancel_action_recording)
 
 
 @app.get("/api/v1/actions/{name}")

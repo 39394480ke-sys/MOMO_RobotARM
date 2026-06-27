@@ -419,6 +419,21 @@ pre {
   gap: 12px;
 }
 
+.action-recording-panel {
+  margin-bottom: 12px;
+}
+
+.recording-grid {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(160px, 240px);
+  gap: 12px;
+  align-items: end;
+}
+
+.recording-grid .button-row {
+  grid-column: 1 / -1;
+}
+
 .item-card {
   background: #fff;
   border: 1px solid var(--line);
@@ -816,6 +831,10 @@ th {
   .jog-buttons,
   .module-link-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .recording-grid {
+    grid-template-columns: 1fr;
   }
 
   .joint-tools {

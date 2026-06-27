@@ -40,6 +40,8 @@ from .controller_bridge import ControllerBridge
 from .errors import WebAPIError
 from .logger import JsonLineLogger
 from .schemas import (
+    ActionRecordingCaptureRequest,
+    ActionRecordingStartRequest,
     AgentAskRequest,
     CalibrationBatchCurrentAngleRequest,
     CalibrationCurrentAngleRequest,
@@ -568,6 +570,32 @@ class WebControlService:
 
     def get_action(self, name: str) -> dict[str, Any]:
         return self._unwrap_bridge(self.bridge.get_action(name), code="ACTION_DETAIL_FAILED")
+
+    def action_recording_status(self) -> dict[str, Any]:
+        return self._unwrap_bridge(self.bridge.get_recording_status(), code="ACTION_RECORDING_STATUS_FAILED")
+
+    def start_action_recording(self, request: ActionRecordingStartRequest) -> dict[str, Any]:
+        with self._lock:
+            if request.source == "web_teach_mode":
+                self._require_real_confirm(request.confirm_text, action="真实示教录制")
+            result = self.bridge.start_action_recording(request.name, request.source)
+            return self._unwrap_bridge(result, code="ACTION_RECORDING_START_FAILED")
+
+    def capture_action_recording_pose(self, request: ActionRecordingCaptureRequest) -> dict[str, Any]:
+        with self._lock:
+            self._require_real_confirm(request.confirm_text, action="采集真实动作帧")
+            result = self.bridge.capture_recording_pose()
+            return self._unwrap_bridge(result, code="ACTION_RECORDING_CAPTURE_FAILED")
+
+    def save_action_recording(self) -> dict[str, Any]:
+        with self._lock:
+            result = self.bridge.save_recording_action()
+            return self._unwrap_bridge(result, code="ACTION_RECORDING_SAVE_FAILED")
+
+    def cancel_action_recording(self) -> dict[str, Any]:
+        with self._lock:
+            result = self.bridge.cancel_recording_action()
+            return self._unwrap_bridge(result, code="ACTION_RECORDING_CANCEL_FAILED")
 
     def play_action(self, request: PlayActionRequest) -> dict[str, Any]:
         with self._lock:

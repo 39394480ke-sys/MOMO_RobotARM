@@ -222,6 +222,10 @@
                   <input id="followDryRun" type="checkbox" checked />
                   <span>dry-run</span>
                 </label>
+                <label class="field">
+                  <span>real 确认文本</span>
+                  <input id="followRealConfirm" placeholder="关闭 dry-run 时输入安全确认文本" disabled />
+                </label>
               </section>
 
               <section class="panel">
@@ -252,8 +256,12 @@
                   <dt>跟随</dt><dd id="followRunning">--</dd>
                   <dt>模式</dt><dd id="followDryRunState">--</dd>
                   <dt>步数</dt><dd id="followStepCount">--</dd>
+                  <dt>关节</dt><dd id="followJointState">--</dd>
+                  <dt>死区</dt><dd id="followDeadZoneState">--</dd>
                   <dt>导轨</dt><dd id="followRailState">--</dd>
+                  <dt>方向</dt><dd id="followDirectionState">--</dd>
                   <dt>最近命令</dt><dd id="followLastCommand">--</dd>
+                  <dt>错误</dt><dd id="followLastError">--</dd>
                 </dl>
               </section>
 
@@ -277,10 +285,13 @@
                   <dt>服务</dt><dd id="visionHealthState">--</dd>
                   <dt>引擎</dt><dd id="visionEngineState">--</dd>
                   <dt>目标</dt><dd id="visionLatestState">--</dd>
+                  <dt>摄像头</dt><dd id="visionCameraState">--</dd>
                   <dt>帧</dt><dd id="visionFrameId">--</dd>
                   <dt>跟踪</dt><dd id="visionTrackingState">--</dd>
                   <dt>画面</dt><dd id="visionFrameSize">--</dd>
                   <dt>偏移</dt><dd id="visionOffsetState">--</dd>
+                  <dt>期望中心</dt><dd id="visionDesiredCenterState">--</dd>
+                  <dt>死区</dt><dd id="visionDeadZoneState">--</dd>
                   <dt>方向</dt><dd id="visionDirectionState">--</dd>
                   <dt>目标框</dt><dd id="visionBboxState">--</dd>
                   <dt>目标中心</dt><dd id="visionCenterState">--</dd>

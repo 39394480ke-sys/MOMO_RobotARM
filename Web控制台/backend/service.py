@@ -524,9 +524,30 @@ class WebControlService:
     # ------------------------------------------------------------------
     def follow_status(self) -> dict[str, Any]:
         if self._follow_controller is None:
+            follow_cfg = self._load_vision_follow_config(self.base_dir.parent / "视觉识别与跟随")
+            rail_cfg = follow_cfg.get("rail_cinematic", {}) if isinstance(follow_cfg.get("rail_cinematic"), dict) else {}
             return {
                 "running": False,
+                "thread_alive": False,
                 "dry_run": True,
+                "latest_url": str(self.config.get("follow", {}).get("latest_url", "http://127.0.0.1:8000/latest")),
+                "robot_api_base": str(self.config.get("follow", {}).get("robot_api_base", self._local_api_base())),
+                "effective_config": {
+                    "pan_joint": follow_cfg.get("pan_joint", "j11"),
+                    "tilt_joint": follow_cfg.get("tilt_joint", "j13"),
+                    "pan_sign": follow_cfg.get("pan_sign", 1.0),
+                    "tilt_sign": follow_cfg.get("tilt_sign", -1.0),
+                    "pan_dead_zone_norm": follow_cfg.get("pan_dead_zone_norm", 0.02),
+                    "tilt_dead_zone_norm": follow_cfg.get("tilt_dead_zone_norm", 0.025),
+                    "max_pan_step_deg": follow_cfg.get("max_pan_step_deg", 1.0),
+                    "max_tilt_step_deg": follow_cfg.get("max_tilt_step_deg", 1.0),
+                    "rail_cinematic": rail_cfg,
+                },
+                "rail": {"enabled": bool(rail_cfg.get("enabled", False)), "running": False, "phase": "idle", "joint": rail_cfg.get("joint", "j10")},
+                "step_count": 0,
+                "last_command": None,
+                "last_vision": {},
+                "last_error": "",
                 "message": "视觉跟随未启动。",
             }
         return self._follow_controller.get_status()
@@ -879,9 +900,9 @@ class WebControlService:
             follow_cfg["max_pan_step_deg"] = min(float(follow_cfg.get("max_pan_step_deg", real_step_limit)), real_step_limit)
             follow_cfg["max_tilt_step_deg"] = min(float(follow_cfg.get("max_tilt_step_deg", real_step_limit)), real_step_limit)
         if request.pan_joint is not None:
-            follow_cfg["pan_joint"] = request.pan_joint
+            follow_cfg["pan_joint"] = normalize_joint_key(request.pan_joint)
         if request.tilt_joint is not None:
-            follow_cfg["tilt_joint"] = request.tilt_joint
+            follow_cfg["tilt_joint"] = normalize_joint_key(request.tilt_joint)
         if request.pan_gain is not None:
             follow_cfg["pan_gain_deg_per_norm"] = float(request.pan_gain)
         if request.tilt_gain is not None:

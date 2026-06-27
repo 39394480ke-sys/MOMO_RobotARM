@@ -85,6 +85,7 @@ function bindEvents() {
     $("#followLatestUrl").dataset.userEdited = "1";
     renderVisionPreviewUrl();
   });
+  $("#followDryRun").addEventListener("change", renderFollowRealControls);
   $("#refreshVisionPreviewBtn").addEventListener("click", refreshVisionPreview);
   $("#toggleVisionLiveBtn").addEventListener("click", toggleVisionLivePreview);
   $("#loadVisionMockBtn").addEventListener("click", loadVisionMock);
@@ -849,22 +850,26 @@ async function switchMode() {
 
 async function startFollow() {
   const dryRun = $("#followDryRun").checked;
-  const body = await withSafety(
-    {
-      latest_url: $("#followLatestUrl").value.trim() || "http://127.0.0.1:8000/latest",
-      poll_interval: Number($("#followPollInterval").value || 0.05),
-      speed_percent: Number($("#followSpeedPercent").value || 60),
-      dry_run: dryRun,
-      pan_joint: "j11",
-      tilt_joint: "j13",
-      rail_enabled: $("#railEnabled").checked,
-      rail_start_mm: Number($("#railStartMm").value || -140),
-      rail_end_mm: Number($("#railEndMm").value || 140),
-      rail_speed_mm_s: Number($("#railSpeedMmS").value || 5),
-    },
-    !dryRun
-  );
-  if (!body) return;
+  const body = {
+    latest_url: $("#followLatestUrl").value.trim() || "http://127.0.0.1:8000/latest",
+    poll_interval: Number($("#followPollInterval").value || 0.05),
+    speed_percent: Number($("#followSpeedPercent").value || 60),
+    dry_run: dryRun,
+    pan_joint: "j11",
+    tilt_joint: "j13",
+    rail_enabled: $("#railEnabled").checked,
+    rail_start_mm: Number($("#railStartMm").value || -140),
+    rail_end_mm: Number($("#railEndMm").value || 140),
+    rail_speed_mm_s: Number($("#railSpeedMmS").value || 5),
+  };
+  if (!dryRun) {
+    const confirmText = $("#followRealConfirm").value.trim();
+    if (confirmText !== SAFE_TEXT) {
+      showError(new ApiError("SAFETY_CONFIRM_REQUIRED", `真实视觉跟随需要输入：${SAFE_TEXT}`));
+      return;
+    }
+    body.confirm_text = confirmText;
+  }
   try {
     const data = await postJsonLogged("/api/v1/follow/start", body);
     state.follow = data.follow || null;
@@ -958,6 +963,15 @@ function renderConfig() {
     $("#followLatestUrl").value = latestUrl;
   }
   renderVisionPreviewUrl();
+  renderFollowRealControls();
+}
+
+function renderFollowRealControls() {
+  const dryRun = $("#followDryRun")?.checked !== false;
+  const input = $("#followRealConfirm");
+  if (!input) return;
+  input.disabled = dryRun;
+  if (dryRun) input.value = "";
 }
 
 function renderSession() {
@@ -980,17 +994,31 @@ function renderWs() {
 function renderFollow() {
   const follow = state.follow || {};
   const rail = follow.rail || {};
+  const cfg = follow.effective_config || {};
+  const vision = follow.last_vision || {};
+  const offset = vision.offset || {};
+  const smoothed = vision.smoothed_offset || {};
   const last = follow.last_command || {};
   const commands = Array.isArray(last.commands) ? last.commands : [];
   $("#followRunning").textContent = follow.running ? "运行" : "停止";
   $("#followDryRunState").textContent = follow.dry_run === false ? "真实" : "dry-run";
   $("#followStepCount").textContent = String(follow.step_count ?? 0);
+  $("#followJointState").textContent = `pan ${cfg.pan_joint || "j11"} / tilt ${cfg.tilt_joint || "j13"}`;
+  $("#followDeadZoneState").textContent = `pan ${formatNum(cfg.pan_dead_zone_norm, 4)} / tilt ${formatNum(cfg.tilt_dead_zone_norm, 4)}`;
   $("#followRailState").textContent = rail.enabled
-    ? `${rail.running ? "运行" : rail.phase || "停止"} ${formatNum(rail.virtual_pos_mm, 2)}mm`
+    ? `${rail.joint || "j10"} ${rail.running ? "运行" : rail.phase || "停止"} ${formatNum(rail.virtual_pos_mm, 2)}mm`
     : "关闭";
+  $("#followDirectionState").textContent = `${vision.direction || "--"} | ndx=${formatNum(smoothed.ndx ?? offset.ndx, 4)}, ndy=${formatNum(smoothed.ndy ?? offset.ndy, 4)}`;
   $("#followLastCommand").textContent = commands.length
-    ? commands.map((cmd) => `${cmd.joint_key}:${formatNum(cmd.delta_deg, 2)}`).join(", ")
+    ? commands.map(formatFollowCommand).join(", ")
     : last.message || "--";
+  $("#followLastError").textContent = follow.last_error || "--";
+}
+
+function formatFollowCommand(cmd) {
+  const joint = String(cmd.joint_key || "--").toUpperCase();
+  const suffix = cmd.kind === "rail_cinematic" ? "mm" : "deg";
+  return `${joint}:${formatNum(cmd.delta_deg, 3)}${suffix}`;
 }
 
 function renderAgentStatus() {
@@ -1200,17 +1228,13 @@ function loadVisionMock() {
   image.src = buildVisionMockFrameDataUrl();
   $("#visionPreviewUrl").textContent = "mock://vision/latest";
   $("#visionPreviewState").textContent = "模拟目标已加载";
-  $("#visionHealthState").textContent = "mock camera ok";
-  $("#visionHealthState").className = "ok-text";
-  $("#visionEngineState").textContent = "mock / camera 0 / frame 1";
-  $("#visionEngineState").className = "ok-text";
-  $("#visionLatestState").textContent = "检测到模拟目标";
-  $("#visionLatestState").className = "ok-text";
   renderVisionTargetState({
     target_mode: "mock",
     tracking_state: "locked",
     target: latest.target,
   });
+  renderVisionHealth({ running: true, camera_available: true, service: "mock" });
+  renderVisionEngineStatus({ running: true, frame_id: 1, fps: latest.fps, camera: { ...latest.camera, opened: true } }, latest);
   renderVisionLatestDebug(latest);
 }
 
@@ -1252,15 +1276,17 @@ function frameUrlFromLatest(latestUrl) {
 
 async function refreshVisionProxyStatus() {
   try {
-    const [health, latest, targetState, engineStatus] = await Promise.all([
+    const [health, latest, targetState, engineStatus, followStatus] = await Promise.all([
       getJson("/api/v1/vision/health", { timeout: 3000 }),
       getJson("/api/v1/vision/latest", { timeout: 3000 }),
       getJson("/api/v1/vision/target/state", { timeout: 3000 }),
       getJson("/api/v1/vision/status", { timeout: 3000 }),
+      getJson("/api/v1/follow/status", { timeout: 3000 }),
     ]);
-    $("#visionHealthState").textContent = health.camera_available ? "camera ok" : health.running ? "running" : "未启动";
-    $("#visionHealthState").className = health.camera_available ? "ok-text" : "bad-text";
-    renderVisionEngineStatus(engineStatus);
+    state.follow = followStatus;
+    renderFollow();
+    renderVisionHealth(health);
+    renderVisionEngineStatus(engineStatus, latest);
     $("#visionLatestState").textContent = latest.detected ? "检测到目标" : latest.message || "未检测";
     $("#visionLatestState").className = latest.detected ? "ok-text" : "";
     renderVisionTargetState(targetState);
@@ -1270,10 +1296,16 @@ async function refreshVisionProxyStatus() {
     $("#visionHealthState").className = "bad-text";
     $("#visionEngineState").textContent = "--";
     $("#visionLatestState").textContent = error.message || String(error);
+    $("#visionCameraState").textContent = "--";
     $("#visionLatestJson").textContent = "";
     state.latestVision = null;
     renderVisionOverlay(null);
   }
+}
+
+function renderVisionHealth(health) {
+  $("#visionHealthState").textContent = health.camera_available ? "camera ok" : health.running ? "running / no camera" : "未启动";
+  $("#visionHealthState").className = health.camera_available ? "ok-text" : health.running ? "" : "bad-text";
 }
 
 async function refreshVisionTargetState() {
@@ -1294,13 +1326,24 @@ function renderVisionTargetState(targetState) {
     : `目标 ${mode} / ${tracking}`;
 }
 
-function renderVisionEngineStatus(status) {
+function renderVisionEngineStatus(status, latest = null) {
   const running = status.running ? "running" : "stopped";
   const camera = status.camera || status.source || {};
-  const cameraText = camera.available === false ? "camera unavailable" : camera.index != null ? `camera ${camera.index}` : "";
+  const latestCamera = latest?.camera || {};
+  const cameraIndex = camera.camera_index ?? camera.index ?? latestCamera.camera_index ?? latestCamera.index;
+  const opened = camera.opened ?? latestCamera.opened ?? latestCamera.available;
+  const read = latestCamera.available ?? latest?.detected ?? false;
+  const width = latestCamera.width ?? camera.width;
+  const height = latestCamera.height ?? camera.height;
+  const fps = latest?.fps ?? status.fps;
+  const cameraText = camera.available === false || latestCamera.available === false ? "camera unavailable" : cameraIndex != null ? `camera ${cameraIndex}` : "";
   const frameId = status.frame_id ?? status.latest_frame_id ?? "";
   $("#visionEngineState").textContent = [running, cameraText, frameId !== "" ? `frame ${frameId}` : ""].filter(Boolean).join(" / ");
   $("#visionEngineState").className = status.running ? "ok-text" : "bad-text";
+  $("#visionCameraState").textContent = `opened=${formatBool(opened)} / read=${formatBool(read)} / index=${cameraIndex ?? "--"}`;
+  if (width && height) {
+    $("#visionFrameSize").textContent = `${width} x ${height} @ ${formatNum(fps, 1)}fps`;
+  }
 }
 
 async function selectVisionTarget() {
@@ -1343,11 +1386,16 @@ function renderVisionLatestDebug(latest) {
   const detector = latest.detector || {};
   const bbox = latest.bbox || latest.target?.bbox || null;
   const center = latest.center || latest.target?.center || offset.target_center || null;
+  const desired = offset.desired_center || latest.desired_center || null;
+  const deadX = offset.dead_zone_x_norm ?? latest.dead_zone_x_norm ?? 0.02;
+  const deadY = offset.dead_zone_y_norm ?? latest.dead_zone_y_norm ?? 0.025;
   const faces = Array.isArray(latest.faces) ? latest.faces : [];
   $("#visionFrameId").textContent = latest.frame_id != null ? String(latest.frame_id) : "--";
   $("#visionTrackingState").textContent = `${latest.target_source || "none"} / ${latest.tracking_state || "idle"}`;
   $("#visionFrameSize").textContent = camera.width && camera.height ? `${camera.width} x ${camera.height} @ ${formatNum(latest.fps, 1)}fps` : "--";
   $("#visionOffsetState").textContent = `ndx=${formatNum(offset.ndx, 4)}, ndy=${formatNum(offset.ndy, 4)} | smooth=${formatNum(smoothed.ndx, 4)},${formatNum(smoothed.ndy, 4)}`;
+  $("#visionDesiredCenterState").textContent = Array.isArray(desired) ? desired.map((value) => formatNum(value, 1)).join(", ") : "--";
+  $("#visionDeadZoneState").textContent = `x=${formatNum(deadX, 4)}, y=${formatNum(deadY, 4)}, ${offset.in_dead_zone ? "inside" : "outside"}`;
   $("#visionDirectionState").textContent = direction.combined || "--";
   $("#visionBboxState").textContent = Array.isArray(bbox) ? bbox.map((value) => formatNum(value, 1)).join(", ") : "--";
   $("#visionCenterState").textContent = Array.isArray(center) ? center.map((value) => formatNum(value, 1)).join(", ") : "--";
@@ -1360,10 +1408,10 @@ function renderVisionLatestDebug(latest) {
       target_source: latest.target_source,
       tracking_state: latest.tracking_state,
       target: latest.target,
+      camera: latest.camera,
       offset: latest.offset,
       smoothed_offset: latest.smoothed_offset,
       direction: latest.direction,
-      gesture: latest.gesture,
       detector: latest.detector,
     },
     null,
@@ -1414,7 +1462,7 @@ function buildVisionMockLatest() {
     },
     gesture: { available: false, raw: "", stable: "", confidence: 0 },
     fps: 30,
-    camera: { source_type: "mock", camera_index: 0, available: true, width, height },
+    camera: { source_type: "mock", camera_index: 0, opened: true, available: true, width, height },
     detector: { face_backend: "mock", face_available: true, face_error: "" },
     message: "模拟视觉目标。不会访问摄像头，也不会控制机械臂。",
   };
@@ -1493,6 +1541,12 @@ function renderVisionOverlay(latest) {
   if (Array.isArray(center) && center.length >= 2) {
     make("circle", { class: "center", cx: toX(center[0]), cy: toY(center[1]), r: 5 });
   }
+}
+
+function formatBool(value) {
+  if (value === true) return "true";
+  if (value === false) return "false";
+  return "--";
 }
 
 function visionImageRect() {

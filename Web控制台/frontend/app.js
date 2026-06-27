@@ -86,6 +86,7 @@ function bindEvents() {
   $("#refreshCalibrationBtn").addEventListener("click", loadCalibration);
   $("#j12DiagnoseBtn").addEventListener("click", diagnoseJ12);
   $("#j12ApplyCalibrationBtn").addEventListener("click", applyJ12Calibration);
+  $("#applyBatchCalibrationBtn").addEventListener("click", applyBatchCalibration);
   $("#refreshDepsBtn").addEventListener("click", loadDependencies);
   $("#refreshHardwareBtn").addEventListener("click", loadHardwareCheck);
   $("#saveMotionTuningBtn").addEventListener("click", saveMotionTuning);
@@ -1000,6 +1001,30 @@ async function applyJ12Calibration() {
   if (!body) return;
   try {
     const data = await postJsonLogged("/api/v1/robot/calibration/current-angle", body, { timeout: 10000 });
+    $("#j12DiagnosticResult").textContent = JSON.stringify(data, null, 2);
+    await loadCalibration();
+    await diagnoseJ12();
+  } catch (_) {}
+}
+
+async function applyBatchCalibration() {
+  const jointAngles = {};
+  $$(".batch-angle-input").forEach((input) => {
+    const raw = input.value.trim();
+    if (raw === "") return;
+    const value = Number(raw);
+    if (Number.isFinite(value)) {
+      jointAngles[input.dataset.joint] = value;
+    }
+  });
+  if (!Object.keys(jointAngles).length) {
+    showError(new ApiError("BAD_INPUT", "请至少填写一个多圈关节的当前逻辑角度。"));
+    return;
+  }
+  const body = await withSafety({ joint_angles_deg: jointAngles }, true);
+  if (!body) return;
+  try {
+    const data = await postJsonLogged("/api/v1/robot/calibration/current-angles", body, { timeout: 20000 });
     $("#j12DiagnosticResult").textContent = JSON.stringify(data, null, 2);
     await loadCalibration();
     await diagnoseJ12();

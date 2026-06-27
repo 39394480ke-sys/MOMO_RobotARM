@@ -43,6 +43,11 @@ class CalibrationCurrentAngleRequest(BaseModel):
     confirm_text: str = ""
 
 
+class CalibrationBatchCurrentAngleRequest(BaseModel):
+    joint_angles_deg: dict[str, float] = Field(..., min_items=1)
+    confirm_text: str = ""
+
+
 class AgentAskRequest(BaseModel):
     text: str = Field(..., min_length=1)
     speak: bool = False

@@ -40,6 +40,7 @@ from .errors import WebAPIError
 from .logger import JsonLineLogger
 from .schemas import (
     AgentAskRequest,
+    CalibrationBatchCurrentAngleRequest,
     CalibrationCurrentAngleRequest,
     CartesianJogRequest,
     ConnectRequest,
@@ -261,6 +262,12 @@ class WebControlService:
             self._require_real_confirm_if_needed("real", request.confirm_text, action="保存真实标定修正")
             result = self.bridge.set_calibration_current_angle(request.joint_key, request.current_angle_deg)
             return self._unwrap_bridge(result, code="CALIBRATION_UPDATE_FAILED")
+
+    def set_calibration_current_angles(self, request: CalibrationBatchCurrentAngleRequest) -> dict[str, Any]:
+        with self._lock:
+            self._require_real_confirm_if_needed("real", request.confirm_text, action="批量保存真实标定修正")
+            result = self.bridge.set_calibration_current_angles(request.joint_angles_deg)
+            return self._unwrap_bridge(result, code="CALIBRATION_BATCH_UPDATE_FAILED")
 
     # ------------------------------------------------------------------
     # 运动控制

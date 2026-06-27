@@ -367,7 +367,7 @@
             </div>
             <div class="panel calibration-diagnostics-panel">
               <div class="panel-head">
-                <h3>J12 当前角度修正</h3>
+                <h3>当前角度修正</h3>
                 <button id="j12DiagnoseBtn">只读诊断</button>
               </div>
               <dl class="kv wide">
@@ -378,13 +378,26 @@
               </dl>
               <div class="input-grid two">
                 <label class="field">
-                  <span>当前真实姿态应为</span>
+                  <span>J12 当前真实姿态应为</span>
                   <input id="j12AssignedAngle" type="number" step="0.1" value="0" />
                 </label>
                 <label class="field">
-                  <span>保存结果</span>
+                  <span>快捷保存</span>
                   <button id="j12ApplyCalibrationBtn" class="primary">按当前角度修正 J12</button>
                 </label>
+              </div>
+              <div class="batch-calibration">
+                <div class="panel-head">
+                  <h4>批量多圈关节修正</h4>
+                  <button id="applyBatchCalibrationBtn" class="primary">批量保存</button>
+                </div>
+                <div class="input-grid five">
+                  <label class="field"><span>J10 mm</span><input class="batch-angle-input" data-joint="j10" type="number" step="0.1" placeholder="留空跳过" /></label>
+                  <label class="field"><span>J11 deg</span><input class="batch-angle-input" data-joint="j11" type="number" step="0.1" placeholder="留空跳过" /></label>
+                  <label class="field"><span>J12 deg</span><input class="batch-angle-input" data-joint="j12" type="number" step="0.1" placeholder="留空跳过" /></label>
+                  <label class="field"><span>J13 deg</span><input class="batch-angle-input" data-joint="j13" type="number" step="0.1" placeholder="留空跳过" /></label>
+                  <label class="field"><span>J15 deg</span><input class="batch-angle-input" data-joint="j15" type="number" step="0.1" placeholder="留空跳过" /></label>
+                </div>
               </div>
               <pre id="j12DiagnosticResult" class="result-box"></pre>
             </div>

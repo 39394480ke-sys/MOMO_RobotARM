@@ -19,6 +19,7 @@ from .errors import WebAPIError
 from .schemas import (
     AgentAskRequest,
     CartesianJogRequest,
+    CalibrationBatchCurrentAngleRequest,
     CalibrationCurrentAngleRequest,
     ConnectRequest,
     ContinuousJogStartRequest,
@@ -211,6 +212,11 @@ async def joint_diagnostics(joint_key: str = "j12") -> dict[str, Any]:
 @app.post("/api/v1/robot/calibration/current-angle")
 async def calibration_current_angle(request: CalibrationCurrentAngleRequest) -> dict[str, Any]:
     return await _call(service.set_calibration_current_angle, request)
+
+
+@app.post("/api/v1/robot/calibration/current-angles")
+async def calibration_current_angles(request: CalibrationBatchCurrentAngleRequest) -> dict[str, Any]:
+    return await _call(service.set_calibration_current_angles, request)
 
 
 # ----------------------------------------------------------------------

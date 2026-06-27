@@ -660,6 +660,17 @@ th {
   margin-top: 14px;
 }
 
+.batch-calibration {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.batch-calibration h4 {
+  margin: 0;
+  font-size: 15px;
+}
+
 .module-link-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

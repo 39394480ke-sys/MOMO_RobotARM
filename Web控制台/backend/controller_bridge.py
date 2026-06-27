@@ -305,48 +305,36 @@ class ControllerBridge:
     def set_calibration_current_angle(self, joint_key: str, current_angle_deg: float) -> dict[str, Any]:
         """把当前 Present_Position 标记为指定逻辑角度，不移动舵机。"""
 
+        return self.set_calibration_current_angles({joint_key: current_angle_deg})
+
+    def set_calibration_current_angles(self, joint_angles_deg: Mapping[str, float]) -> dict[str, Any]:
+        """批量把当前 Present_Position 标记为指定逻辑角度，不移动舵机。"""
+
         try:
-            joint = normalize_joint_key(joint_key)
+            assignments = {normalize_joint_key(joint): float(angle) for joint, angle in dict(joint_angles_deg).items()}
+            if not assignments:
+                return bridge_fail("没有可保存的标定修正项。")
             config_path = self._resolve_config("real_config_path")
             config, calibration, calibration_path = self._load_real_calibration(config_path)
-            joint_config = self._joint_config(config, joint)
-            calibration_entry = calibration.get(joint)
-            if not isinstance(calibration_entry, dict):
-                return bridge_fail(f"{joint} 缺少标定项。")
-            if str(calibration_entry.get("模式", joint_config.get("模式", ""))) != "多圈":
-                return bridge_fail("当前 Web 修正入口只支持 J10/J11/J12/J13/J15 多圈关节。")
 
-            present_raw = self._read_present_raw_for_joint(config, calibration, joint)
-            from 角度映射_angle_mapper import (
-                RAW_COUNTS_PER_REV,
-                joint_deg_to_relative_raw,
-                present_raw_to_joint_detail,
-                获取关节比例,
-                获取方向,
-            )
+            updates: dict[str, dict[str, Any]] = {}
+            for joint, angle in assignments.items():
+                updates[joint] = self._build_current_angle_calibration_update(config, calibration, joint, angle)
+                calibration[joint] = updates[joint]["updated_entry"]
 
-            old_detail = present_raw_to_joint_detail(joint, present_raw, joint_config, calibration_entry)
-            relative_raw = joint_deg_to_relative_raw(
-                joint,
-                float(current_angle_deg),
-                获取关节比例(joint, joint_config),
-                获取方向(calibration_entry),
-            )
-            new_home_raw = int(round(int(present_raw) - int(relative_raw)))
-            updated_entry = dict(calibration_entry)
-            updated_entry["home_present_raw"] = new_home_raw
-            updated_entry["home_present_wrapped_raw"] = new_home_raw % RAW_COUNTS_PER_REV
-            calibration[joint] = updated_entry
             meta = dict(calibration.get("_meta", {})) if isinstance(calibration.get("_meta"), dict) else {}
             meta["updated_at_unix_s"] = time.time()
-            meta["updated_by"] = "Web set_calibration_current_angle"
-            meta["last_current_angle_update"] = {
-                "joint_key": joint,
-                "present_raw": int(present_raw),
-                "assigned_angle_deg": float(current_angle_deg),
-                "old_home_present_raw": calibration_entry.get("home_present_raw"),
-                "new_home_present_raw": new_home_raw,
-            }
+            meta["updated_by"] = "Web set_calibration_current_angles"
+            meta["last_current_angle_update"] = [
+                {
+                    "joint_key": joint,
+                    "present_raw": int(item["present_raw"]),
+                    "assigned_angle_deg": float(item["assigned_angle_deg"]),
+                    "old_home_present_raw": item["old_home_present_raw"],
+                    "new_home_present_raw": item["new_home_present_raw"],
+                }
+                for joint, item in updates.items()
+            ]
             calibration["_meta"] = meta
 
             backup_dir = calibration_path.parent / "标定备份_backups"
@@ -356,32 +344,79 @@ class ControllerBridge:
                 shutil.copy2(calibration_path, backup_path)
             atomic_write_json(calibration_path, calibration)
 
-            new_detail = present_raw_to_joint_detail(joint, present_raw, joint_config, updated_entry)
             self._log(
                 "warning",
-                "calibration_current_angle_updated",
-                f"{joint} 标定已按当前姿态={float(current_angle_deg):.2f} 更新。",
-                joint_key=joint,
-                present_raw=present_raw,
-                new_home_present_raw=new_home_raw,
+                "calibration_current_angles_updated",
+                f"已批量更新 {len(updates)} 个多圈关节标定。",
+                joints=list(updates),
                 backup_path=str(backup_path),
             )
             return bridge_ok(
                 "标定修正已保存；未写 Goal_Position，舵机未移动。",
                 {
-                    "joint_key": joint,
-                    "present_raw": int(present_raw),
-                    "assigned_angle_deg": float(current_angle_deg),
-                    "old_mapping": old_detail,
-                    "new_mapping": new_detail,
-                    "old_home_present_raw": calibration_entry.get("home_present_raw"),
-                    "new_home_present_raw": new_home_raw,
+                    "updates": {
+                        joint: {
+                            "joint_key": joint,
+                            "present_raw": int(item["present_raw"]),
+                            "assigned_angle_deg": float(item["assigned_angle_deg"]),
+                            "old_mapping": item["old_detail"],
+                            "new_mapping": item["new_detail"],
+                            "old_home_present_raw": item["old_home_present_raw"],
+                            "new_home_present_raw": item["new_home_present_raw"],
+                        }
+                        for joint, item in updates.items()
+                    },
                     "calibration_path": str(calibration_path),
                     "backup_path": str(backup_path),
                 },
             )
         except Exception as exc:
             return self._exception("保存标定修正失败", exc)
+
+    def _build_current_angle_calibration_update(
+        self,
+        config: dict[str, Any],
+        calibration: dict[str, Any],
+        joint: str,
+        current_angle_deg: float,
+    ) -> dict[str, Any]:
+        joint_config = self._joint_config(config, joint)
+        calibration_entry = calibration.get(joint)
+        if not isinstance(calibration_entry, dict):
+            raise RuntimeError(f"{joint} 缺少标定项。")
+        if str(calibration_entry.get("模式", joint_config.get("模式", ""))) != "多圈":
+            raise RuntimeError("当前 Web 修正入口只支持 J10/J11/J12/J13/J15 多圈关节。")
+
+        present_raw = self._read_present_raw_for_joint(config, calibration, joint)
+        from 角度映射_angle_mapper import (
+            RAW_COUNTS_PER_REV,
+            joint_deg_to_relative_raw,
+            present_raw_to_joint_detail,
+            获取关节比例,
+            获取方向,
+        )
+
+        old_detail = present_raw_to_joint_detail(joint, present_raw, joint_config, calibration_entry)
+        relative_raw = joint_deg_to_relative_raw(
+            joint,
+            float(current_angle_deg),
+            获取关节比例(joint, joint_config),
+            获取方向(calibration_entry),
+        )
+        new_home_raw = int(round(int(present_raw) - int(relative_raw)))
+        updated_entry = dict(calibration_entry)
+        updated_entry["home_present_raw"] = new_home_raw
+        updated_entry["home_present_wrapped_raw"] = new_home_raw % RAW_COUNTS_PER_REV
+        new_detail = present_raw_to_joint_detail(joint, present_raw, joint_config, updated_entry)
+        return {
+            "present_raw": int(present_raw),
+            "assigned_angle_deg": float(current_angle_deg),
+            "old_detail": old_detail,
+            "new_detail": new_detail,
+            "old_home_present_raw": calibration_entry.get("home_present_raw"),
+            "new_home_present_raw": new_home_raw,
+            "updated_entry": updated_entry,
+        }
 
     def _real_hardware_port(self) -> str:
         env_paths = (self.project_root / ".env", self.base_dir / "环境变量.env", self.project_root / "系统集成" / "环境变量.env")

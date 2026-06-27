@@ -408,11 +408,18 @@ class WebControlService:
                         with self._lock:
                             result = self.bridge.move_single_joint_target(joint, target_deg)
                             if not result.get("ok"):
+                                code, message = self._classify_motion_error(
+                                    str(result.get("message") or result.get("error") or "连续控制失败。"),
+                                    fallback_code="CONTINUOUS_JOG_FAILED",
+                                    action="连续控制",
+                                )
                                 self._continuous_jog_status.update(
                                     running=False,
-                                    message=str(result.get("message", "连续控制失败。")),
+                                    code=code,
+                                    message=message,
                                     stopped_at=time.time(),
                                 )
+                                self._remember_error(code, message)
                                 return
                             last_target = target_deg
                             self._continuous_jog_status["target_deg"] = target_deg
@@ -420,8 +427,9 @@ class WebControlService:
                         if stop_event.wait(sleep_s):
                             break
                 except Exception as exc:
-                    self._continuous_jog_status.update(running=False, message=f"连续控制异常：{exc}", stopped_at=time.time())
-                    self._remember_error("CONTINUOUS_JOG_FAILED", str(exc))
+                    code, message = self._classify_motion_error(str(exc), fallback_code="CONTINUOUS_JOG_FAILED", action="连续控制")
+                    self._continuous_jog_status.update(running=False, code=code, message=message, stopped_at=time.time())
+                    self._remember_error(code, message)
                 finally:
                     self._continuous_jog_status.update(running=False, stopped_at=time.time())
 
@@ -491,7 +499,7 @@ class WebControlService:
         with self._lock:
             self._before_manual_motion(request.confirm_text)
             result = self.bridge.home()
-            return self._unwrap_bridge(result, code="HOME_FAILED")
+            return self._unwrap_bridge(result, code="HOME_FAILED", action="Home")
 
     def home_precheck(self) -> dict[str, Any]:
         with self._lock:
@@ -766,7 +774,7 @@ class WebControlService:
         key = "max_real_step_deg" if self.bridge.mode == "real" else "max_manual_step_deg"
         return float(self.config.get("safety", {}).get(key, 5.0))
 
-    def _unwrap_bridge(self, result: dict[str, Any], code: str) -> dict[str, Any]:
+    def _unwrap_bridge(self, result: dict[str, Any], code: str, action: str = "真实动作") -> dict[str, Any]:
         if result.get("ok"):
             data = result.get("data", {})
             if isinstance(data, dict):
@@ -774,8 +782,32 @@ class WebControlService:
                 return data
             return {"value": data, "message": result.get("message", "成功")}
         message = str(result.get("message") or result.get("error") or "操作失败")
+        code, message = self._classify_motion_error(message, fallback_code=code, action=action)
         self._remember_error(code, message)
         raise WebAPIError(code, message)
+
+    @staticmethod
+    def _classify_motion_error(message: str, fallback_code: str, action: str = "真实动作") -> tuple[str, str]:
+        text = str(message or "")
+        lower = text.lower()
+        comm_markers = (
+            "there is no status packet",
+            "txrxresult",
+            "status packet",
+            "no status",
+        )
+        write_id_failed = "写入" in text and "ID" in text and ("失败" in text or "重试" in text)
+        if any(marker in lower for marker in comm_markers) or "无状态包" in text or write_id_failed:
+            guidance = (
+                f"{action} 已停止：真实舵机通信/写入失败。"
+                "请不要继续发送真实动作；先运行轻量 SDK 只读总线扫描 "
+                "`诊断舵机总线_lightweight_sdk.py --port /dev/momo-servo --no-gripper`，"
+                "再检查对应 ID 的电源、负载、线序、USB/串口稳定性和重试配置。"
+            )
+            if text and guidance not in text:
+                return "REAL_SERVO_COMM_FAILED", f"{guidance} 原始错误：{text}"
+            return "REAL_SERVO_COMM_FAILED", guidance
+        return fallback_code, text
 
     def _load_agent_config(self) -> dict[str, Any]:
         agent_root = self.base_dir.parent / "语音Agent"

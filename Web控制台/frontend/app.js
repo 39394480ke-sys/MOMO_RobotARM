@@ -2106,12 +2106,26 @@ function showPage(name) {
 
 function showError(error) {
   const code = error.code || "ERROR";
-  const message = error.message || String(error);
+  const rawMessage = error.message || String(error);
+  const message = isRealServoCommError(code, rawMessage)
+    ? `真实舵机通信/写入失败，已停止真实动作。请先运行轻量 SDK 只读总线扫描：诊断舵机总线_lightweight_sdk.py --port /dev/momo-servo --no-gripper；再检查对应 ID 的电源、负载、线序、USB/串口稳定性。原始错误：${rawMessage}`
+    : rawMessage;
   state.lastError = `${code}: ${message}`;
   $("#topError").textContent = state.lastError;
   $("#topError").classList.remove("hidden");
   log("error", state.lastError);
   setTimeout(() => $("#topError").classList.add("hidden"), 6000);
+}
+
+function isRealServoCommError(code, message) {
+  const text = `${code || ""} ${message || ""}`.toLowerCase();
+  return (
+    text.includes("real_servo_comm_failed") ||
+    text.includes("there is no status packet") ||
+    text.includes("txrxresult") ||
+    text.includes("status packet") ||
+    (text.includes("写入") && text.includes("id") && (text.includes("失败") || text.includes("重试")))
+  );
 }
 
 function log(level, message) {

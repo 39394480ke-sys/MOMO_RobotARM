@@ -1,51 +1,62 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# The Edge AIoT board kernel has usbserial option/cp210x/pl2303 built in, but
-# CONFIG_USB_SERIAL_CH341 is disabled. This binds QinHeng 1a86:55d3 adapters to
-# the built-in option USB serial driver so /dev/ttyUSB* appears.
+# Install the WCH CH343 Linux driver for QinHeng 1a86:55d3 adapters and create
+# a stable robot-arm serial alias: /dev/momo-servo.
 
 if [[ "$(uname -s)" != "Linux" ]]; then
   echo "This script is intended for Linux boards." >&2
   exit 1
 fi
 
-sudo usermod -aG dialout "${USER}"
-
-sudo tee /usr/local/sbin/bind-qinheng-55d3-serial.sh >/dev/null <<'SH'
-#!/usr/bin/env bash
-set -euo pipefail
-NEW_ID=/sys/bus/usb-serial/drivers/option1/new_id
-if [[ -w "$NEW_ID" ]]; then
-  echo '1a86 55d3' > "$NEW_ID" 2>/dev/null || true
+KVER="$(uname -r)"
+KERNELDIR="${KERNELDIR:-/lib/modules/$KVER/build}"
+if [[ ! -d "$KERNELDIR" && -d /usr/src/header ]]; then
+  KERNELDIR=/usr/src/header
 fi
-SH
-sudo chmod +x /usr/local/sbin/bind-qinheng-55d3-serial.sh
 
-sudo tee /etc/udev/rules.d/99-qinheng-55d3-option-serial.rules >/dev/null <<'RULE'
-ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="1a86", ATTR{idProduct}=="55d3", RUN+="/usr/local/sbin/bind-qinheng-55d3-serial.sh"
+WORKDIR="${CH343_WORKDIR:-$HOME/ch343ser_linux}"
+DRIVER_URL="${CH343_DRIVER_URL:-https://github.com/WCHSoftGroup/ch343ser_linux.git}"
+
+sudo usermod -aG dialout "${USER}"
+sudo apt-get update
+sudo apt-get install -y build-essential git flex bison
+
+if [[ ! -d "$WORKDIR/.git" ]]; then
+  rm -rf "$WORKDIR"
+  git clone --depth 1 "$DRIVER_URL" "$WORKDIR"
+fi
+
+if [[ ! -x "$KERNELDIR/scripts/basic/fixdep" || ! -x "$KERNELDIR/scripts/mod/modpost" ]]; then
+  sudo make -C "$KERNELDIR" scripts modules_prepare || true
+fi
+
+make -C "$WORKDIR/driver" clean KERNELDIR="$KERNELDIR" || true
+make -C "$WORKDIR/driver" KERNELDIR="$KERNELDIR"
+
+sudo install -D -m 0644 "$WORKDIR/driver/ch343.ko" "/lib/modules/$KVER/extra/ch343.ko"
+sudo depmod -a "$KVER" || true
+echo ch343 | sudo tee /etc/modules-load.d/ch343.conf >/dev/null
+
+sudo systemctl disable --now qinheng-55d3-serial-bind.service 2>/dev/null || true
+if [[ -f /etc/udev/rules.d/99-qinheng-55d3-option-serial.rules ]]; then
+  sudo mv /etc/udev/rules.d/99-qinheng-55d3-option-serial.rules /etc/udev/rules.d/99-qinheng-55d3-option-serial.rules.disabled
+fi
+
+sudo modprobe ch343 || sudo insmod "/lib/modules/$KVER/extra/ch343.ko"
+
+sudo tee /etc/udev/rules.d/98-momo-servo-ch343.rules >/dev/null <<'RULE'
+SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="55d3", SYMLINK+="momo-servo", MODE="0660", GROUP="dialout"
 RULE
 
-sudo tee /etc/systemd/system/qinheng-55d3-serial-bind.service >/dev/null <<'UNIT'
-[Unit]
-Description=Bind QinHeng 1a86:55d3 USB serial adapter to option driver
-After=systemd-udev-settle.service
-
-[Service]
-Type=oneshot
-ExecStart=/usr/local/sbin/bind-qinheng-55d3-serial.sh
-RemainAfterExit=yes
-
-[Install]
-WantedBy=multi-user.target
-UNIT
-
-sudo systemctl daemon-reload
-sudo systemctl enable qinheng-55d3-serial-bind.service
 sudo udevadm control --reload-rules
-sudo /usr/local/sbin/bind-qinheng-55d3-serial.sh
+sudo udevadm trigger --subsystem-match=tty || true
 
-echo "QinHeng 1a86:55d3 bind installed."
+echo "CH343 setup complete."
+echo "If the adapter is already plugged in and still bound to option, unplug/replug it or run:"
+echo "  sudo sh -c 'echo 4-1:1.0 > /sys/bus/usb/drivers/option/unbind'  # interface name may differ"
+echo
+lsusb | grep -i '1a86:55d3' || true
+lsusb -t | grep -E 'usb_ch343|option' || true
+ls -l /dev/momo-servo /dev/ttyCH343USB* 2>/dev/null || true
 echo "Log out and back in for the dialout group change to apply."
-ls -l /dev/serial/by-id 2>/dev/null || true
-ls -l /dev/ttyUSB* 2>/dev/null || true

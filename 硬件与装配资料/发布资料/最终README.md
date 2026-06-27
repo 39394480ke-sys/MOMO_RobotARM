@@ -212,7 +212,7 @@ python 语音Agent主程序_main.py
 
 ## 常见问题
 
-- 串口找不到：检查 USB 数据线、串口名和 `ARM_ROBOT_PORT`。
+- 串口找不到：检查 USB 数据线、串口名和 `ARM_ROBOT_PORT`；开发板优先恢复 CH343 并使用 `/dev/momo-servo`。
 - 舵机无响应：检查外部舵机电源、总线方向、舵机 ID。
 - 多圈关节跑飞：检查 J2/J3/J5 的 `home_present_raw` 和 `phase=28`。
 - 标定文件缺失：运行阶段十一 `标定检查.py`，必要时运行阶段四标定程序。

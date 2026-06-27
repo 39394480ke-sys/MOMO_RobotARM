@@ -11,7 +11,9 @@
 
 from __future__ import annotations
 
+import platform
 import shutil
+import subprocess
 import time
 import traceback
 from pathlib import Path
@@ -60,6 +62,7 @@ from 控制桥接_common import (  # noqa: E402
     state_tcp_pose,
 )
 from 系统集成.integration.dependency_checker import DependencyChecker  # noqa: E402
+from 通用_io import atomic_write_json, env_value, read_json_object_or_default, timestamped_json_path  # noqa: E402
 
 
 class ControllerBridge:
@@ -209,6 +212,362 @@ class ControllerBridge:
         data["real_mode_requires"] = list(real_hardware.keys())
         return bridge_ok("依赖检查完成。", data)
 
+    def check_real_hardware(self) -> dict[str, Any]:
+        """真实硬件只读检查，不写舵机寄存器。"""
+
+        data: dict[str, Any] = {
+            "checked_at": time.time(),
+            "port": self._real_hardware_port(),
+            "expected_ids": [10, 11, 12, 13, 14, 15],
+            "dependencies": {},
+            "calibration": {},
+            "serial": {},
+            "driver": {},
+            "readonly_scan": {},
+            "ok": False,
+            "errors": [],
+        }
+
+        deps = self.check_dependencies().get("data", {})
+        data["dependencies"] = {
+            "real_mode_ready": bool(deps.get("real_mode_ready")),
+            "real_hardware": deps.get("real_hardware", {}),
+        }
+        if not data["dependencies"]["real_mode_ready"]:
+            data["errors"].append("真实硬件依赖未就绪。")
+
+        data["calibration"] = self._hardware_calibration_summary()
+        if not data["calibration"].get("exists"):
+            data["errors"].append("标定文件不存在。")
+
+        data["serial"] = self._hardware_serial_summary(data["port"])
+        if not data["serial"].get("exists"):
+            data["errors"].append(f"串口不存在：{data['port']}")
+
+        data["driver"] = self._hardware_driver_summary()
+        if platform.system() == "Linux" and Path("/dev").exists() and str(data["port"]).startswith("/dev/"):
+            if not data["driver"].get("usb_ch343"):
+                data["errors"].append("CH343 驱动未加载或未接管 1a86:55d3。")
+
+        if data["dependencies"]["real_mode_ready"] and data["serial"].get("exists"):
+            if self.mode == "real" and self.is_connected() and self.controller is not None:
+                data["readonly_scan"] = self._hardware_readonly_from_connected_controller()
+            else:
+                data["readonly_scan"] = self._hardware_readonly_scan(str(data["port"]))
+            if not data["readonly_scan"].get("ok"):
+                data["errors"].append(data["readonly_scan"].get("message", "只读扫描失败。"))
+
+        data["ok"] = not data["errors"]
+        message = "真实硬件检查通过。" if data["ok"] else "真实硬件检查未通过。"
+        return bridge_ok(message, data)
+
+    def get_joint_diagnostics(self, joint_key: str = "j12") -> dict[str, Any]:
+        """只读诊断某个关节的 raw -> 逻辑角度 -> 限位状态。"""
+
+        try:
+            joint = normalize_joint_key(joint_key)
+            config_path = self._resolve_config("real_config_path")
+            config, calibration, calibration_path = self._load_real_calibration(config_path)
+            joint_config = self._joint_config(config, joint)
+            calibration_entry = calibration.get(joint)
+            if not isinstance(calibration_entry, dict):
+                return bridge_fail(f"{joint} 缺少标定项。")
+
+            present_raw = self._read_present_raw_for_joint(config, calibration, joint)
+            from 角度映射_angle_mapper import joint_deg_to_goal_detail, present_raw_to_joint_detail
+
+            detail = present_raw_to_joint_detail(joint, present_raw, joint_config, calibration_entry)
+            min_deg = float(joint_config.get("最小角度", -180.0))
+            max_deg = float(joint_config.get("最大角度", 180.0))
+            current_deg = float(detail["joint_deg"])
+            in_limit = min_deg <= current_deg <= max_deg
+            zero_goal = joint_deg_to_goal_detail(joint, 0.0, joint_config, calibration_entry)
+            return bridge_ok(
+                "关节诊断已完成。",
+                {
+                    "joint_key": joint,
+                    "label": detail.get("show_name"),
+                    "calibration_path": str(calibration_path),
+                    "present_raw": int(present_raw),
+                    "current_angle_deg": current_deg,
+                    "min_angle_deg": min_deg,
+                    "max_angle_deg": max_deg,
+                    "in_limit": in_limit,
+                    "reason": "当前角度在软件限位内。" if in_limit else f"当前角度 {current_deg:.2f} 超出 [{min_deg:.2f}, {max_deg:.2f}]。",
+                    "mapping": detail,
+                    "zero_goal": zero_goal,
+                    "calibration_entry": calibration_entry,
+                },
+            )
+        except Exception as exc:
+            return self._exception("关节诊断失败", exc)
+
+    def set_calibration_current_angle(self, joint_key: str, current_angle_deg: float) -> dict[str, Any]:
+        """把当前 Present_Position 标记为指定逻辑角度，不移动舵机。"""
+
+        try:
+            joint = normalize_joint_key(joint_key)
+            config_path = self._resolve_config("real_config_path")
+            config, calibration, calibration_path = self._load_real_calibration(config_path)
+            joint_config = self._joint_config(config, joint)
+            calibration_entry = calibration.get(joint)
+            if not isinstance(calibration_entry, dict):
+                return bridge_fail(f"{joint} 缺少标定项。")
+            if str(calibration_entry.get("模式", joint_config.get("模式", ""))) != "多圈":
+                return bridge_fail("当前 Web 修正入口只支持 J10/J11/J12/J13/J15 多圈关节。")
+
+            present_raw = self._read_present_raw_for_joint(config, calibration, joint)
+            from 角度映射_angle_mapper import (
+                RAW_COUNTS_PER_REV,
+                joint_deg_to_relative_raw,
+                present_raw_to_joint_detail,
+                获取关节比例,
+                获取方向,
+            )
+
+            old_detail = present_raw_to_joint_detail(joint, present_raw, joint_config, calibration_entry)
+            relative_raw = joint_deg_to_relative_raw(
+                joint,
+                float(current_angle_deg),
+                获取关节比例(joint, joint_config),
+                获取方向(calibration_entry),
+            )
+            new_home_raw = int(round(int(present_raw) - int(relative_raw)))
+            updated_entry = dict(calibration_entry)
+            updated_entry["home_present_raw"] = new_home_raw
+            updated_entry["home_present_wrapped_raw"] = new_home_raw % RAW_COUNTS_PER_REV
+            calibration[joint] = updated_entry
+            meta = dict(calibration.get("_meta", {})) if isinstance(calibration.get("_meta"), dict) else {}
+            meta["updated_at_unix_s"] = time.time()
+            meta["updated_by"] = "Web set_calibration_current_angle"
+            meta["last_current_angle_update"] = {
+                "joint_key": joint,
+                "present_raw": int(present_raw),
+                "assigned_angle_deg": float(current_angle_deg),
+                "old_home_present_raw": calibration_entry.get("home_present_raw"),
+                "new_home_present_raw": new_home_raw,
+            }
+            calibration["_meta"] = meta
+
+            backup_dir = calibration_path.parent / "标定备份_backups"
+            backup_dir.mkdir(parents=True, exist_ok=True)
+            backup_path = timestamped_json_path(backup_dir, f"{calibration_path.stem}_backup")
+            if calibration_path.exists():
+                shutil.copy2(calibration_path, backup_path)
+            atomic_write_json(calibration_path, calibration)
+
+            new_detail = present_raw_to_joint_detail(joint, present_raw, joint_config, updated_entry)
+            self._log(
+                "warning",
+                "calibration_current_angle_updated",
+                f"{joint} 标定已按当前姿态={float(current_angle_deg):.2f} 更新。",
+                joint_key=joint,
+                present_raw=present_raw,
+                new_home_present_raw=new_home_raw,
+                backup_path=str(backup_path),
+            )
+            return bridge_ok(
+                "标定修正已保存；未写 Goal_Position，舵机未移动。",
+                {
+                    "joint_key": joint,
+                    "present_raw": int(present_raw),
+                    "assigned_angle_deg": float(current_angle_deg),
+                    "old_mapping": old_detail,
+                    "new_mapping": new_detail,
+                    "old_home_present_raw": calibration_entry.get("home_present_raw"),
+                    "new_home_present_raw": new_home_raw,
+                    "calibration_path": str(calibration_path),
+                    "backup_path": str(backup_path),
+                },
+            )
+        except Exception as exc:
+            return self._exception("保存标定修正失败", exc)
+
+    def _real_hardware_port(self) -> str:
+        env_paths = (self.project_root / ".env", self.base_dir / "环境变量.env", self.project_root / "系统集成" / "环境变量.env")
+        env_port = str(env_value("ARM_ROBOT_PORT", "", env_paths=env_paths) or "").strip()
+        if env_port:
+            return env_port
+        try:
+            real_config = self._resolve_config("real_config_path")
+            ensure_project_root_on_path()
+            from 真实机械臂控制器_real_arm_controller import 读取配置
+
+            return str(读取配置(real_config).get("transport", {}).get("port", ""))
+        except Exception:
+            return ""
+
+    def _load_real_calibration(self, config_path: Path) -> tuple[dict[str, Any], dict[str, Any], Path]:
+        from 真实机械臂控制器_real_arm_controller import 读取配置
+        from 真实路径工具_real_path_utils import resolve_real_path
+
+        config = 读取配置(config_path)
+        calibration_value = config.get("calibration", {}).get("path", "标定文件.json")
+        calibration_path = resolve_real_path(calibration_value, Path(config_path).parent)
+        calibration = read_json_object_or_default(calibration_path)
+        return config, calibration, calibration_path
+
+    @staticmethod
+    def _joint_config(config: dict[str, Any], joint_key: str) -> dict[str, Any]:
+        joint_config: dict[str, Any] = {}
+        for item in config.get("robot", {}).get("joints", []):
+            if item.get("key") == joint_key:
+                joint_config = dict(item)
+                break
+        scales = config.get("robot", {}).get("joint_scales", {}) or config.get("robot", {}).get("关节减速比_joint_scales", {})
+        if joint_key in scales:
+            joint_config["joint_scale"] = float(scales[joint_key])
+        if not joint_config:
+            raise KeyError(f"未知关节：{joint_key}")
+        return joint_config
+
+    def _read_present_raw_for_joint(self, config: dict[str, Any], calibration: dict[str, Any], joint_key: str) -> int:
+        port = self._real_hardware_port()
+        if not port:
+            raise RuntimeError("没有真实串口；请设置 ARM_ROBOT_PORT 或真实配置 transport.port。")
+        from 轻量舵机驱动_lightweight_feetech_driver import LightweightFeetechBus, build_motor_ids
+
+        motor_ids_by_joint = build_motor_ids(config, calibration, [joint_key])
+        bus = LightweightFeetechBus(
+            port,
+            motor_ids_by_joint,
+            baudrate=int(config.get("transport", {}).get("baudrate", 1_000_000)),
+        )
+        try:
+            found = bus.connect()
+            motor_id = motor_ids_by_joint[joint_key]
+            if int(motor_id) not in {int(item) for item in found}:
+                raise RuntimeError(f"{joint_key} ID {motor_id} 未响应。")
+            return int(bus.read("Present_Position", joint_key))
+        finally:
+            bus.disconnect()
+
+    def _hardware_calibration_summary(self) -> dict[str, Any]:
+        try:
+            report = load_calibration_report(self._resolve_config("real_config_path"))
+            return {
+                "exists": bool(report.get("是否存在")),
+                "allowed": bool(report.get("允许真机移动")),
+                "path": report.get("标定文件", ""),
+            }
+        except Exception as exc:
+            return {"exists": False, "allowed": False, "path": "", "error": str(exc)}
+
+    def _hardware_serial_summary(self, port: str) -> dict[str, Any]:
+        path = Path(str(port)) if port else Path("")
+        exists = bool(port) and path.exists()
+        return {
+            "port": port,
+            "exists": exists,
+            "is_symlink": bool(port) and path.is_symlink(),
+            "target": str(path.resolve()) if exists else "",
+            "parent_exists": bool(port) and path.parent.exists(),
+        }
+
+    def _hardware_driver_summary(self) -> dict[str, Any]:
+        lsusb_tree = self._run_command(["lsusb", "-t"])
+        lsmod = self._run_command(["lsmod"])
+        return {
+            "usb_ch343": "Driver=usb_ch343" in lsusb_tree or "\nch343 " in f"\n{lsmod}",
+            "option_bound": "Driver=option" in lsusb_tree,
+            "lsusb_tree": lsusb_tree,
+            "ch343_loaded": "\nch343 " in f"\n{lsmod}",
+        }
+
+    def _hardware_readonly_scan(self, port: str) -> dict[str, Any]:
+        try:
+            ensure_project_root_on_path()
+            from 真实机械臂控制器_real_arm_controller import 读取配置
+            from 真实路径工具_real_path_utils import resolve_real_path
+            from 标定工具_calibration_utils import JOINTS
+            from 轻量舵机驱动_lightweight_feetech_driver import (
+                EXPECTED_STS3215_MODEL,
+                LightweightFeetechBus,
+                build_motor_ids,
+            )
+            from 通用_io import read_json_object_or_default
+
+            config_path = self._resolve_config("real_config_path")
+            config = 读取配置(config_path)
+            calibration_value = config.get("calibration", {}).get("path", "标定文件.json")
+            calibration_path = resolve_real_path(calibration_value, Path(config_path).parent)
+            calibration = read_json_object_or_default(calibration_path)
+            joint_keys = list(JOINTS)
+            motor_ids_by_joint = build_motor_ids(config, calibration, joint_keys)
+            bus = LightweightFeetechBus(
+                port,
+                motor_ids_by_joint,
+                baudrate=int(config.get("transport", {}).get("baudrate", 1_000_000)),
+            )
+            try:
+                found = bus.connect()
+                positions = bus.read_many("Present_Position", list(motor_ids_by_joint))
+            finally:
+                bus.disconnect()
+
+            expected_ids = set(motor_ids_by_joint.values())
+            found_ids = set(found)
+            missing = sorted(expected_ids - found_ids)
+            wrong_model = {
+                motor_id: model
+                for motor_id, model in found.items()
+                if motor_id in expected_ids and int(model) != EXPECTED_STS3215_MODEL
+            }
+            ok = not missing and not wrong_model
+            return {
+                "ok": ok,
+                "message": "只读扫描通过。" if ok else "只读扫描未完整通过。",
+                "expected_ids": sorted(expected_ids),
+                "found_models": found,
+                "missing_ids": missing,
+                "wrong_model": wrong_model,
+                "present_position": positions,
+            }
+        except Exception as exc:
+            return {"ok": False, "message": f"只读扫描失败：{exc}"}
+
+    def _hardware_readonly_from_connected_controller(self) -> dict[str, Any]:
+        try:
+            state = read_controller_state(self.controller, prefer_detailed=True)
+            if "错误" in state:
+                return {"ok": False, "source": "connected_controller", "message": str(state["错误"])}
+            raw = state.get("raw_present_position") or {}
+            found = {
+                str(self._motor_id_for_joint(joint_key)): 777
+                for joint_key, value in raw.items()
+                if joint_key in JOINT_ORDER and value is not None
+            }
+            missing = [str(motor_id) for motor_id in (10, 11, 12, 13, 14, 15) if str(motor_id) not in found]
+            return {
+                "ok": not missing,
+                "source": "connected_controller",
+                "message": "已复用当前 real 控制器读取状态。" if not missing else f"已连接控制器缺少 ID：{', '.join(missing)}",
+                "expected_ids": [10, 11, 12, 13, 14, 15],
+                "found_models": found,
+                "missing_ids": missing,
+                "wrong_model": {},
+                "present_position": {key: int(value) for key, value in raw.items() if key in JOINT_ORDER},
+            }
+        except Exception as exc:
+            return {"ok": False, "source": "connected_controller", "message": f"复用当前控制器读取失败：{exc}"}
+
+    def _motor_id_for_joint(self, joint_key: str) -> int:
+        try:
+            joint_config = getattr(self.controller, "joint_config_by_key", {}).get(joint_key, {})
+            if "舵机ID" in joint_config:
+                return int(joint_config["舵机ID"])
+        except Exception:
+            pass
+        defaults = {"j10": 10, "j11": 11, "j12": 12, "j13": 13, "j14": 14, "j15": 15}
+        return defaults.get(joint_key, -1)
+
+    @staticmethod
+    def _run_command(command: list[str], timeout: float = 2.0) -> str:
+        try:
+            return subprocess.run(command, check=False, capture_output=True, text=True, timeout=timeout).stdout
+        except Exception:
+            return ""
+
     # ------------------------------------------------------------------
     # 运动控制
     # ------------------------------------------------------------------
@@ -310,6 +669,72 @@ class ControllerBridge:
             return normalized
         except Exception as exc:
             return self._exception("Home 失败", exc)
+
+    def home_precheck(self) -> dict[str, Any]:
+        """只计算 Home 目标和安全检查，不写真实舵机。"""
+
+        try:
+            self._ensure_controller()
+            controller = self.controller
+            if controller is None:
+                return bridge_fail("控制器不可用，无法检查 Home。")
+            joint_order = list(getattr(controller, "joint_order", JOINT_ORDER))
+            joint_config_by_key = getattr(controller, "joint_config_by_key", {})
+            calibration_manager = getattr(controller, "calibration_manager", None)
+            safety_checker = getattr(controller, "safety_checker", None)
+            runtime_state = getattr(controller, "runtime_state", {})
+            if calibration_manager is None or safety_checker is None:
+                return bridge_fail("当前控制器缺少标定或安全检查器。")
+
+            targets = {
+                joint_key: float(joint_config_by_key[joint_key].get("默认角度", 0.0))
+                for joint_key in joint_order
+            }
+            angle_check = safety_checker.check_all_joint_angles(targets, joint_config_by_key)
+            calibration_check = safety_checker.check_calibration_for_move(list(targets))
+
+            from 角度映射_angle_mapper import joint_deg_to_goal_detail
+
+            details: dict[str, Any] = {}
+            goal_raw_by_joint: dict[str, int] = {}
+            calibration_by_joint: dict[str, dict[str, Any]] = {}
+            errors: list[str] = []
+            for joint_key, target_deg in targets.items():
+                try:
+                    entry = controller._calibration_entry_for_move(joint_key)
+                    calibration_by_joint[joint_key] = entry
+                    detail = joint_deg_to_goal_detail(
+                        joint_key,
+                        target_deg,
+                        joint_config_by_key[joint_key],
+                        entry,
+                        runtime_state,
+                    )
+                    details[joint_key] = detail
+                    goal_raw_by_joint[joint_key] = int(detail["goal_raw"])
+                except Exception as exc:
+                    errors.append(f"{joint_key}: {exc}")
+
+            raw_check = safety_checker.check_goal_raws(goal_raw_by_joint, calibration_by_joint) if not errors else None
+            ok = bool(angle_check.成功 and calibration_check.成功 and not errors and (raw_check is None or raw_check.成功))
+            messages = [angle_check.消息, calibration_check.消息]
+            if raw_check is not None:
+                messages.append(raw_check.消息)
+            messages.extend(errors)
+            return bridge_ok(
+                "Home 预检查通过。" if ok else "Home 预检查未通过。",
+                {
+                    "ok": ok,
+                    "mode": self.mode,
+                    "connected": self.is_connected(),
+                    "targets_deg": targets,
+                    "goal_raw_by_joint": goal_raw_by_joint,
+                    "details": details,
+                    "messages": messages,
+                },
+            )
+        except Exception as exc:
+            return self._exception("Home 预检查失败", exc)
 
     def stop(self) -> dict[str, Any]:
         """急停必须尽最大努力成功；未连接时也返回安全结果。"""

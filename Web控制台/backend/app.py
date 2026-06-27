@@ -11,14 +11,16 @@ from typing import Any, Callable
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 
 from .path_utils import PROJECT_ROOT, WEB_DIR, ensure_project_root_on_path
 from 控制桥接_common import api_error, api_success
 from .errors import WebAPIError
 from .schemas import (
     CartesianJogRequest,
+    CalibrationCurrentAngleRequest,
     ConnectRequest,
+    ContinuousJogStartRequest,
     FKRequest,
     FollowStartRequest,
     GotoPoseRequest,
@@ -27,6 +29,7 @@ from .schemas import (
     IKRequest,
     JointStepRequest,
     ModeRequest,
+    MotionTuningRequest,
     MoveJointsRequest,
     MovePoseRequest,
     PlayActionRequest,
@@ -171,12 +174,57 @@ async def dependencies() -> dict[str, Any]:
     return api_success(service.get_dependencies())
 
 
+@app.get("/api/v1/robot/hardware-check")
+async def hardware_check() -> dict[str, Any]:
+    return api_success(service.get_hardware_check())
+
+
+@app.get("/api/v1/robot/joint-diagnostics")
+async def joint_diagnostics(joint_key: str = "j12") -> dict[str, Any]:
+    return api_success(service.get_joint_diagnostics(joint_key))
+
+
+@app.post("/api/v1/robot/calibration/current-angle")
+async def calibration_current_angle(request: CalibrationCurrentAngleRequest) -> dict[str, Any]:
+    return await _call(service.set_calibration_current_angle, request)
+
+
 # ----------------------------------------------------------------------
 # 运动控制
 # ----------------------------------------------------------------------
 @app.post("/api/v1/motion/joint-step")
 async def motion_joint_step(request: JointStepRequest) -> dict[str, Any]:
     return await _call(service.joint_step, request)
+
+
+@app.get("/api/v1/motion/tuning")
+async def motion_tuning() -> dict[str, Any]:
+    return api_success(service.motion_tuning())
+
+
+@app.post("/api/v1/motion/tuning")
+async def motion_tuning_update(request: MotionTuningRequest) -> dict[str, Any]:
+    return await _call(service.set_motion_tuning, request, broadcast=False)
+
+
+@app.post("/api/v1/motion/tuning/reset")
+async def motion_tuning_reset() -> dict[str, Any]:
+    return await _call(service.reset_motion_tuning, broadcast=False)
+
+
+@app.get("/api/v1/motion/continuous-jog/status")
+async def motion_continuous_jog_status() -> dict[str, Any]:
+    return api_success(service.continuous_jog_status())
+
+
+@app.post("/api/v1/motion/continuous-jog/start")
+async def motion_continuous_jog_start(request: ContinuousJogStartRequest) -> dict[str, Any]:
+    return await _call(service.start_continuous_jog, request)
+
+
+@app.post("/api/v1/motion/continuous-jog/stop")
+async def motion_continuous_jog_stop() -> dict[str, Any]:
+    return await _call(service.stop_continuous_jog)
 
 
 @app.post("/api/v1/motion/move-joints")
@@ -197,6 +245,11 @@ async def motion_move_pose(request: MovePoseRequest) -> dict[str, Any]:
 @app.post("/api/v1/motion/home")
 async def motion_home(request: HomeRequest) -> dict[str, Any]:
     return await _call(service.home, request)
+
+
+@app.get("/api/v1/motion/home-precheck")
+async def motion_home_precheck() -> dict[str, Any]:
+    return api_success(service.home_precheck())
 
 
 @app.post("/api/v1/motion/stop")
@@ -225,6 +278,22 @@ async def follow_start(request: FollowStartRequest) -> dict[str, Any]:
 @app.post("/api/v1/follow/stop")
 async def follow_stop() -> dict[str, Any]:
     return await _call(service.stop_follow)
+
+
+@app.get("/api/v1/vision/health")
+async def vision_health() -> dict[str, Any]:
+    return api_success(service.vision_health())
+
+
+@app.get("/api/v1/vision/latest")
+async def vision_latest() -> dict[str, Any]:
+    return api_success(service.vision_latest())
+
+
+@app.get("/api/v1/vision/frame.jpg")
+async def vision_frame() -> Response:
+    content, media_type = service.vision_frame()
+    return Response(content=content, media_type=media_type)
 
 
 # ----------------------------------------------------------------------

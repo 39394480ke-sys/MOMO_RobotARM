@@ -34,6 +34,18 @@ motion:
   default_joint_step_deg: 2.0
   default_cartesian_step_mm: 5.0
   default_cartesian_angle_deg: 5.0
+  quick_step_duration_s: 0.8
+  quick_step_frames: 12
+  continuous_update_hz: 20.0
+  continuous_target_horizon_s: 0.25
+  playback_update_hz: 20.0
+  jog_direction_overrides:
+    j10: 1
+    j11: 1
+    j12: 1
+    j13: 1
+    j14: 1
+    j15: 1
 
 follow:
   latest_url: http://127.0.0.1:8000/latest

@@ -82,12 +82,21 @@ POST /api/v1/session/mode
 GET /api/v1/robot/state
 GET /api/v1/robot/calibration-status
 GET /api/v1/robot/dependencies
+GET /api/v1/robot/hardware-check
+GET /api/v1/robot/joint-diagnostics?joint_key=j12
+POST /api/v1/robot/calibration/current-angle
 ```
 
 运动控制：
 
 ```text
 POST /api/v1/motion/joint-step
+GET  /api/v1/motion/tuning
+POST /api/v1/motion/tuning
+POST /api/v1/motion/tuning/reset
+GET  /api/v1/motion/continuous-jog/status
+POST /api/v1/motion/continuous-jog/start
+POST /api/v1/motion/continuous-jog/stop
 POST /api/v1/motion/move-joints
 POST /api/v1/motion/cartesian-jog
 POST /api/v1/motion/move-pose
@@ -117,6 +126,19 @@ WebSocket：
 ```text
 WS /api/v1/ws/state
 ```
+
+视觉跟随：
+
+```text
+GET  /api/v1/follow/status
+POST /api/v1/follow/start
+POST /api/v1/follow/stop
+GET  /api/v1/vision/health
+GET  /api/v1/vision/latest
+GET  /api/v1/vision/frame.jpg
+```
+
+“视觉跟随”页的画面预览走 Web 后端代理 `/api/v1/vision/frame.jpg`，前端不再直接访问 `127.0.0.1:8000`。预览只读，不会向机械臂发送动作。
 
 ## WebSocket 状态推送
 
@@ -167,22 +189,56 @@ curl -X POST http://127.0.0.1:8010/api/v1/actions/play \
 curl http://127.0.0.1:8010/api/v1/robot/calibration-status
 ```
 
+J12 只读诊断：
+
+```bash
+curl 'http://127.0.0.1:8010/api/v1/robot/joint-diagnostics?joint_key=j12'
+```
+
+把 J12 当前真实姿态标记为指定逻辑角度，例如当前物理姿态应为 `30°`：
+
+```bash
+curl -X POST http://127.0.0.1:8010/api/v1/robot/calibration/current-angle \
+  -H "Content-Type: application/json" \
+  -d '{"joint_key":"j12","current_angle_deg":30,"confirm_text":"我确认机械臂周围安全"}'
+```
+
+同等 CLI：
+
+```bash
+cd ~/MOMO_RobotARM
+source ~/miniforge3/etc/profile.d/conda.sh
+conda activate momo_rebot
+python 真实舵机控制/标定当前角度_calibrate_current_angle.py \
+  --port /dev/momo-servo \
+  --joint j12 \
+  --angle 30
+```
+
+真实硬件只读检查：
+
+```bash
+curl http://127.0.0.1:8010/api/v1/robot/hardware-check
+```
+
 ## 真实模式安全流程
 
 1. 确认机械臂周围没有人、线缆、工具和易碰撞物。
-2. 在设置页选择 `真实`。
-3. 点击连接。
+2. 在设置页点击“真实硬件检查”，确认 `/dev/momo-servo`、CH343、依赖、标定和 ID `10-15` 都通过。
+3. 在设置页选择 `真实` 并点击连接。
 4. 输入：`我确认机械臂周围安全`。
-5. 后续 Home、关节移动、夹爪、前往姿态、播放动作等危险操作也会再次要求确认。
+5. J12 标定修正前不测试 J12；其余已验证关节可以按设置页限位做 `1°-3°` 单关节测试。
+6. Home、动作库、多关节动作和视觉真实跟随仍放到单关节全部确认之后。
 
 API 不接受 raw 舵机值，也不提供任意 Python 执行接口。真实动作都必须通过阶段四控制器的标定和安全检查。
 
 ## 常见错误
 
 - 端口被占用：换端口启动，例如 `--port 8011`。
-- FastAPI 未安装：执行 `pip install fastapi uvicorn pydantic pyyaml`。
-- lerobot 未安装：dry-run 不受影响；真实模式执行 `pip install lerobot feetech-servo-sdk pyserial`。
+- FastAPI 未安装：在 `momo_rebot` 环境执行 `pip install fastapi uvicorn pydantic pyyaml`。
+- 真实依赖缺失：ARM 开发板默认使用轻量 SDK，确认 `feetech-servo-sdk`、`pyserial`、`scservo_sdk` 可导入。
 - 标定文件缺失：先运行阶段四标定程序。
-- 串口错误：检查 `真实舵机控制/真实配置.yaml` 里的串口。
+- 串口错误：开发板检查 `.env` 里的 `ARM_ROBOT_PORT=/dev/momo-servo`。
+- CH343 未加载：运行 `bash scripts/setup_qinheng_55d3_serial.sh`，并拔插控制板 USB。
 - WebSocket 断开：前端会自动重连；也可以刷新页面。
 - CORS 问题：默认前端和 API 同源访问 `http://127.0.0.1:8010/web/`，不要直接双击打开 HTML。

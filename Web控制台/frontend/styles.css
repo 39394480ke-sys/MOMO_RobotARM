@@ -239,6 +239,40 @@ pre {
   flex-wrap: wrap;
 }
 
+.joint-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+  background: #f7f8fb;
+}
+
+.segmented button {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  min-height: 34px;
+}
+
+.segmented button.active {
+  background: var(--blue);
+  color: #fff;
+}
+
+.inline-status {
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
 .control-grid,
 .kin-grid,
 .settings-grid {
@@ -280,6 +314,12 @@ pre {
   align-items: center;
   gap: 8px;
   min-height: 44px;
+}
+
+.joint-row button.active-jog {
+  background: var(--blue);
+  border-color: var(--blue);
+  color: #fff;
 }
 
 .joint-name {
@@ -428,6 +468,28 @@ pre {
   grid-column: span 12;
 }
 
+.vision-preview-panel {
+  grid-column: span 12;
+}
+
+.vision-preview {
+  margin-top: 10px;
+  display: grid;
+  place-items: center;
+  min-height: 260px;
+  background: #111827;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.vision-preview img {
+  display: block;
+  width: 100%;
+  max-height: 420px;
+  object-fit: contain;
+}
+
 .input-grid {
   display: grid;
   gap: 8px;
@@ -506,6 +568,39 @@ th {
   grid-column: span 4;
 }
 
+.hardware-panel {
+  grid-column: span 8;
+}
+
+.motion-tuning-panel,
+.module-links-panel {
+  grid-column: span 6;
+}
+
+.calibration-diagnostics-panel {
+  margin-top: 14px;
+}
+
+.module-link-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.module-link-grid a {
+  display: block;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 9px 10px;
+  color: var(--blue);
+  text-decoration: none;
+  background: #f7f9ff;
+}
+
+.module-link-grid a:hover {
+  border-color: var(--blue);
+}
+
 .deps-list {
   display: grid;
   gap: 6px;
@@ -529,6 +624,32 @@ th {
 
 .bad-text {
   color: var(--red);
+}
+
+.hardware-errors {
+  margin-top: 12px;
+  display: grid;
+  gap: 6px;
+}
+
+.hardware-error,
+.hardware-ok {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 13px;
+}
+
+.hardware-error {
+  border-color: #eda7a1;
+  color: var(--red);
+  background: #fff1f0;
+}
+
+.hardware-ok {
+  border-color: #9bd1ad;
+  color: var(--green);
+  background: #f0f9f3;
 }
 
 @media (max-width: 980px) {
@@ -570,7 +691,11 @@ th {
   .kin-grid .panel:first-child,
   .kin-grid .panel:nth-child(2),
   .jog-panel,
-  .settings-grid > .panel {
+  .vision-preview-panel,
+  .settings-grid > .panel,
+  .hardware-panel,
+  .motion-tuning-panel,
+  .module-links-panel {
     grid-column: span 12;
   }
 
@@ -580,7 +705,12 @@ th {
 
   .input-grid.five,
   .input-grid.six,
-  .jog-buttons {
+  .jog-buttons,
+  .module-link-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .joint-tools {
+    justify-content: flex-start;
   }
 }

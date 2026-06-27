@@ -20,6 +20,29 @@ class JointStepRequest(BaseModel):
     confirm_text: str = ""
 
 
+class ContinuousJogStartRequest(BaseModel):
+    joint_key: str
+    direction: int = Field(..., ge=-1, le=1)
+    speed_deg_s: float = Field(5.0, gt=0.0, le=90.0)
+    confirm_text: str = ""
+
+
+class MotionTuningRequest(BaseModel):
+    default_speed_percent: float | None = Field(None, ge=10.0, le=100.0)
+    quick_step_duration_s: float | None = Field(None, ge=0.05, le=10.0)
+    quick_step_frames: int | None = Field(None, ge=1, le=240)
+    continuous_update_hz: float | None = Field(None, ge=2.0, le=60.0)
+    continuous_target_horizon_s: float | None = Field(None, ge=0.0, le=2.0)
+    playback_update_hz: float | None = Field(None, ge=2.0, le=60.0)
+    jog_direction_overrides: dict[str, int] | None = None
+
+
+class CalibrationCurrentAngleRequest(BaseModel):
+    joint_key: str = "j12"
+    current_angle_deg: float
+    confirm_text: str = ""
+
+
 class MoveJointsRequest(BaseModel):
     targets_deg: dict[str, float]
     speed_percent: int = Field(50, ge=1, le=100)

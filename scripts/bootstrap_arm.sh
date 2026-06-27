@@ -119,7 +119,7 @@ fi
 
 if [[ ! -f .env ]]; then
   cp .env.example .env
-  echo "Created .env from .env.example. Edit ARM_ROBOT_PORT before real hardware use."
+  echo "Created .env from .env.example. Use ARM_ROBOT_PORT=/dev/momo-servo after CH343 setup."
 fi
 
 echo "Python check:"
@@ -135,5 +135,5 @@ PY
 echo "Bootstrap complete. Next:"
 echo "  mamba run -n $ENV_NAME python 系统集成/依赖检查.py"
 echo "  mamba run -n $ENV_NAME python URDF运动学仿真/URDF检查_urdf_inspector.py"
-echo "  bash scripts/setup_qinheng_55d3_serial.sh  # only if lsusb shows 1a86:55d3 and no /dev/ttyUSB*"
-echo "Note: real Feetech control still needs a separate LeRobot/Torch or lightweight SDK decision."
+echo "  bash scripts/setup_qinheng_55d3_serial.sh  # install CH343 and create /dev/momo-servo"
+echo "Note: real Feetech control defaults to the lightweight SDK backend on ARM."

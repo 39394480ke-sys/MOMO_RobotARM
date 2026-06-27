@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import re
+import time
 from abc import ABC, abstractmethod
 from typing import Any
 
@@ -489,13 +490,14 @@ class 轻量_FeetechSDKServoDriver(BaseServoDriver):
     def write_goal_position(self, joint_key: str, goal_raw: int) -> None:
         self._ensure_connected()
         self._ensure_known_joint(joint_key)
-        self.bus.write("Goal_Position", joint_key, int(goal_raw))
+        self._write_with_retry("Goal_Position", joint_key, int(goal_raw))
 
     def write_many_goal_positions(self, goal_raw_by_joint: dict[str, int]) -> None:
         self._ensure_connected()
         for joint_key in goal_raw_by_joint:
             self._ensure_known_joint(joint_key)
-        self.bus.write_many("Goal_Position", {joint_key: int(value) for joint_key, value in goal_raw_by_joint.items()})
+        for joint_key, value in goal_raw_by_joint.items():
+            self._write_with_retry("Goal_Position", joint_key, int(value))
 
     def read_register(self, register_name: str, joint_key: str) -> int:
         self._ensure_connected()
@@ -505,21 +507,21 @@ class 轻量_FeetechSDKServoDriver(BaseServoDriver):
     def write_register(self, register_name: str, joint_key: str, raw_value: int) -> None:
         self._ensure_connected()
         self._ensure_known_joint(joint_key)
-        self.bus.write(register_name, joint_key, int(raw_value))
+        self._write_with_retry(register_name, joint_key, int(raw_value))
 
     def enable_torque(self, joint_key: str | None = None) -> None:
         self._ensure_connected()
         targets = [joint_key] if joint_key else self.joint_keys
         for key in targets:
             self._ensure_known_joint(key)
-            self.bus.write("Torque_Enable", key, 1)
+            self._write_with_retry("Torque_Enable", key, 1)
 
     def disable_torque(self, joint_key: str | None = None) -> None:
         self._ensure_connected()
         targets = [joint_key] if joint_key else self.joint_keys
         for key in targets:
             self._ensure_known_joint(key)
-            self.bus.write("Torque_Enable", key, 0)
+            self._write_with_retry("Torque_Enable", key, 0)
 
     def stop(self) -> None:
         current = self.read_all_present_positions()
@@ -554,6 +556,21 @@ class 轻量_FeetechSDKServoDriver(BaseServoDriver):
             self._disconnect_after_failed_connect()
             raise RuntimeError(f"发现非 STS3215 型号：{wrong_model}，期望型号号 {EXPECTED_STS3215_MODEL}。")
         self.joint_keys = list(joint_keys)
+
+    def _write_with_retry(self, register_name: str, joint_key: str, value: int) -> None:
+        attempts = max(1, int(self.config.get("transport", {}).get("write_retries", 3)))
+        delay_s = max(0.0, float(self.config.get("transport", {}).get("write_retry_delay_s", 0.03)))
+        last_error: Exception | None = None
+        for index in range(attempts):
+            try:
+                self.bus.write(register_name, joint_key, int(value))
+                return
+            except Exception as error:
+                last_error = error
+                if index + 1 < attempts:
+                    time.sleep(delay_s)
+        motor_id = self.motor_ids_by_joint.get(joint_key, joint_key)
+        raise RuntimeError(f"写入 {register_name} ID {motor_id} 失败（重试 {attempts} 次）：{last_error}")
 
     def _disconnect_after_failed_connect(self) -> None:
         if self.bus is None:

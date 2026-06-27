@@ -21,6 +21,15 @@ const state = {
   pending: new Set(),
   lastIkTargets: null,
   follow: null,
+  hardware: null,
+  motionTuning: null,
+  jointControlMode: "step",
+  continuousJogActive: false,
+  continuousJogStopping: false,
+  continuousJogPointerId: null,
+  continuousJogButton: null,
+  j12Diagnostic: null,
+  modeSelectDirty: false,
 };
 
 document.addEventListener("DOMContentLoaded", init);
@@ -41,7 +50,9 @@ function bindEvents() {
   $("#topStopBtn").addEventListener("click", stopNow);
   $("#quickStopBtn").addEventListener("click", stopNow);
   $("#refreshStateBtn").addEventListener("click", refreshState);
-  $("#homeBtn").addEventListener("click", () => postDanger("/api/v1/motion/home", { speed_percent: 50 }));
+  $("#homeBtn").addEventListener("click", homeWithPrecheck);
+  $("#jointStepModeBtn").addEventListener("click", () => setJointControlMode("step"));
+  $("#jointContinuousModeBtn").addEventListener("click", () => setJointControlMode("continuous"));
   $("#gripperSlider").addEventListener("input", () => updateGripperLabel(Number($("#gripperSlider").value)));
   $("#gripperOpenBtn").addEventListener("click", () => setGripper(1));
   $("#gripperCloseBtn").addEventListener("click", () => setGripper(0));
@@ -53,18 +64,37 @@ function bindEvents() {
   $("#refreshFollowBtn").addEventListener("click", refreshFollow);
   $("#startFollowBtn").addEventListener("click", startFollow);
   $("#stopFollowBtn").addEventListener("click", stopFollow);
+  $("#followLatestUrl").addEventListener("input", () => {
+    $("#followLatestUrl").dataset.userEdited = "1";
+    renderVisionPreviewUrl();
+  });
+  $("#refreshVisionPreviewBtn").addEventListener("click", refreshVisionPreview);
   $("#kinRefreshBtn").addEventListener("click", refreshState);
   $("#fkBtn").addEventListener("click", computeFk);
   $("#ikBtn").addEventListener("click", computeIk);
   $("#executeIkBtn").addEventListener("click", executeIk);
   $("#refreshCalibrationBtn").addEventListener("click", loadCalibration);
+  $("#j12DiagnoseBtn").addEventListener("click", diagnoseJ12);
+  $("#j12ApplyCalibrationBtn").addEventListener("click", applyJ12Calibration);
   $("#refreshDepsBtn").addEventListener("click", loadDependencies);
+  $("#refreshHardwareBtn").addEventListener("click", loadHardwareCheck);
+  $("#saveMotionTuningBtn").addEventListener("click", saveMotionTuning);
+  $("#resetMotionTuningBtn").addEventListener("click", resetMotionTuning);
+  $("#modeSelect").addEventListener("change", () => {
+    state.modeSelectDirty = true;
+  });
   $("#connectBtn").addEventListener("click", connectSession);
   $("#disconnectBtn").addEventListener("click", disconnectSession);
   $("#switchModeBtn").addEventListener("click", switchMode);
   $("#clearLogBtn").addEventListener("click", clearLogs);
   $("#miniClearLogBtn").addEventListener("click", clearLogs);
   $("#copyErrorBtn").addEventListener("click", copyLastError);
+  window.addEventListener("pointerup", stopContinuousJogFromPointer);
+  window.addEventListener("pointercancel", stopContinuousJogFromPointer);
+  window.addEventListener("blur", () => stopContinuousJog());
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) stopContinuousJog();
+  });
 }
 
 async function requestJson(path, options = {}) {
@@ -130,7 +160,7 @@ async function loadConfig() {
 }
 
 async function refreshAll() {
-  await Promise.allSettled([refreshSession(), refreshState(), refreshFollow(), loadPoses(), loadActions(), loadCalibration(), loadDependencies()]);
+  await Promise.allSettled([refreshSession(), refreshState(), refreshFollow(), loadMotionTuning(), loadPoses(), loadActions(), loadCalibration(), loadDependencies()]);
 }
 
 async function refreshSession() {
@@ -187,6 +217,24 @@ async function loadDependencies() {
   }
 }
 
+async function loadHardwareCheck() {
+  try {
+    state.hardware = await getJson("/api/v1/robot/hardware-check", { timeout: 10000 });
+    renderHardwareCheck();
+  } catch (error) {
+    showError(error);
+  }
+}
+
+async function loadMotionTuning() {
+  try {
+    state.motionTuning = await getJson("/api/v1/motion/tuning");
+    renderMotionTuning();
+  } catch (error) {
+    showError(error);
+  }
+}
+
 async function refreshFollow() {
   try {
     state.follow = await getJson("/api/v1/follow/status");
@@ -210,6 +258,7 @@ function connectWebSocket() {
     if (msg.type === "state") {
       state.session = msg.data.session || state.session;
       state.robot = msg.data.robot || state.robot;
+      if (msg.data.continuous_jog) renderContinuousJog(msg.data.continuous_jog);
       if (msg.data.error) state.lastError = msg.data.error.message || "";
       renderSession();
       renderRobot();
@@ -246,9 +295,16 @@ function buildJointControls() {
   });
   wrap.addEventListener("click", (event) => {
     const btn = event.target.closest("button[data-joint]");
-    if (!btn) return;
+    if (!btn || state.jointControlMode !== "step") return;
     const step = selectedJointStep() * Number(btn.dataset.dir);
     jointStep(btn.dataset.joint, step);
+  });
+  wrap.addEventListener("pointerdown", (event) => {
+    const btn = event.target.closest("button[data-joint]");
+    if (!btn || state.jointControlMode !== "continuous") return;
+    event.preventDefault();
+    btn.setPointerCapture?.(event.pointerId);
+    startContinuousJog(btn.dataset.joint, Number(btn.dataset.dir), event.pointerId, btn);
   });
 }
 
@@ -269,18 +325,83 @@ function buildJogButtons() {
 
 function selectedJointStep() {
   let value = Number($("#jointStepSelect").value || 2);
-  if ((state.session.mode || state.robot?.mode) === "real" && value > 2) {
-    value = 2;
-    $("#jointStepSelect").value = "2";
-    log("info", "真实模式步长已限制为 2 deg/mm");
+  const realLimit = Number(state.config?.safety?.max_real_step_deg || 3);
+  if ((state.session.mode || state.robot?.mode) === "real" && value > realLimit) {
+    value = realLimit;
+    $("#jointStepSelect").value = String(realLimit);
+    log("info", `真实模式步长已限制为 ${realLimit} deg/mm`);
   }
   return value;
 }
 
+function setJointControlMode(mode) {
+  state.jointControlMode = mode === "continuous" ? "continuous" : "step";
+  $("#jointStepModeBtn").classList.toggle("active", state.jointControlMode === "step");
+  $("#jointContinuousModeBtn").classList.toggle("active", state.jointControlMode === "continuous");
+  $("#jointStepSelect").disabled = state.jointControlMode === "continuous";
+  $("#continuousSpeedInput").disabled = state.jointControlMode !== "continuous";
+  if (state.jointControlMode === "step") stopContinuousJog();
+}
+
 async function jointStep(jointKey, delta) {
-  const body = await withSafety({ joint_key: jointKey, delta_deg: delta, speed_percent: 50 });
+  const speed = Number(state.motionTuning?.default_speed_percent || 50);
+  const body = await withSafety({ joint_key: jointKey, delta_deg: delta, speed_percent: speed });
   if (!body) return;
   await postJsonLogged("/api/v1/motion/joint-step", body);
+}
+
+async function startContinuousJog(jointKey, direction, pointerId = null, button = null) {
+  if (state.continuousJogActive || state.continuousJogStopping) await stopContinuousJog();
+  const body = await withSafety({
+    joint_key: jointKey,
+    direction,
+    speed_deg_s: Number($("#continuousSpeedInput").value || 5),
+  });
+  if (!body) return;
+  try {
+    state.continuousJogActive = true;
+    state.continuousJogPointerId = pointerId;
+    state.continuousJogButton = button;
+    state.continuousJogButton?.classList.add("active-jog");
+    renderContinuousJog({ running: true, joint_key: jointKey, speed_deg_s: body.speed_deg_s, update_hz: state.motionTuning?.continuous_update_hz });
+    const data = await postJson("/api/v1/motion/continuous-jog/start", body);
+    renderContinuousJog(data.jog || { running: true, joint_key: jointKey });
+  } catch (error) {
+    state.continuousJogActive = false;
+    clearContinuousJogPointer();
+    showError(error);
+  }
+}
+
+async function stopContinuousJog() {
+  if (!state.continuousJogActive || state.continuousJogStopping) return;
+  state.continuousJogStopping = true;
+  try {
+    const data = await postJson("/api/v1/motion/continuous-jog/stop", {});
+    renderContinuousJog(data.jog || { running: false });
+    await refreshState();
+  } catch (error) {
+    showError(error);
+  } finally {
+    state.continuousJogActive = false;
+    state.continuousJogStopping = false;
+    clearContinuousJogPointer();
+  }
+}
+
+function stopContinuousJogFromPointer(event) {
+  if (!state.continuousJogActive) return;
+  if (state.continuousJogPointerId !== null && event.pointerId !== state.continuousJogPointerId) return;
+  stopContinuousJog();
+}
+
+function clearContinuousJogPointer() {
+  try {
+    state.continuousJogButton?.releasePointerCapture?.(state.continuousJogPointerId);
+  } catch (_) {}
+  state.continuousJogButton?.classList.remove("active-jog");
+  state.continuousJogPointerId = null;
+  state.continuousJogButton = null;
 }
 
 async function setGripper(openRatio) {
@@ -299,6 +420,24 @@ async function postDanger(path, body) {
   const safe = await withSafety(body);
   if (!safe) return;
   await postJsonLogged(path, safe);
+}
+
+async function homeWithPrecheck() {
+  try {
+    const precheck = await getJson("/api/v1/motion/home-precheck", { timeout: 10000 });
+    const messages = Array.isArray(precheck.messages) ? precheck.messages.filter(Boolean) : [];
+    log(
+      precheck.ok === false ? "error" : "info",
+      `Home 预检查：${precheck.message || (precheck.ok === false ? "未通过" : "通过")}`
+    );
+    if (precheck.ok === false) {
+      showError(new ApiError("HOME_PRECHECK_FAILED", messages.join("；") || "Home 预检查未通过。"));
+      return;
+    }
+    await postDanger("/api/v1/motion/home", { speed_percent: 50 });
+  } catch (error) {
+    showError(error);
+  }
 }
 
 async function savePose() {
@@ -394,11 +533,13 @@ async function connectSession() {
   const body = await withSafety({ mode }, mode === "real");
   if (!body) return;
   await postJsonLogged("/api/v1/session/connect", body);
+  state.modeSelectDirty = false;
   await refreshSession();
 }
 
 async function disconnectSession() {
   await postJsonLogged("/api/v1/session/disconnect", {});
+  state.modeSelectDirty = false;
   await refreshSession();
 }
 
@@ -407,6 +548,7 @@ async function switchMode() {
   const body = await withSafety({ mode }, mode === "real");
   if (!body) return;
   await postJsonLogged("/api/v1/session/mode", body);
+  state.modeSelectDirty = false;
   await refreshSession();
 }
 
@@ -467,6 +609,11 @@ function renderConfig() {
   $("#configPaths").innerHTML = Object.entries(paths)
     .map(([key, value]) => `<dt>${escapeHtml(key)}</dt><dd>${escapeHtml(String(value))}</dd>`)
     .join("");
+  const latestUrl = cfg.follow?.latest_url || "http://127.0.0.1:8000/latest";
+  if ($("#followLatestUrl") && !$("#followLatestUrl").dataset.userEdited) {
+    $("#followLatestUrl").value = latestUrl;
+  }
+  renderVisionPreviewUrl();
 }
 
 function renderSession() {
@@ -476,7 +623,9 @@ function renderSession() {
   $("#modePill").className = `status-pill ${mode === "real" ? "bad" : mode === "dry_run" ? "warn" : "good"}`;
   $("#connectionPill").textContent = connected ? "已连接" : "未连接";
   $("#connectionPill").className = `status-pill ${connected ? "good" : "warn"}`;
-  $("#modeSelect").value = mode;
+  if (!state.modeSelectDirty) {
+    $("#modeSelect").value = mode;
+  }
 }
 
 function renderWs() {
@@ -498,6 +647,55 @@ function renderFollow() {
   $("#followLastCommand").textContent = commands.length
     ? commands.map((cmd) => `${cmd.joint_key}:${formatNum(cmd.delta_deg, 2)}`).join(", ")
     : last.message || "--";
+}
+
+function refreshVisionPreview() {
+  const image = $("#visionPreviewFrame");
+  const url = renderVisionPreviewUrl();
+  if (!url) return;
+  $("#visionPreviewState").textContent = "刷新中";
+  image.onload = () => {
+    $("#visionPreviewState").textContent = "已更新";
+  };
+  image.onerror = () => {
+    $("#visionPreviewState").textContent = "无法读取视觉服务";
+  };
+  image.src = `${url}${url.includes("?") ? "&" : "?"}t=${Date.now()}`;
+  refreshVisionProxyStatus();
+}
+
+function renderVisionPreviewUrl() {
+  const frameUrl = "/api/v1/vision/frame.jpg";
+  $("#visionPreviewUrl").textContent = frameUrl || "--";
+  return frameUrl;
+}
+
+function frameUrlFromLatest(latestUrl) {
+  try {
+    const url = new URL(latestUrl, location.origin);
+    url.pathname = url.pathname.replace(/\/latest\/?$/, "/frame.jpg");
+    url.search = "";
+    return url.toString();
+  } catch (_) {
+    return "";
+  }
+}
+
+async function refreshVisionProxyStatus() {
+  try {
+    const [health, latest] = await Promise.all([
+      getJson("/api/v1/vision/health", { timeout: 3000 }),
+      getJson("/api/v1/vision/latest", { timeout: 3000 }),
+    ]);
+    $("#visionHealthState").textContent = health.camera_available ? "camera ok" : health.running ? "running" : "未启动";
+    $("#visionHealthState").className = health.camera_available ? "ok-text" : "bad-text";
+    $("#visionLatestState").textContent = latest.detected ? "检测到目标" : latest.message || "未检测";
+    $("#visionLatestState").className = latest.detected ? "ok-text" : "";
+  } catch (error) {
+    $("#visionHealthState").textContent = "视觉服务不可用";
+    $("#visionHealthState").className = "bad-text";
+    $("#visionLatestState").textContent = error.message || String(error);
+  }
 }
 
 function renderRobot() {
@@ -641,11 +839,127 @@ function renderCalibration(calib) {
     </table>`;
 }
 
+async function diagnoseJ12() {
+  try {
+    state.j12Diagnostic = await getJson("/api/v1/robot/joint-diagnostics?joint_key=j12", { timeout: 8000 });
+    renderJ12Diagnostic(state.j12Diagnostic);
+  } catch (error) {
+    showError(error);
+    $("#j12DiagnosticResult").textContent = error.message || String(error);
+  }
+}
+
+async function applyJ12Calibration() {
+  const assigned = Number($("#j12AssignedAngle").value);
+  if (!Number.isFinite(assigned)) {
+    showError(new ApiError("BAD_INPUT", "请输入 J12 当前真实姿态对应的角度。"));
+    return;
+  }
+  const body = await withSafety({ joint_key: "j12", current_angle_deg: assigned }, true);
+  if (!body) return;
+  try {
+    const data = await postJsonLogged("/api/v1/robot/calibration/current-angle", body, { timeout: 10000 });
+    $("#j12DiagnosticResult").textContent = JSON.stringify(data, null, 2);
+    await loadCalibration();
+    await diagnoseJ12();
+  } catch (_) {}
+}
+
+function renderJ12Diagnostic(data) {
+  $("#j12PresentRaw").textContent = String(data.present_raw ?? "--");
+  $("#j12CurrentAngle").textContent = `${formatNum(data.current_angle_deg, 2)} deg`;
+  $("#j12Limit").textContent = `[${formatNum(data.min_angle_deg, 1)}, ${formatNum(data.max_angle_deg, 1)}] deg`;
+  $("#j12LimitState").textContent = data.in_limit ? "限位内" : data.reason || "超限";
+  $("#j12LimitState").className = data.in_limit ? "ok-text" : "bad-text";
+  $("#j12DiagnosticResult").textContent = JSON.stringify(data, null, 2);
+}
+
+function renderMotionTuning() {
+  const t = state.motionTuning || state.config?.motion || {};
+  $("#motionSpeedPercent").value = formatNum(t.default_speed_percent ?? 50, 0);
+  $("#quickStepDuration").value = formatNum(t.quick_step_duration_s ?? 0.8, 2);
+  $("#quickStepFrames").value = String(t.quick_step_frames ?? 12);
+  $("#continuousUpdateHz").value = formatNum(t.continuous_update_hz ?? 20, 1);
+  $("#continuousHorizon").value = formatNum(t.continuous_target_horizon_s ?? 0.25, 2);
+  $("#playbackUpdateHz").value = formatNum(t.playback_update_hz ?? 20, 1);
+  $("#continuousSpeedInput").disabled = state.jointControlMode !== "continuous";
+}
+
+async function saveMotionTuning() {
+  const body = {
+    default_speed_percent: Number($("#motionSpeedPercent").value || 50),
+    quick_step_duration_s: Number($("#quickStepDuration").value || 0.8),
+    quick_step_frames: Number($("#quickStepFrames").value || 12),
+    continuous_update_hz: Number($("#continuousUpdateHz").value || 20),
+    continuous_target_horizon_s: Number($("#continuousHorizon").value || 0.25),
+    playback_update_hz: Number($("#playbackUpdateHz").value || 20),
+  };
+  try {
+    const data = await postJson("/api/v1/motion/tuning", body);
+    state.motionTuning = data.motion || data;
+    renderMotionTuning();
+    log("info", "运动调参已保存");
+  } catch (error) {
+    showError(error);
+  }
+}
+
+async function resetMotionTuning() {
+  try {
+    const data = await postJson("/api/v1/motion/tuning/reset", {});
+    state.motionTuning = data.motion || data;
+    renderMotionTuning();
+    log("info", "运动调参已恢复推荐值");
+  } catch (error) {
+    showError(error);
+  }
+}
+
+function renderContinuousJog(jog) {
+  const running = Boolean(jog.running);
+  $("#continuousJogStatus").textContent = running
+    ? `连续控制：${jog.joint_key || "--"} ${formatNum(jog.speed_deg_s, 1)} deg/s @ ${formatNum(jog.update_hz, 1)} Hz`
+    : "连续控制：停止";
+  $("#continuousJogStatus").className = `inline-status ${running ? "ok-text" : ""}`;
+}
+
 function renderDependencies(deps) {
   $("#depsList").innerHTML = Object.entries(deps)
     .filter(([_, value]) => value && typeof value === "object" && "available" in value)
     .map(([name, value]) => `<div class="dep-row"><span>${escapeHtml(name)}</span><span class="${value.available ? "ok-text" : "bad-text"}">${value.available ? "可用" : "缺失"}</span></div>`)
     .join("");
+}
+
+function renderHardwareCheck() {
+  const hw = state.hardware || {};
+  const scan = hw.readonly_scan || {};
+  const serial = hw.serial || {};
+  const driver = hw.driver || {};
+  const deps = hw.dependencies || {};
+  const calibration = hw.calibration || {};
+  const errors = hw.errors || [];
+  $("#hardwareStatus").textContent = hw.ok ? "通过" : "需检查";
+  $("#hardwareStatus").className = `status-pill ${hw.ok ? "good" : "bad"}`;
+  $("#hardwarePort").textContent = serial.exists
+    ? `${hw.port || "--"}${serial.is_symlink ? ` -> ${shortPath(serial.target)}` : ""}`
+    : `${hw.port || "--"} 不存在`;
+  $("#hardwarePort").className = serial.exists ? "ok-text" : "bad-text";
+  $("#hardwareDriver").textContent = driver.usb_ch343 ? "usb_ch343" : driver.option_bound ? "option 占用" : "未识别";
+  $("#hardwareDriver").className = driver.usb_ch343 ? "ok-text" : "bad-text";
+  $("#hardwareDeps").textContent = deps.real_mode_ready ? "real_mode_ready" : "缺依赖";
+  $("#hardwareDeps").className = deps.real_mode_ready ? "ok-text" : "bad-text";
+  $("#hardwareCalibration").textContent = calibration.exists ? (calibration.allowed ? "允许真实移动" : "需检查") : "缺失";
+  $("#hardwareCalibration").className = calibration.exists && calibration.allowed ? "ok-text" : "bad-text";
+  $("#hardwareIds").textContent = scan.found_models
+    ? Object.keys(scan.found_models).sort((a, b) => Number(a) - Number(b)).join(", ")
+    : "--";
+  $("#hardwareIds").className = scan.ok ? "ok-text" : "bad-text";
+  $("#hardwareRaw").textContent = scan.present_position
+    ? Object.entries(scan.present_position).map(([key, value]) => `${key}:${value}`).join(", ")
+    : "--";
+  $("#hardwareErrors").innerHTML = errors.length
+    ? errors.map((item) => `<div class="hardware-error">${escapeHtml(item)}</div>`).join("")
+    : `<div class="hardware-ok">真实硬件只读检查通过。</div>`;
 }
 
 function showPage(name) {
@@ -654,9 +968,17 @@ function showPage(name) {
   $(`#page${capitalize(name)}`).classList.add("active");
   if (name === "poses") loadPoses();
   if (name === "actions") loadActions();
-  if (name === "follow") refreshFollow();
+  if (name === "follow") {
+    refreshFollow();
+    refreshVisionPreview();
+  }
   if (name === "calibration") loadCalibration();
-  if (name === "settings") loadDependencies();
+  if (name === "calibration") diagnoseJ12();
+  if (name === "settings") {
+    loadDependencies();
+    loadHardwareCheck();
+    loadMotionTuning();
+  }
 }
 
 function showError(error) {
@@ -727,6 +1049,11 @@ function escapeHtml(value) {
 
 function escapeAttr(value) {
   return escapeHtml(value).replace(/`/g, "&#96;");
+}
+
+function shortPath(value) {
+  const text = String(value || "");
+  return text.length > 36 ? `...${text.slice(-33)}` : text;
 }
 
 function capitalize(name) {

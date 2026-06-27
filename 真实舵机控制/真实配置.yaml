@@ -10,6 +10,8 @@
     "robot_id": "soarmmoce",
     "dry_run": true,
     "gripper_available": true,
+    "write_retries": 3,
+    "write_retry_delay_s": 0.03,
     "arm_p_coefficient": 16,
     "arm_d_coefficient": 8,
     "update_hz": 25.0

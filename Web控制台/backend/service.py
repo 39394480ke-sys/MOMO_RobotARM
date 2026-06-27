@@ -13,6 +13,8 @@ from __future__ import annotations
 import threading
 import time
 import traceback
+import urllib.error
+import urllib.request
 from pathlib import Path
 from typing import Any
 
@@ -20,20 +22,32 @@ from .path_utils import ensure_project_root_on_path
 
 ensure_project_root_on_path()
 
-from 控制桥接_common import normalize_control_mode, real_confirm_matches, real_confirm_required, real_confirm_text  # noqa: E402
+from 控制桥接_common import (  # noqa: E402
+    DEFAULT_MOTION_TUNING,
+    JOINT_ORDER,
+    normalize_control_mode,
+    normalize_joint_key,
+    normalize_motion_tuning,
+    real_confirm_matches,
+    real_confirm_required,
+    real_confirm_text,
+)
 from 通用_io import read_structured_section  # noqa: E402
 
 from .controller_bridge import ControllerBridge
 from .errors import WebAPIError
 from .logger import JsonLineLogger
 from .schemas import (
+    CalibrationCurrentAngleRequest,
     CartesianJogRequest,
     ConnectRequest,
+    ContinuousJogStartRequest,
     FollowStartRequest,
     GotoPoseRequest,
     GripperRequest,
     HomeRequest,
     JointStepRequest,
+    MotionTuningRequest,
     MoveJointsRequest,
     MovePoseRequest,
     PlayActionRequest,
@@ -62,6 +76,9 @@ class WebControlService:
         self._lock = threading.RLock()
         self._action_thread: threading.Thread | None = None
         self._follow_controller: Any | None = None
+        self._continuous_jog_thread: threading.Thread | None = None
+        self._continuous_jog_stop = threading.Event()
+        self._continuous_jog_status: dict[str, Any] = {"running": False, "message": "连续控制未启动。"}
         self.recent_error: dict[str, Any] | None = None
 
     # ------------------------------------------------------------------
@@ -141,16 +158,34 @@ class WebControlService:
     # 状态
     # ------------------------------------------------------------------
     def get_robot_state(self) -> dict[str, Any]:
-        result = self.bridge.get_state()
-        return self._unwrap_bridge(result, code="STATE_FAILED")
+        with self._lock:
+            result = self.bridge.get_state()
+            return self._unwrap_bridge(result, code="STATE_FAILED")
 
     def get_calibration_status(self) -> dict[str, Any]:
-        result = self.bridge.get_calibration_status()
-        return self._unwrap_bridge(result, code="CALIBRATION_STATUS_FAILED")
+        with self._lock:
+            result = self.bridge.get_calibration_status()
+            return self._unwrap_bridge(result, code="CALIBRATION_STATUS_FAILED")
 
     def get_dependencies(self) -> dict[str, Any]:
         result = self.bridge.check_dependencies()
         return self._unwrap_bridge(result, code="DEPENDENCY_CHECK_FAILED")
+
+    def get_hardware_check(self) -> dict[str, Any]:
+        with self._lock:
+            result = self.bridge.check_real_hardware()
+            return self._unwrap_bridge(result, code="HARDWARE_CHECK_FAILED")
+
+    def get_joint_diagnostics(self, joint_key: str = "j12") -> dict[str, Any]:
+        with self._lock:
+            result = self.bridge.get_joint_diagnostics(joint_key)
+            return self._unwrap_bridge(result, code="JOINT_DIAGNOSTICS_FAILED")
+
+    def set_calibration_current_angle(self, request: CalibrationCurrentAngleRequest) -> dict[str, Any]:
+        with self._lock:
+            self._require_real_confirm_if_needed("real", request.confirm_text, action="保存真实标定修正")
+            result = self.bridge.set_calibration_current_angle(request.joint_key, request.current_angle_deg)
+            return self._unwrap_bridge(result, code="CALIBRATION_UPDATE_FAILED")
 
     # ------------------------------------------------------------------
     # 运动控制
@@ -163,6 +198,99 @@ class WebControlService:
                 raise WebAPIError("STEP_TOO_LARGE", f"步长 {request.delta_deg}° 超过当前模式限制 {limit}°。")
             result = self.bridge.move_joint_delta(request.joint_key, request.delta_deg)
             return self._unwrap_bridge(result, code="JOINT_STEP_FAILED")
+
+    def motion_tuning(self) -> dict[str, Any]:
+        return normalize_motion_tuning(DEFAULT_MOTION_TUNING, self.config.get("motion", {}), joint_order=JOINT_ORDER)
+
+    def set_motion_tuning(self, request: MotionTuningRequest) -> dict[str, Any]:
+        payload = {key: value for key, value in request.dict(exclude_none=True).items()}
+        tuning = normalize_motion_tuning(self.config.get("motion", {}), payload, joint_order=JOINT_ORDER)
+        self.config.setdefault("motion", {}).update(tuning)
+        return {"message": "运动调参已更新。", "motion": tuning}
+
+    def reset_motion_tuning(self) -> dict[str, Any]:
+        tuning = normalize_motion_tuning(DEFAULT_MOTION_TUNING, {}, joint_order=JOINT_ORDER)
+        self.config.setdefault("motion", {}).update(tuning)
+        return {"message": "运动调参已恢复推荐值。", "motion": tuning}
+
+    def continuous_jog_status(self) -> dict[str, Any]:
+        status = dict(self._continuous_jog_status)
+        thread_alive = bool(self._continuous_jog_thread and self._continuous_jog_thread.is_alive())
+        status["running"] = bool(status.get("running") and thread_alive)
+        return status
+
+    def start_continuous_jog(self, request: ContinuousJogStartRequest) -> dict[str, Any]:
+        with self._lock:
+            self._before_manual_motion(request.confirm_text)
+            joint = normalize_joint_key(request.joint_key)
+            if int(request.direction) == 0:
+                raise WebAPIError("BAD_DIRECTION", "连续控制方向不能为 0。")
+            self.stop_continuous_jog(join_timeout=0.4)
+            tuning = self.motion_tuning()
+            direction = 1 if int(request.direction) > 0 else -1
+            direction *= int(tuning.get("jog_direction_overrides", {}).get(joint, 1))
+            update_hz = max(2.0, float(tuning.get("continuous_update_hz", 20.0)))
+            sleep_s = 1.0 / update_hz
+            max_step = self._manual_step_limit()
+            speed = min(abs(float(request.speed_deg_s)), max_step * update_hz)
+            delta = max(0.02, min(max_step, speed / update_hz)) * direction
+            stop_event = threading.Event()
+            self._continuous_jog_stop = stop_event
+            self._continuous_jog_status = {
+                "running": True,
+                "joint_key": joint,
+                "direction": direction,
+                "speed_deg_s": speed,
+                "update_hz": update_hz,
+                "delta_per_tick": delta,
+                "started_at": time.time(),
+                "tick_count": 0,
+                "message": "连续控制运行中。",
+            }
+            first_result = self.bridge.move_joint_delta(joint, delta)
+            if not first_result.get("ok"):
+                self._continuous_jog_status.update(
+                    running=False,
+                    message=str(first_result.get("message", "连续控制启动失败。")),
+                    stopped_at=time.time(),
+                )
+                return self._unwrap_bridge(first_result, code="CONTINUOUS_JOG_FAILED")
+            self._continuous_jog_status["tick_count"] = 1
+
+            def worker() -> None:
+                try:
+                    while not stop_event.is_set():
+                        stop_event.wait(sleep_s)
+                        if stop_event.is_set():
+                            break
+                        with self._lock:
+                            result = self.bridge.move_joint_delta(joint, delta)
+                            if not result.get("ok"):
+                                self._continuous_jog_status.update(
+                                    running=False,
+                                    message=str(result.get("message", "连续控制失败。")),
+                                    stopped_at=time.time(),
+                                )
+                                return
+                            self._continuous_jog_status["tick_count"] = int(self._continuous_jog_status.get("tick_count", 0)) + 1
+                        stop_event.wait(sleep_s)
+                except Exception as exc:
+                    self._continuous_jog_status.update(running=False, message=f"连续控制异常：{exc}", stopped_at=time.time())
+                    self._remember_error("CONTINUOUS_JOG_FAILED", str(exc))
+                finally:
+                    self._continuous_jog_status.update(running=False, stopped_at=time.time())
+
+            self._continuous_jog_thread = threading.Thread(target=worker, name=f"web-continuous-jog-{joint}", daemon=True)
+            self._continuous_jog_thread.start()
+            return {"message": "连续控制已启动。", "jog": self.continuous_jog_status()}
+
+    def stop_continuous_jog(self, join_timeout: float = 0.8) -> dict[str, Any]:
+        self._continuous_jog_stop.set()
+        thread = self._continuous_jog_thread
+        if thread and thread.is_alive():
+            thread.join(timeout=join_timeout)
+        self._continuous_jog_status.update(running=False, stopped_at=time.time(), message="连续控制已停止。")
+        return {"message": "连续控制已停止。", "jog": self.continuous_jog_status()}
 
     def move_joints(self, request: MoveJointsRequest) -> dict[str, Any]:
         with self._lock:
@@ -220,8 +348,14 @@ class WebControlService:
             result = self.bridge.home()
             return self._unwrap_bridge(result, code="HOME_FAILED")
 
+    def home_precheck(self) -> dict[str, Any]:
+        with self._lock:
+            result = self.bridge.home_precheck()
+            return self._unwrap_bridge(result, code="HOME_PRECHECK_FAILED")
+
     def stop(self) -> dict[str, Any]:
         with self._lock:
+            self.stop_continuous_jog(join_timeout=0.2)
             result = self.bridge.stop()
             data = self._unwrap_bridge(result, code="STOP_FAILED")
             return {"message": result.get("message", "已急停。"), "bridge": data}
@@ -279,7 +413,8 @@ class WebControlService:
     # 姿态
     # ------------------------------------------------------------------
     def list_poses(self) -> dict[str, Any]:
-        return self._unwrap_bridge(self.bridge.list_poses(), code="POSE_LIST_FAILED")
+        with self._lock:
+            return self._unwrap_bridge(self.bridge.list_poses(), code="POSE_LIST_FAILED")
 
     def save_pose(self, request: SavePoseRequest) -> dict[str, Any]:
         return self._unwrap_bridge(self.bridge.save_pose(request.name, request.description), code="POSE_SAVE_FAILED")
@@ -296,7 +431,8 @@ class WebControlService:
     # 动作
     # ------------------------------------------------------------------
     def list_actions(self) -> dict[str, Any]:
-        return self._unwrap_bridge(self.bridge.list_actions(), code="ACTION_LIST_FAILED")
+        with self._lock:
+            return self._unwrap_bridge(self.bridge.list_actions(), code="ACTION_LIST_FAILED")
 
     def get_action(self, name: str) -> dict[str, Any]:
         return self._unwrap_bridge(self.bridge.get_action(name), code="ACTION_DETAIL_FAILED")
@@ -307,6 +443,7 @@ class WebControlService:
             if self._action_thread and self._action_thread.is_alive():
                 self.bridge.stop_action()
                 self._action_thread.join(timeout=0.5)
+            self.stop_continuous_jog(join_timeout=0.2)
 
             def worker() -> None:
                 try:
@@ -368,9 +505,27 @@ class WebControlService:
                 "robot": robot,
                 "action": self.current_action_status(),
                 "follow": self.follow_status(),
+                "continuous_jog": self.continuous_jog_status(),
                 "error": error,
             },
         }
+
+    # ------------------------------------------------------------------
+    # 视觉服务代理。前端只访问 Web 服务，避免浏览器侧 127.0.0.1 指向错误机器。
+    # ------------------------------------------------------------------
+    def vision_health(self) -> dict[str, Any]:
+        return self._fetch_vision_json("/health")
+
+    def vision_latest(self) -> dict[str, Any]:
+        return self._fetch_vision_json("/latest")
+
+    def vision_frame(self) -> tuple[bytes, str]:
+        url = self._vision_service_url("/frame.jpg")
+        try:
+            with urllib.request.urlopen(url, timeout=2.0) as response:
+                return response.read(), response.headers.get("content-type", "image/jpeg")
+        except Exception as exc:
+            raise WebAPIError("VISION_FRAME_FAILED", f"无法读取视觉画面：{exc}", status_code=502)
 
     async def broadcast_state(self) -> None:
         try:
@@ -386,6 +541,8 @@ class WebControlService:
         if self._action_thread and self._action_thread.is_alive():
             self.bridge.stop_action()
             self._action_thread.join(timeout=0.5)
+        if self._continuous_jog_thread and self._continuous_jog_thread.is_alive():
+            self.stop_continuous_jog(join_timeout=0.2)
 
     def _require_real_confirm(self, confirm_text: str, action: str) -> None:
         if self.bridge.mode != "real":
@@ -480,6 +637,33 @@ class WebControlService:
             return read_structured_section(config_path, "follow")
         except Exception:
             return {}
+
+    def _fetch_vision_json(self, path: str) -> dict[str, Any]:
+        url = self._vision_service_url(path)
+        try:
+            with urllib.request.urlopen(url, timeout=2.0) as response:
+                import json
+
+                payload = json.loads(response.read().decode("utf-8"))
+                if isinstance(payload, dict):
+                    payload.setdefault("proxy_url", url)
+                    return payload
+                return {"value": payload, "proxy_url": url}
+        except urllib.error.HTTPError as exc:
+            raise WebAPIError("VISION_HTTP_ERROR", f"视觉服务 HTTP {exc.code}：{url}", status_code=502)
+        except Exception as exc:
+            raise WebAPIError("VISION_UNAVAILABLE", f"视觉服务不可用：{url}，{exc}", status_code=502)
+
+    def _vision_service_url(self, path: str) -> str:
+        follow = self.config.get("follow", {})
+        latest_url = str(follow.get("latest_url", "http://127.0.0.1:8000/latest"))
+        try:
+            from urllib.parse import urljoin
+
+            base = latest_url.rsplit("/", 1)[0] + "/"
+            return urljoin(base, path.lstrip("/"))
+        except Exception:
+            return f"http://127.0.0.1:8000/{path.lstrip('/')}"
 
     def _local_api_base(self) -> str:
         server = self.config.get("server", {})

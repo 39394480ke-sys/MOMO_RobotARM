@@ -52,16 +52,28 @@
               <section class="panel joints-panel">
                 <div class="panel-head">
                   <h3>J10-J15 关节</h3>
-                  <label class="field-inline">
-                    <span>步长</span>
-                    <select id="jointStepSelect">
-                      <option value="0.5">0.5 deg/mm</option>
-                      <option value="1">1 deg/mm</option>
-                      <option value="2" selected>2 deg/mm</option>
-                      <option value="5">5 deg/mm</option>
-                    </select>
-                  </label>
+                  <div class="joint-tools">
+                    <div class="segmented" aria-label="控制模式">
+                      <button id="jointStepModeBtn" class="active" data-joint-mode="step">步进</button>
+                      <button id="jointContinuousModeBtn" data-joint-mode="continuous">连续</button>
+                    </div>
+                    <label class="field-inline">
+                      <span>步长</span>
+                      <select id="jointStepSelect">
+                        <option value="0.5">0.5 deg/mm</option>
+                        <option value="1">1 deg/mm</option>
+                        <option value="2" selected>2 deg/mm</option>
+                        <option value="3">3 deg/mm</option>
+                        <option value="5">5 deg/mm</option>
+                      </select>
+                    </label>
+                    <label class="field-inline">
+                      <span>连续速度</span>
+                      <input id="continuousSpeedInput" type="number" min="0.2" max="90" step="0.5" value="5" />
+                    </label>
+                  </div>
                 </div>
+                <div id="continuousJogStatus" class="inline-status">连续控制：停止</div>
                 <div id="jointControls" class="joint-list"></div>
               </section>
 
@@ -199,6 +211,22 @@
                   <dt>最近命令</dt><dd id="followLastCommand">--</dd>
                 </dl>
               </section>
+
+              <section class="panel vision-preview-panel">
+                <div class="panel-head">
+                  <h3>视觉预览</h3>
+                  <button id="refreshVisionPreviewBtn">刷新画面</button>
+                </div>
+                <div class="vision-preview">
+                  <img id="visionPreviewFrame" alt="视觉服务画面预览" />
+                </div>
+                <dl class="kv wide">
+                  <dt>frame</dt><dd id="visionPreviewUrl">--</dd>
+                  <dt>状态</dt><dd id="visionPreviewState">等待刷新</dd>
+                  <dt>服务</dt><dd id="visionHealthState">--</dd>
+                  <dt>目标</dt><dd id="visionLatestState">--</dd>
+                </dl>
+              </section>
             </div>
           </section>
 
@@ -263,13 +291,39 @@
                 <code>python ../04_真实舵机控制/标定应用_apply_calibration.py</code>
               </div>
             </div>
+            <div class="panel calibration-diagnostics-panel">
+              <div class="panel-head">
+                <h3>J12 当前角度修正</h3>
+                <button id="j12DiagnoseBtn">只读诊断</button>
+              </div>
+              <dl class="kv wide">
+                <dt>Present raw</dt><dd id="j12PresentRaw">--</dd>
+                <dt>当前换算</dt><dd id="j12CurrentAngle">--</dd>
+                <dt>软件限位</dt><dd id="j12Limit">--</dd>
+                <dt>判断</dt><dd id="j12LimitState">--</dd>
+              </dl>
+              <div class="input-grid two">
+                <label class="field">
+                  <span>当前真实姿态应为</span>
+                  <input id="j12AssignedAngle" type="number" step="0.1" value="0" />
+                </label>
+                <label class="field">
+                  <span>保存结果</span>
+                  <button id="j12ApplyCalibrationBtn" class="primary">按当前角度修正 J12</button>
+                </label>
+              </div>
+              <pre id="j12DiagnosticResult" class="result-box"></pre>
+            </div>
             <div id="calibTableWrap" class="table-wrap"></div>
           </section>
 
           <section id="pageSettings" class="page">
             <div class="section-head">
               <h2>设置</h2>
-              <button id="refreshDepsBtn">检查依赖</button>
+              <div class="inline-actions">
+                <button id="refreshHardwareBtn" class="primary">真实硬件检查</button>
+                <button id="refreshDepsBtn">检查依赖</button>
+              </div>
             </div>
             <div class="settings-grid">
               <section class="panel">
@@ -296,6 +350,45 @@
                 <div class="panel-head"><h3>依赖</h3></div>
                 <div id="depsList" class="deps-list"></div>
               </section>
+              <section class="panel motion-tuning-panel">
+                <div class="panel-head">
+                  <h3>运动调参</h3>
+                  <button id="resetMotionTuningBtn">恢复推荐值</button>
+                </div>
+                <div class="input-grid two">
+                  <label class="field"><span>速度 %</span><input id="motionSpeedPercent" type="number" min="10" max="100" step="1" /></label>
+                  <label class="field"><span>单击用时 s</span><input id="quickStepDuration" type="number" min="0.05" max="10" step="0.05" /></label>
+                  <label class="field"><span>单击帧数</span><input id="quickStepFrames" type="number" min="1" max="240" step="1" /></label>
+                  <label class="field"><span>长按刷新率 Hz</span><input id="continuousUpdateHz" type="number" min="2" max="60" step="1" /></label>
+                  <label class="field"><span>长按前瞻 s</span><input id="continuousHorizon" type="number" min="0" max="2" step="0.05" /></label>
+                  <label class="field"><span>播放刷新率 Hz</span><input id="playbackUpdateHz" type="number" min="2" max="60" step="1" /></label>
+                </div>
+                <button id="saveMotionTuningBtn" class="primary">保存调参</button>
+              </section>
+              <section class="panel module-links-panel">
+                <div class="panel-head"><h3>模块入口</h3></div>
+                <div class="module-link-grid">
+                  <a href="/api/v1/vision/frame.jpg" target="_blank" rel="noreferrer">视觉画面</a>
+                  <a href="/api/v1/vision/latest" target="_blank" rel="noreferrer">视觉 latest</a>
+                  <a href="/docs" target="_blank" rel="noreferrer">Web API</a>
+                  <a href="/api/v1/robot/calibration-status" target="_blank" rel="noreferrer">标定 JSON</a>
+                </div>
+              </section>
+              <section class="panel hardware-panel">
+                <div class="panel-head">
+                  <h3>真实硬件</h3>
+                  <span id="hardwareStatus" class="status-pill warn">未检查</span>
+                </div>
+                <dl class="kv wide">
+                  <dt>串口</dt><dd id="hardwarePort">--</dd>
+                  <dt>CH343</dt><dd id="hardwareDriver">--</dd>
+                  <dt>依赖</dt><dd id="hardwareDeps">--</dd>
+                  <dt>标定</dt><dd id="hardwareCalibration">--</dd>
+                  <dt>舵机 ID</dt><dd id="hardwareIds">--</dd>
+                  <dt>raw</dt><dd id="hardwareRaw">--</dd>
+                </dl>
+                <div id="hardwareErrors" class="hardware-errors"></div>
+              </section>
             </div>
           </section>
 
@@ -313,6 +406,6 @@
       </div>
     </div>
 
-    <script src="/static/app.js?v=20260619-rail-follow"></script>
+    <script src="/static/app.js?v=20260627-j12-vision-jog"></script>
   </body>
 </html>

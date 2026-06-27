@@ -314,9 +314,9 @@ class ControllerBridge:
             return self._exception("关节诊断失败", exc)
 
     def get_joint_diagnostics_batch(self, joint_keys: list[str] | None = None) -> dict[str, Any]:
-        """批量只读诊断多圈关节，不移动舵机。"""
+        """批量读取当前状态，不移动舵机。"""
 
-        joints = joint_keys or ["j10", "j11", "j12", "j13", "j15"]
+        joints = joint_keys or ["j10", "j11", "j12", "j13", "j14", "j15"]
         diagnostics: dict[str, Any] = {}
         errors: dict[str, str] = {}
         for joint_key in joints:
@@ -418,7 +418,7 @@ class ControllerBridge:
         if not isinstance(calibration_entry, dict):
             raise RuntimeError(f"{joint} 缺少标定项。")
         if str(calibration_entry.get("模式", joint_config.get("模式", ""))) != "多圈":
-            raise RuntimeError("当前 Web 修正入口只支持 J10/J11/J12/J13/J15 多圈关节。")
+            raise RuntimeError("当前 Web 修正入口只支持 J10-J15 多圈关节。")
 
         present_raw = self._read_present_raw_for_joint(config, calibration, joint)
         from 角度映射_angle_mapper import (

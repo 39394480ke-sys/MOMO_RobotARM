@@ -27,7 +27,6 @@ JOINTS = list(COMMON_JOINT_ORDER)
 MULTI_TURN_JOINTS = list(COMMON_MULTI_TURN_JOINTS)
 
 SINGLE_TURN_CALIBRATION_JOINTS = [
-    "j14",  # J14_腕部俯仰
     GRIPPER_JOINT,  # J16_夹爪
 ]
 
@@ -176,7 +175,7 @@ def build_feetech_connect_error(error: Exception, port: str, include_gripper: bo
 
 
 def single_turn_calibration_joints(include_gripper: bool = True) -> list[str]:
-    """返回需要单圈标定的关节。夹爪未安装时只标定 J14。"""
+    """返回需要单圈标定的关节。J14 已统一为多圈，只剩可选夹爪。"""
 
     if include_gripper:
         return list(SINGLE_TURN_CALIBRATION_JOINTS)
@@ -228,10 +227,9 @@ def confirm_or_abort(prompt: str, expected_text: str) -> None:
 
 
 def has_complete_single_turn_calibration(calibration: dict[str, Any], include_gripper: bool = True) -> bool:
-    """检查 J14/夹爪 是否已有可复用单圈标定。"""
+    """检查夹爪是否已有可复用单圈标定。"""
 
     required = {
-        "j14": ["id", "zero_present_raw", "range_min", "range_max", "homing_offset"],
         GRIPPER_JOINT: ["id", "zero_present_raw", "range_min", "range_max", "homing_offset"],
     }
     for joint_name in single_turn_calibration_joints(include_gripper):

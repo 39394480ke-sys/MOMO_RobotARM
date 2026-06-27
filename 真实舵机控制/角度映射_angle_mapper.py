@@ -8,7 +8,7 @@
 - j11 = J11_底座旋转，多圈，1:5 行星减速
 - j12 = J12_肩部抬升，多圈
 - j13 = J13_肘部弯曲，多圈
-- j14 = J14_腕部俯仰，单圈
+- j14 = J14_腕部俯仰，多圈，直连 1:1
 - j15 = J15_腕部旋转，多圈
 """
 
@@ -40,9 +40,7 @@ MULTI_TURN_DISABLED_LIMIT_RAW = 0
 JOINT_ORDER = list(COMMON_JOINT_ORDER)
 MULTI_TURN_JOINTS = list(COMMON_MULTI_TURN_JOINTS)
 
-SINGLE_TURN_JOINTS = [
-    "j14",  # J14_腕部俯仰
-]
+SINGLE_TURN_JOINTS: list[str] = []
 
 def joint_label(joint_key: str) -> str:
     """返回带 J 编号的显示名。"""

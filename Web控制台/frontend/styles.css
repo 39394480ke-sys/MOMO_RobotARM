@@ -684,6 +684,16 @@ th {
   grid-column: span 8;
 }
 
+.advanced-calibration-panel summary {
+  cursor: pointer;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.advanced-calibration-panel .table-wrap {
+  margin-top: 12px;
+}
+
 .agent-chat-panel {
   grid-column: span 8;
 }

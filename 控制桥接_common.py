@@ -19,7 +19,7 @@ from 通用路径 import ensure_paths_on_sys_path
 
 
 JOINT_ORDER = ["j10", "j11", "j12", "j13", "j14", "j15"]
-MULTI_TURN_JOINTS = ["j10", "j11", "j12", "j13", "j15"]
+MULTI_TURN_JOINTS = ["j10", "j11", "j12", "j13", "j14", "j15"]
 GRIPPER_JOINT = "gripper"
 SERVO_IDS = {
     "j10": 10,

@@ -1,7 +1,7 @@
 """多圈关节映射检查。
 
 只做角度到 raw 的转换测试，不写入舵机。
-检查 J10/J11/J12/J13/J15 是否按 signed absolute raw 处理，没有做 4096 包裹。
+检查 J10-J15 是否按 signed absolute raw 处理，没有做 4096 包裹。
 """
 
 from __future__ import annotations

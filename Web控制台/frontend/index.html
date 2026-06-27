@@ -514,52 +514,39 @@
                 <dt>允许真实移动</dt><dd id="calibAllowed">--</dd>
               </dl>
               <div class="command-box">
-                <code>python 真实舵机控制/标定当前角度_calibrate_current_angle.py --port /dev/momo-servo --joint-angle j12=0 --dry-run</code>
-                <code>python 真实舵机控制/标定当前角度_calibrate_current_angle.py --port /dev/momo-servo --joint-angle j12=0 --joint-angle j13=0 --yes</code>
+                <code>python 真实舵机控制/标定当前角度_calibrate_current_angle.py --port /dev/momo-servo --joint-angle j12=0 --joint-angle j14=0 --dry-run</code>
+                <code>python 真实舵机控制/标定当前角度_calibrate_current_angle.py --port /dev/momo-servo --joint-angle j10=0 --joint-angle j11=0 --joint-angle j12=0 --joint-angle j13=0 --joint-angle j14=0 --joint-angle j15=0 --yes</code>
               </div>
             </div>
             <div class="panel calibration-diagnostics-panel">
               <div class="panel-head">
-                <h3>当前角度修正</h3>
-                <button id="j12DiagnoseBtn">只读诊断</button>
+                <h3>当前状态</h3>
+                <button id="batchDiagnoseBtn">刷新当前状态</button>
               </div>
-              <dl class="kv wide">
-                <dt>Present raw</dt><dd id="j12PresentRaw">--</dd>
-                <dt>当前换算</dt><dd id="j12CurrentAngle">--</dd>
-                <dt>软件限位</dt><dd id="j12Limit">--</dd>
-                <dt>判断</dt><dd id="j12LimitState">--</dd>
-              </dl>
-              <div class="input-grid two">
-                <label class="field">
-                  <span>J12 当前真实姿态应为</span>
-                  <input id="j12AssignedAngle" type="number" step="0.1" value="0" />
-                </label>
-                <label class="field">
-                  <span>快捷保存</span>
-                  <button id="j12ApplyCalibrationBtn" class="primary">按当前角度修正 J12</button>
-                </label>
-              </div>
+              <div id="batchDiagnosticsTable" class="table-wrap"></div>
               <div class="batch-calibration">
                 <div class="panel-head">
-                  <h4>批量多圈关节修正</h4>
+                  <h4>当前姿态修正</h4>
                   <div class="inline-actions">
-                    <button id="batchDiagnoseBtn">批量只读诊断</button>
                     <button id="fillBatchFromDiagnosisBtn">用当前换算填入</button>
-                    <button id="applyBatchCalibrationBtn" class="primary">批量保存</button>
+                    <button id="applyBatchCalibrationBtn" class="primary">保存修正</button>
                   </div>
                 </div>
-                <div class="input-grid five">
+                <div class="input-grid six">
                   <label class="field"><span>J10 mm</span><input class="batch-angle-input" data-joint="j10" type="number" step="0.1" placeholder="留空跳过" /></label>
                   <label class="field"><span>J11 deg</span><input class="batch-angle-input" data-joint="j11" type="number" step="0.1" placeholder="留空跳过" /></label>
                   <label class="field"><span>J12 deg</span><input class="batch-angle-input" data-joint="j12" type="number" step="0.1" placeholder="留空跳过" /></label>
                   <label class="field"><span>J13 deg</span><input class="batch-angle-input" data-joint="j13" type="number" step="0.1" placeholder="留空跳过" /></label>
+                  <label class="field"><span>J14 deg</span><input class="batch-angle-input" data-joint="j14" type="number" step="0.1" placeholder="留空跳过" /></label>
                   <label class="field"><span>J15 deg</span><input class="batch-angle-input" data-joint="j15" type="number" step="0.1" placeholder="留空跳过" /></label>
                 </div>
-                <div id="batchDiagnosticsTable" class="table-wrap"></div>
               </div>
-              <pre id="j12DiagnosticResult" class="result-box"></pre>
+              <pre id="calibrationResult" class="result-box"></pre>
             </div>
-            <div id="calibTableWrap" class="table-wrap"></div>
+            <details class="panel advanced-calibration-panel">
+              <summary>高级：标定文件摘要</summary>
+              <div id="calibTableWrap" class="table-wrap"></div>
+            </details>
           </section>
 
           <section id="pageSettings" class="page">
@@ -656,6 +643,6 @@
       </div>
     </div>
 
-    <script src="/static/app.js?v=20260627-j12-vision-jog"></script>
+    <script src="/static/app.js?v=20260627-j14-multiturn-calibration"></script>
   </body>
 </html>

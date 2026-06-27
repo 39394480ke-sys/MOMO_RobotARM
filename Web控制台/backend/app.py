@@ -236,7 +236,7 @@ async def joint_diagnostics(joint_key: str = "j12") -> dict[str, Any]:
 
 
 @app.get("/api/v1/robot/joint-diagnostics/batch")
-async def joint_diagnostics_batch(joint_keys: str = "j10,j11,j12,j13,j15") -> dict[str, Any]:
+async def joint_diagnostics_batch(joint_keys: str = "j10,j11,j12,j13,j14,j15") -> dict[str, Any]:
     joints = [item.strip() for item in joint_keys.split(",") if item.strip()]
     return api_success(service.get_joint_diagnostics_batch(joints or None))
 

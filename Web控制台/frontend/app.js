@@ -40,7 +40,6 @@ const state = {
   continuousJogStopping: false,
   continuousJogPointerId: null,
   continuousJogButton: null,
-  j12Diagnostic: null,
   batchDiagnostics: null,
   modeSelectDirty: false,
 };
@@ -118,8 +117,6 @@ function bindEvents() {
   $("#ikBtn").addEventListener("click", computeIk);
   $("#executeIkBtn").addEventListener("click", executeIk);
   $("#refreshCalibrationBtn").addEventListener("click", loadCalibration);
-  $("#j12DiagnoseBtn").addEventListener("click", diagnoseJ12);
-  $("#j12ApplyCalibrationBtn").addEventListener("click", applyJ12Calibration);
   $("#batchDiagnoseBtn").addEventListener("click", diagnoseBatchCalibration);
   $("#fillBatchFromDiagnosisBtn").addEventListener("click", fillBatchCalibrationFromDiagnostics);
   $("#applyBatchCalibrationBtn").addEventListener("click", applyBatchCalibration);
@@ -1857,48 +1854,22 @@ function renderCalibration(calib) {
     </table>`;
 }
 
-async function diagnoseJ12() {
-  try {
-    state.j12Diagnostic = await getJson("/api/v1/robot/joint-diagnostics?joint_key=j12", { timeout: 8000 });
-    renderJ12Diagnostic(state.j12Diagnostic);
-  } catch (error) {
-    showError(error);
-    $("#j12DiagnosticResult").textContent = error.message || String(error);
-  }
-}
-
-async function applyJ12Calibration() {
-  const assigned = Number($("#j12AssignedAngle").value);
-  if (!Number.isFinite(assigned)) {
-    showError(new ApiError("BAD_INPUT", "请输入 J12 当前真实姿态对应的角度。"));
-    return;
-  }
-  const body = await withSafety({ joint_key: "j12", current_angle_deg: assigned }, true);
-  if (!body) return;
-  try {
-    const data = await postJsonLogged("/api/v1/robot/calibration/current-angle", body, { timeout: 10000 });
-    $("#j12DiagnosticResult").textContent = JSON.stringify(data, null, 2);
-    await loadCalibration();
-    await diagnoseJ12();
-  } catch (_) {}
-}
-
 async function diagnoseBatchCalibration() {
   try {
     const data = await getJson("/api/v1/robot/joint-diagnostics/batch", { timeout: 20000 });
     state.batchDiagnostics = data;
     renderBatchDiagnostics(data);
-    $("#j12DiagnosticResult").textContent = JSON.stringify(data, null, 2);
+    $("#calibrationResult").textContent = JSON.stringify(data, null, 2);
   } catch (error) {
     showError(error);
-    $("#j12DiagnosticResult").textContent = error.message || String(error);
+    $("#calibrationResult").textContent = error.message || String(error);
   }
 }
 
 function fillBatchCalibrationFromDiagnostics() {
   const diagnostics = state.batchDiagnostics?.diagnostics || {};
   if (!Object.keys(diagnostics).length) {
-    showError(new ApiError("NO_BATCH_DIAGNOSTICS", "请先点击“批量只读诊断”。"));
+    showError(new ApiError("NO_BATCH_DIAGNOSTICS", "请先点击“刷新当前状态”。"));
     return;
   }
   $$(".batch-angle-input").forEach((input) => {
@@ -1906,7 +1877,7 @@ function fillBatchCalibrationFromDiagnostics() {
     if (!item || item.current_angle_deg == null) return;
     input.value = formatNum(item.current_angle_deg, input.dataset.joint === "j10" ? 2 : 2);
   });
-  $("#j12DiagnosticResult").textContent = "已把当前软件换算角度填入批量输入框。请只保留你确认要修正的关节，其他输入框清空。";
+  $("#calibrationResult").textContent = "已把当前软件换算值填入输入框。请只保留你确认要修正的关节，其他输入框清空。";
 }
 
 async function applyBatchCalibration() {
@@ -1920,33 +1891,23 @@ async function applyBatchCalibration() {
     }
   });
   if (!Object.keys(jointAngles).length) {
-    showError(new ApiError("BAD_INPUT", "请至少填写一个多圈关节的当前逻辑角度。"));
+    showError(new ApiError("BAD_INPUT", "请至少填写一个关节的当前逻辑值。"));
     return;
   }
   const body = await withSafety({ joint_angles_deg: jointAngles }, true);
   if (!body) return;
   try {
     const data = await postJsonLogged("/api/v1/robot/calibration/current-angles", body, { timeout: 20000 });
-    $("#j12DiagnosticResult").textContent = JSON.stringify(data, null, 2);
+    $("#calibrationResult").textContent = JSON.stringify(data, null, 2);
     await loadCalibration();
-    await diagnoseJ12();
     await diagnoseBatchCalibration();
   } catch (_) {}
-}
-
-function renderJ12Diagnostic(data) {
-  $("#j12PresentRaw").textContent = String(data.present_raw ?? "--");
-  $("#j12CurrentAngle").textContent = `${formatNum(data.current_angle_deg, 2)} deg`;
-  $("#j12Limit").textContent = `[${formatNum(data.min_angle_deg, 1)}, ${formatNum(data.max_angle_deg, 1)}] deg`;
-  $("#j12LimitState").textContent = data.in_limit ? "限位内" : data.reason || "超限";
-  $("#j12LimitState").className = data.in_limit ? "ok-text" : "bad-text";
-  $("#j12DiagnosticResult").textContent = JSON.stringify(data, null, 2);
 }
 
 function renderBatchDiagnostics(data) {
   const diagnostics = data.diagnostics || {};
   const errors = data.errors || {};
-  const rows = ["j10", "j11", "j12", "j13", "j15"]
+  const rows = ["j10", "j11", "j12", "j13", "j14", "j15"]
     .map((joint) => {
       const item = diagnostics[joint] || {};
       const error = errors[joint] || "";
@@ -2135,7 +2096,7 @@ function showPage(name) {
     refreshKinematicsRender();
   }
   if (name === "calibration") loadCalibration();
-  if (name === "calibration") diagnoseJ12();
+  if (name === "calibration") diagnoseBatchCalibration();
   if (name === "settings") {
     loadDependencies();
     loadHardwareCheck();

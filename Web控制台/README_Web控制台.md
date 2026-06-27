@@ -223,6 +223,7 @@ python 真实舵机控制/标定当前角度_calibrate_current_angle.py \
   --joint-angle j11=0 \
   --joint-angle j12=30 \
   --joint-angle j13=-15 \
+  --joint-angle j14=0 \
   --joint-angle j15=0
 ```
 

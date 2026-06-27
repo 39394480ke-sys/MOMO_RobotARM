@@ -3,20 +3,19 @@
     "generated_at_unix_s": 1782410039.064536,
     "script": "标定程序_calibrate.py",
     "gripper_available": false,
-    "bounded_single_turn_joints": [
-      "j14"
-    ],
+    "bounded_single_turn_joints": [],
     "absolute_raw_joints": [
       "j10",
       "j11",
       "j12",
       "j13",
+      "j14",
       "j15"
     ],
     "notes": {
-      "bounded_single_turn": "J14 使用有限位单圈标定；夹爪未安装，已禁用。",
-      "absolute_raw": "J10/J11/J12/J13/J15 使用 mode 0 + Phase 28 + 0/0 限位的多圈绝对 raw 模式；J11 为 1:5 减速底盘旋转。",
-      "home": "home() 回到由 zero_present_raw / home_present_raw 定义的相对 0 度。"
+      "bounded_single_turn": "夹爪未安装，已禁用；J14 已统一为多圈软件限位。",
+      "absolute_raw": "J10/J11/J12/J13/J14/J15 使用 mode 0 + Phase 28 + 0/0 限位的多圈绝对 raw 模式；J11 为 1:5 减速底盘旋转，J14 为直连 1:1。",
+      "home": "home() 回到由 home_present_raw 定义的相对 0 度。"
     }
   },
   "j10": {
@@ -91,14 +90,16 @@
   },
   "j14": {
     "show_name": "J14_腕部俯仰",
-    "模式": "单圈",
-    "direction": 1,
+    "模式": "多圈",
+    "direction": -1,
     "id": 14,
     "drive_mode": 0,
-    "homing_offset": 1271,
-    "range_min": 841,
-    "range_max": 3215,
+    "homing_offset": 0,
+    "phase": 28,
+    "range_min": 0,
+    "range_max": 0,
     "operating_mode": 0,
-    "zero_present_raw": 2047
+    "home_present_raw": 2047,
+    "home_present_wrapped_raw": 2047
   }
 }

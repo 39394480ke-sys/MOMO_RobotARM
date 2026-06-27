@@ -86,10 +86,10 @@ def main() -> None:
         )
     if is_lightweight_backend(backend) and args.recalibrate_single:
         raise SystemExit(
-            "当前 driver_backend 使用轻量 SDK。轻量标定路线不执行 J14/夹爪单圈重标定，"
+            "当前 driver_backend 使用轻量 SDK。轻量标定路线不执行夹爪单圈重标定，"
             "因为该流程需要写 Homing_Offset 和采样单圈限位。\n"
-            "开发板推荐做法：保留已有 J14/夹爪单圈标定，只用 "
-            "标定当前角度_calibrate_current_angle.py / Web 批量标定修正多圈关节。"
+            "开发板推荐做法：J10-J15 全部用 "
+            "标定当前角度_calibrate_current_angle.py / Web 当前姿态修正；夹爪单独处理。"
         )
     print(f"后端：{backend}  baudrate={baudrate}")
     bus, include_gripper = connect_optional_gripper_bus(port, include_gripper, backend=backend, baudrate=baudrate)
@@ -166,7 +166,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output", default=None, help="输出标定文件。dry-run 默认写 标定文件_dry_run预览.json")
     parser.add_argument("--dry-run", action="store_true", help="不连接硬件，只生成预览")
     parser.add_argument("--apply-registers", action="store_true", help="把多圈/单圈标定寄存器写入舵机")
-    parser.add_argument("--recalibrate-single", action="store_true", help="强制重新标定 J14/夹爪")
+    parser.add_argument("--recalibrate-single", action="store_true", help="强制重新标定夹爪单圈")
     parser.add_argument("--yes", action="store_true", help="兼容旧脚本参数；当前版本启动时不再要求固定文本确认")
     return parser.parse_args()
 
@@ -196,7 +196,7 @@ def print_hardware_status(bus: Any, include_gripper: bool = True) -> None:
 
 
 def apply_multi_turn_registers(bus: Any) -> None:
-    """写入 J10/J11/J12/J13/J15 多圈寄存器配置。"""
+    """写入 J10-J15 多圈寄存器配置。"""
 
     print("\n写入多圈关节寄存器配置：Operating_Mode=0, Homing_Offset=0, Phase=28, Limit=0/0")
     for joint_name in MULTI_TURN_JOINTS:
@@ -209,13 +209,13 @@ def apply_multi_turn_registers(bus: Any) -> None:
 
 
 def build_multi_turn_entries(bus: Any) -> dict[str, dict[str, Any]]:
-    """读取 J10/J11/J12/J13/J15 当前 raw，生成多圈标定项。"""
+    """读取 J10-J15 当前 raw，生成多圈标定项。"""
 
     positions = bus_sync_read_positions(bus, MULTI_TURN_JOINTS)
     entries = {}
     print("\n多圈关节零点记录：")
     print("  J10 底盘导轨和 J11 减速底盘旋转不用手动采样限位。")
-    print("  J10/J11/J12/J13/J15 会把当前 Present_Position 记录为 home_present_raw。")
+    print("  J10/J11/J12/J13/J14/J15 会把当前 Present_Position 记录为 home_present_raw。")
     for joint_name in MULTI_TURN_JOINTS:
         present_raw = int(positions[joint_name])
         entries[joint_name] = {
@@ -245,10 +245,13 @@ def build_single_turn_entries(
     force_recalibrate: bool = False,
     include_gripper: bool = True,
 ) -> dict[str, dict[str, Any]]:
-    """生成 J14/夹爪单圈标定项。"""
+    """生成夹爪单圈标定项。J14 已统一为多圈。"""
 
     single_turn_joints = single_turn_calibration_joints(include_gripper)
-    single_turn_label = "J14/夹爪" if include_gripper else "J14"
+    if not single_turn_joints:
+        print("\n没有需要处理的单圈关节；J14 已按多圈处理。")
+        return {}
+    single_turn_label = "夹爪"
 
     if has_complete_single_turn_calibration(old_calibration, include_gripper=include_gripper) and not force_recalibrate:
         answer = input(
@@ -262,9 +265,7 @@ def build_single_turn_entries(
 
     print(f"\n开始重新标定 {single_turn_label}。")
     bus.disable_torque()
-    prompt = "请手动把 J14 腕部俯仰放到你希望的 0 度位置。\n"
-    if include_gripper:
-        prompt += "请把夹爪放到安全位置。\n"
+    prompt = "请把夹爪放到安全位置。\n"
     input(
         prompt + "完成后按 ENTER。"
     )
@@ -310,11 +311,14 @@ def build_single_turn_entries(
 
 
 def apply_single_turn_registers(bus: Any, calibration: dict[str, Any], include_gripper: bool = True) -> None:
-    """把 J14/夹爪单圈寄存器写入舵机。"""
+    """把夹爪单圈寄存器写入舵机。"""
 
-    single_turn_label = "J14/夹爪" if include_gripper else "J14"
+    single_turn_joints = single_turn_calibration_joints(include_gripper)
+    if not single_turn_joints:
+        return
+    single_turn_label = "夹爪"
     print(f"\n写入 {single_turn_label} 单圈寄存器配置。")
-    for joint_name in single_turn_calibration_joints(include_gripper):
+    for joint_name in single_turn_joints:
         entry = calibration[joint_name]
         bus_write(bus, "Operating_Mode", joint_name, int(entry.get("operating_mode", POSITION_MODE_VALUE)))
         bus_write(bus, "Homing_Offset", joint_name, int(entry.get("homing_offset", 0)))
@@ -332,7 +336,7 @@ def set_single_turn_midpoint_homings(bus: Any, single_turn_joints: list[str]) ->
 
     try:
         print("\n把单圈关节当前姿势写为 raw 中点。")
-        print("目标：J14/夹爪当前零点姿势在采样前落到 2047/2048 附近，避免范围跨过 0。")
+        print("目标：夹爪当前零点姿势在采样前落到 2047/2048 附近，避免范围跨过 0。")
         result = bus.set_half_turn_homings(single_turn_joints)
         if isinstance(result, dict):
             print(f"set_half_turn_homings 返回：{result}")
@@ -344,10 +348,10 @@ def set_single_turn_midpoint_homings(bus: Any, single_turn_joints: list[str]) ->
 
 
 def record_single_turn_ranges(bus: Any, include_gripper: bool = True) -> dict[str, tuple[int, int]]:
-    """记录 J14/夹爪安全运动范围。"""
+    """记录夹爪安全运动范围。"""
 
     single_turn_joints = single_turn_calibration_joints(include_gripper)
-    single_turn_label = "J14/夹爪" if include_gripper else "J14"
+    single_turn_label = "夹爪"
     print(f"\n请手动让 {single_turn_label} 在安全范围内完整移动一遍。")
     input("准备开始记录范围时按 ENTER。")
 
@@ -452,9 +456,9 @@ def build_meta(include_gripper: bool = True) -> dict[str, Any]:
         "bounded_single_turn_joints": single_turn_calibration_joints(include_gripper),
         "absolute_raw_joints": list(MULTI_TURN_JOINTS),
         "notes": {
-            "bounded_single_turn": "J14/夹爪使用有限位单圈标定。" if include_gripper else "J14 使用有限位单圈标定；夹爪未安装，已禁用。",
-            "absolute_raw": "J10/J11/J12/J13/J15 使用 mode 0 + Phase 28 + 0/0 限位的多圈绝对 raw 模式；J11 为 1:5 减速底盘旋转。",
-            "home": "home() 回到由 zero_present_raw / home_present_raw 定义的相对 0 度。",
+            "bounded_single_turn": "夹爪使用有限位单圈标定。" if include_gripper else "夹爪未安装，已禁用；J14 已统一为多圈软件限位。",
+            "absolute_raw": "J10/J11/J12/J13/J14/J15 使用 mode 0 + Phase 28 + 0/0 限位的多圈绝对 raw 模式；J11 为 1:5 减速底盘旋转，J14 为直连 1:1。",
+            "home": "home() 回到由 home_present_raw 定义的相对 0 度；夹爪仍使用 zero_present_raw/range。",
         },
     }
 

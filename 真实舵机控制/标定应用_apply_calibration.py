@@ -52,7 +52,7 @@ def main() -> None:
 
     include_gripper = should_include_gripper(config, calibration)
     if not include_gripper:
-        print("夹爪不可用或未标定：只会应用 J10-J15 的寄存器配置。")
+        print("夹爪不可用或未标定：只会应用主臂 J10-J15 的寄存器配置。")
 
     bus = connect_feetech_bus(port, include_gripper=include_gripper)
     try:

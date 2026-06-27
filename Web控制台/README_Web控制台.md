@@ -211,8 +211,19 @@ source ~/miniforge3/etc/profile.d/conda.sh
 conda activate momo_rebot
 python 真实舵机控制/标定当前角度_calibrate_current_angle.py \
   --port /dev/momo-servo \
-  --joint j12 \
-  --angle 30
+  --joint-angle j12=30
+```
+
+一次修多个多圈关节：
+
+```bash
+python 真实舵机控制/标定当前角度_calibrate_current_angle.py \
+  --port /dev/momo-servo \
+  --joint-angle j10=0 \
+  --joint-angle j11=0 \
+  --joint-angle j12=30 \
+  --joint-angle j13=-15 \
+  --joint-angle j15=0
 ```
 
 真实硬件只读检查：

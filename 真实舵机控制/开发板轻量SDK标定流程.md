@@ -36,7 +36,7 @@ python 真实舵机控制/标定当前角度_calibrate_current_angle.py \
   --port /dev/momo-servo \
   --joint-angle j12=30 \
   --joint-angle j13=-15 \
-  --joint-angle j14=0
+  --joint-angle j15=0
 ```
 
 含义是：
@@ -45,6 +45,8 @@ python 真实舵机控制/标定当前角度_calibrate_current_angle.py \
 - 你告诉程序“当前物理姿态应该是多少逻辑角度”。
 - 程序反算并更新对应关节的 `home_present_raw`。
 - 保存前自动备份旧 `标定文件.json`。
+
+当前角度标定只适合多圈关节：`j10, j11, j12, j13, j15`。`j14` 是单圈腕部俯仰，不走 `home_present_raw` 当前角度反算；如果 J14 需要重做零点/限位，先保留原有标定，等确认要进入单圈寄存器流程时再单独处理。
 
 例如 J12 当前实际应该是 `30°`，不是把 J12 强行设为 `0°`：
 

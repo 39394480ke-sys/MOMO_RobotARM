@@ -38,6 +38,7 @@ const state = {
   continuousJogPointerId: null,
   continuousJogButton: null,
   j12Diagnostic: null,
+  batchDiagnostics: null,
   modeSelectDirty: false,
 };
 
@@ -110,6 +111,8 @@ function bindEvents() {
   $("#refreshCalibrationBtn").addEventListener("click", loadCalibration);
   $("#j12DiagnoseBtn").addEventListener("click", diagnoseJ12);
   $("#j12ApplyCalibrationBtn").addEventListener("click", applyJ12Calibration);
+  $("#batchDiagnoseBtn").addEventListener("click", diagnoseBatchCalibration);
+  $("#fillBatchFromDiagnosisBtn").addEventListener("click", fillBatchCalibrationFromDiagnostics);
   $("#applyBatchCalibrationBtn").addEventListener("click", applyBatchCalibration);
   $("#refreshDepsBtn").addEventListener("click", loadDependencies);
   $("#refreshHardwareBtn").addEventListener("click", loadHardwareCheck);
@@ -1731,6 +1734,32 @@ async function applyJ12Calibration() {
   } catch (_) {}
 }
 
+async function diagnoseBatchCalibration() {
+  try {
+    const data = await getJson("/api/v1/robot/joint-diagnostics/batch", { timeout: 20000 });
+    state.batchDiagnostics = data;
+    renderBatchDiagnostics(data);
+    $("#j12DiagnosticResult").textContent = JSON.stringify(data, null, 2);
+  } catch (error) {
+    showError(error);
+    $("#j12DiagnosticResult").textContent = error.message || String(error);
+  }
+}
+
+function fillBatchCalibrationFromDiagnostics() {
+  const diagnostics = state.batchDiagnostics?.diagnostics || {};
+  if (!Object.keys(diagnostics).length) {
+    showError(new ApiError("NO_BATCH_DIAGNOSTICS", "请先点击“批量只读诊断”。"));
+    return;
+  }
+  $$(".batch-angle-input").forEach((input) => {
+    const item = diagnostics[input.dataset.joint];
+    if (!item || item.current_angle_deg == null) return;
+    input.value = formatNum(item.current_angle_deg, input.dataset.joint === "j10" ? 2 : 2);
+  });
+  $("#j12DiagnosticResult").textContent = "已把当前软件换算角度填入批量输入框。请只保留你确认要修正的关节，其他输入框清空。";
+}
+
 async function applyBatchCalibration() {
   const jointAngles = {};
   $$(".batch-angle-input").forEach((input) => {
@@ -1752,6 +1781,7 @@ async function applyBatchCalibration() {
     $("#j12DiagnosticResult").textContent = JSON.stringify(data, null, 2);
     await loadCalibration();
     await diagnoseJ12();
+    await diagnoseBatchCalibration();
   } catch (_) {}
 }
 
@@ -1762,6 +1792,31 @@ function renderJ12Diagnostic(data) {
   $("#j12LimitState").textContent = data.in_limit ? "限位内" : data.reason || "超限";
   $("#j12LimitState").className = data.in_limit ? "ok-text" : "bad-text";
   $("#j12DiagnosticResult").textContent = JSON.stringify(data, null, 2);
+}
+
+function renderBatchDiagnostics(data) {
+  const diagnostics = data.diagnostics || {};
+  const errors = data.errors || {};
+  const rows = ["j10", "j11", "j12", "j13", "j15"]
+    .map((joint) => {
+      const item = diagnostics[joint] || {};
+      const error = errors[joint] || "";
+      const ok = item.in_limit === true;
+      const bad = item.in_limit === false || error;
+      return `<tr>
+        <td>${escapeHtml(joint.toUpperCase())}</td>
+        <td>${escapeHtml(String(item.present_raw ?? "--"))}</td>
+        <td>${item.current_angle_deg == null ? "--" : `${formatNum(item.current_angle_deg, 2)}`}</td>
+        <td>${item.min_angle_deg == null ? "--" : `${formatNum(item.min_angle_deg, 1)} ~ ${formatNum(item.max_angle_deg, 1)}`}</td>
+        <td class="${ok ? "ok-text" : bad ? "bad-text" : ""}">${escapeHtml(error || item.reason || "--")}</td>
+      </tr>`;
+    })
+    .join("");
+  $("#batchDiagnosticsTable").innerHTML = `
+    <table>
+      <thead><tr><th>关节</th><th>Present raw</th><th>当前换算</th><th>软件限位</th><th>判断</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
 }
 
 function renderKinematicsStatus() {

@@ -235,6 +235,12 @@ async def joint_diagnostics(joint_key: str = "j12") -> dict[str, Any]:
     return api_success(service.get_joint_diagnostics(joint_key))
 
 
+@app.get("/api/v1/robot/joint-diagnostics/batch")
+async def joint_diagnostics_batch(joint_keys: str = "j10,j11,j12,j13,j15") -> dict[str, Any]:
+    joints = [item.strip() for item in joint_keys.split(",") if item.strip()]
+    return api_success(service.get_joint_diagnostics_batch(joints or None))
+
+
 @app.post("/api/v1/robot/calibration/current-angle")
 async def calibration_current_angle(request: CalibrationCurrentAngleRequest) -> dict[str, Any]:
     return await _call(service.set_calibration_current_angle, request)

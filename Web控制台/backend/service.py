@@ -300,6 +300,11 @@ class WebControlService:
             result = self.bridge.get_joint_diagnostics(joint_key)
             return self._unwrap_bridge(result, code="JOINT_DIAGNOSTICS_FAILED")
 
+    def get_joint_diagnostics_batch(self, joint_keys: list[str] | None = None) -> dict[str, Any]:
+        with self._lock:
+            result = self.bridge.get_joint_diagnostics_batch(joint_keys)
+            return self._unwrap_bridge(result, code="JOINT_DIAGNOSTICS_BATCH_FAILED")
+
     def set_calibration_current_angle(self, request: CalibrationCurrentAngleRequest) -> dict[str, Any]:
         with self._lock:
             self._require_real_confirm_if_needed("real", request.confirm_text, action="保存真实标定修正")

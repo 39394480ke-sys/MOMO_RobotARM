@@ -313,6 +313,28 @@ class ControllerBridge:
         except Exception as exc:
             return self._exception("关节诊断失败", exc)
 
+    def get_joint_diagnostics_batch(self, joint_keys: list[str] | None = None) -> dict[str, Any]:
+        """批量只读诊断多圈关节，不移动舵机。"""
+
+        joints = joint_keys or ["j10", "j11", "j12", "j13", "j15"]
+        diagnostics: dict[str, Any] = {}
+        errors: dict[str, str] = {}
+        for joint_key in joints:
+            joint = normalize_joint_key(joint_key)
+            result = self.get_joint_diagnostics(joint)
+            if result.get("ok"):
+                diagnostics[joint] = result.get("data", {})
+            else:
+                errors[joint] = str(result.get("message") or result.get("error") or "诊断失败")
+        return bridge_ok(
+            "批量关节诊断已完成。",
+            {
+                "diagnostics": diagnostics,
+                "errors": errors,
+                "joint_keys": [normalize_joint_key(joint) for joint in joints],
+            },
+        )
+
     def set_calibration_current_angle(self, joint_key: str, current_angle_deg: float) -> dict[str, Any]:
         """把当前 Present_Position 标记为指定逻辑角度，不移动舵机。"""
 

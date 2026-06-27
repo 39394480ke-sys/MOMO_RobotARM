@@ -647,6 +647,9 @@ class WebControlService:
     def compute_ik(self, xyz: list[float], rpy: list[float] | None = None) -> dict[str, Any]:
         return self._unwrap_bridge(self.bridge.compute_ik(xyz, rpy), code="IK_FAILED")
 
+    def kinematics_status(self) -> dict[str, Any]:
+        return self._unwrap_bridge(self.bridge.kinematics_status(), code="KINEMATICS_STATUS_FAILED")
+
     # ------------------------------------------------------------------
     # WebSocket 状态
     # ------------------------------------------------------------------

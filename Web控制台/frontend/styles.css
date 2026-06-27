@@ -474,9 +474,13 @@ pre {
   background: #f0f9f3;
 }
 
-.kin-grid .panel:first-child,
-.kin-grid .panel:nth-child(2) {
+.kin-grid .panel:nth-child(2),
+.kin-grid .panel:nth-child(3) {
   grid-column: span 6;
+}
+
+.kin-status-panel {
+  grid-column: span 12;
 }
 
 .jog-panel {
@@ -805,8 +809,9 @@ th {
   .tcp-panel,
   .log-panel,
   .control-grid > .panel:nth-child(2),
-  .kin-grid .panel:first-child,
   .kin-grid .panel:nth-child(2),
+  .kin-grid .panel:nth-child(3),
+  .kin-status-panel,
   .jog-panel,
   .vision-preview-panel,
   .settings-grid > .panel,

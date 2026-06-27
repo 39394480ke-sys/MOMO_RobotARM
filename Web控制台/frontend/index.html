@@ -358,9 +358,25 @@
           <section id="pageKinematics" class="page">
             <div class="section-head">
               <h2>运动学</h2>
-              <button id="kinRefreshBtn">刷新 TCP</button>
+              <div class="inline-actions">
+                <button id="kinRefreshBtn">刷新 TCP</button>
+                <button id="kinStatusBtn">刷新仿真状态</button>
+              </div>
             </div>
             <div class="kin-grid">
+              <section class="panel kin-status-panel">
+                <div class="panel-head">
+                  <h3>URDF / 仿真检查</h3>
+                  <span id="kinStatusPill" class="status-pill warn">未检查</span>
+                </div>
+                <dl class="kv wide">
+                  <dt>URDF</dt><dd id="kinUrdfPath">--</dd>
+                  <dt>target</dt><dd id="kinTargetFrame">--</dd>
+                  <dt>links / joints</dt><dd id="kinCounts">--</dd>
+                  <dt>PyBullet</dt><dd id="kinModelState">--</dd>
+                </dl>
+                <pre id="kinStatusResult" class="result-box"></pre>
+              </section>
               <section class="panel">
                 <div class="panel-head"><h3>FK</h3></div>
                 <div class="input-grid five" id="fkInputs"></div>

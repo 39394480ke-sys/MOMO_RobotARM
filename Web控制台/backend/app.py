@@ -435,6 +435,11 @@ async def actions_stop() -> dict[str, Any]:
 # ----------------------------------------------------------------------
 # 运动学辅助接口。前端只展示计算结果，执行仍走 /api/v1/motion/move-pose 或 move-joints。
 # ----------------------------------------------------------------------
+@app.get("/api/v1/kinematics/status")
+async def kinematics_status() -> dict[str, Any]:
+    return api_success(service.kinematics_status())
+
+
 @app.post("/api/v1/kinematics/fk")
 async def kinematics_fk(request: FKRequest) -> dict[str, Any]:
     return api_success(service.compute_fk(request.joints_deg))

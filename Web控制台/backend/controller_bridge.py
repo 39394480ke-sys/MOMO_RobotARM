@@ -1121,6 +1121,40 @@ class ControllerBridge:
         except Exception as exc:
             return self._exception("IK 计算失败", exc)
 
+    def kinematics_status(self) -> dict[str, Any]:
+        """只读 URDF / PyBullet 运动学状态，用于 Web 仿真检查器。"""
+
+        try:
+            from URDF检查_urdf_inspector import 检查URDF
+
+            report = 检查URDF(self._resolve_config("kinematics_config_path"))
+            model = self._get_kinematics_model()
+            model_data: dict[str, Any] = {
+                "available": model is not None,
+                "error": self.last_error,
+            }
+            if model is not None:
+                model_data.update(
+                    {
+                        "backend": "pybullet",
+                        "sdk_joint_names": list(getattr(model, "sdk_joint_names", [])),
+                        "ordered_joint_urdf_names": list(getattr(model, "ordered_joint_urdf_names", [])),
+                        "target_frame": getattr(model, "target_frame", ""),
+                        "ee_link_index": getattr(model, "ee_link_index", None),
+                        "joint_limits": model.joint_limits_report() if hasattr(model, "joint_limits_report") else {},
+                    }
+                )
+            return bridge_ok(
+                "URDF / 运动学状态已读取。",
+                {
+                    "urdf": report,
+                    "model": model_data,
+                    "message": "URDF / 运动学状态已读取。",
+                },
+            )
+        except Exception as exc:
+            return self._exception("读取运动学状态失败", exc)
+
     # ------------------------------------------------------------------
     # 内部对象创建
     # ------------------------------------------------------------------

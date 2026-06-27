@@ -23,6 +23,7 @@ const state = {
   follow: null,
   hardware: null,
   motionTuning: null,
+  kinematicsStatus: null,
   recording: null,
   agent: null,
   agentMessages: [],
@@ -89,6 +90,7 @@ function bindEvents() {
     if (event.key === "Enter") sendAgentMessage();
   });
   $("#kinRefreshBtn").addEventListener("click", refreshState);
+  $("#kinStatusBtn").addEventListener("click", loadKinematicsStatus);
   $("#fkBtn").addEventListener("click", computeFk);
   $("#ikBtn").addEventListener("click", computeIk);
   $("#executeIkBtn").addEventListener("click", executeIk);
@@ -180,7 +182,7 @@ async function loadConfig() {
 }
 
 async function refreshAll() {
-  await Promise.allSettled([refreshSession(), refreshState(), refreshFollow(), loadMotionTuning(), loadPoses(), loadActions(), loadCalibration(), loadDependencies()]);
+  await Promise.allSettled([refreshSession(), refreshState(), refreshFollow(), loadMotionTuning(), loadKinematicsStatus(), loadPoses(), loadActions(), loadCalibration(), loadDependencies()]);
 }
 
 async function refreshSession() {
@@ -261,6 +263,15 @@ async function loadMotionTuning() {
   try {
     state.motionTuning = await getJson("/api/v1/motion/tuning");
     renderMotionTuning();
+  } catch (error) {
+    showError(error);
+  }
+}
+
+async function loadKinematicsStatus() {
+  try {
+    state.kinematicsStatus = await getJson("/api/v1/kinematics/status", { timeout: 12000 });
+    renderKinematicsStatus();
   } catch (error) {
     showError(error);
   }
@@ -1274,6 +1285,40 @@ function renderJ12Diagnostic(data) {
   $("#j12DiagnosticResult").textContent = JSON.stringify(data, null, 2);
 }
 
+function renderKinematicsStatus() {
+  const data = state.kinematicsStatus || {};
+  const urdf = data.urdf || {};
+  const model = data.model || {};
+  const ok = Boolean(urdf.ok && model.available);
+  $("#kinStatusPill").textContent = ok ? "可用" : "需检查";
+  $("#kinStatusPill").className = `status-pill ${ok ? "good" : "bad"}`;
+  $("#kinUrdfPath").textContent = shortPath(urdf.urdf_path || "");
+  $("#kinTargetFrame").textContent = model.target_frame || urdf.target_frame || "--";
+  $("#kinCounts").textContent = `${(urdf.links || []).length} links / ${(urdf.joints || []).length} joints`;
+  $("#kinModelState").textContent = model.available ? `${model.backend || "model"} ee=${model.ee_link_index ?? "--"}` : model.error || "不可用";
+  $("#kinModelState").className = model.available ? "ok-text" : "bad-text";
+  const jointLimits = model.joint_limits || {};
+  const limitSummary = Object.entries(jointLimits).map(([joint, item]) => ({
+    joint,
+    urdf_joint: item.urdf_joint,
+    lower_deg: item.lower_deg,
+    upper_deg: item.upper_deg,
+    unit: item.unit,
+  }));
+  $("#kinStatusResult").textContent = JSON.stringify(
+    {
+      errors: urdf.errors || [],
+      warnings: urdf.warnings || [],
+      missing_meshes: urdf.missing_meshes || [],
+      sdk_joint_mapping: urdf.sdk_joint_mapping || {},
+      ordered_joint_urdf_names: model.ordered_joint_urdf_names || [],
+      joint_limits: limitSummary,
+    },
+    null,
+    2
+  );
+}
+
 function renderMotionTuning() {
   const t = state.motionTuning || state.config?.motion || {};
   $("#motionSpeedPercent").value = formatNum(t.default_speed_percent ?? 50, 0);
@@ -1374,6 +1419,7 @@ function showPage(name) {
   }
   if (name === "agent") loadAgentStatus();
   if (name === "cinematic") loadCinematicStatus();
+  if (name === "kinematics") loadKinematicsStatus();
   if (name === "calibration") loadCalibration();
   if (name === "calibration") diagnoseJ12();
   if (name === "settings") {

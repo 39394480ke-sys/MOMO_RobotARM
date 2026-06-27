@@ -273,6 +273,19 @@ pre {
   color: var(--muted);
 }
 
+.jog-detail {
+  min-height: 42px;
+  max-height: 140px;
+  overflow: auto;
+  margin: 8px 0 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #f8fafc;
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .control-grid,
 .kin-grid,
 .settings-grid {
@@ -701,6 +714,42 @@ th {
   grid-column: span 6;
 }
 
+.motion-direction-block {
+  margin-top: 12px;
+}
+
+.subhead {
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.direction-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.direction-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 88px;
+  gap: 8px;
+  align-items: center;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #f8fafc;
+  font-size: 13px;
+}
+
+.direction-field span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .agent-chat-log {
   min-height: 360px;
   max-height: 520px;
@@ -940,6 +989,7 @@ th {
   .input-grid.five,
   .input-grid.six,
   .jog-buttons,
+  .direction-grid,
   .module-link-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }

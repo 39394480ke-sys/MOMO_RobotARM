@@ -50,6 +50,7 @@ document.addEventListener("DOMContentLoaded", init);
 async function init() {
   $("#apiAddress").textContent = `API: ${location.origin}`;
   buildJointControls();
+  buildJogDirectionOverrides();
   buildFkInputs();
   buildJogButtons();
   bindEvents();
@@ -536,6 +537,20 @@ function buildJointControls() {
     btn.setPointerCapture?.(event.pointerId);
     startContinuousJog(btn.dataset.joint, Number(btn.dataset.dir), event.pointerId, btn);
   });
+}
+
+function buildJogDirectionOverrides() {
+  const wrap = $("#jogDirectionOverrides");
+  if (!wrap) return;
+  wrap.innerHTML = JOINTS.map(([key, label]) => `
+    <label class="direction-field">
+      <span>${escapeHtml(label)}</span>
+      <select data-jog-direction="${key}">
+        <option value="1">正常</option>
+        <option value="-1">反向</option>
+      </select>
+    </label>
+  `).join("");
 }
 
 function buildFkInputs() {
@@ -1989,13 +2004,27 @@ function renderKinematicsStatus() {
 
 function renderMotionTuning() {
   const t = state.motionTuning || state.config?.motion || {};
+  const overrides = t.jog_direction_overrides || {};
   $("#motionSpeedPercent").value = formatNum(t.default_speed_percent ?? 50, 0);
   $("#quickStepDuration").value = formatNum(t.quick_step_duration_s ?? 0.8, 2);
   $("#quickStepFrames").value = String(t.quick_step_frames ?? 12);
   $("#continuousUpdateHz").value = formatNum(t.continuous_update_hz ?? 20, 1);
   $("#continuousHorizon").value = formatNum(t.continuous_target_horizon_s ?? 0.25, 2);
   $("#playbackUpdateHz").value = formatNum(t.playback_update_hz ?? 20, 1);
+  $$("[data-jog-direction]").forEach((select) => {
+    const joint = select.dataset.jogDirection;
+    select.value = String(Number(overrides[joint] ?? 1) < 0 ? -1 : 1);
+  });
   $("#continuousSpeedInput").disabled = state.jointControlMode !== "continuous";
+}
+
+function readJogDirectionOverrides() {
+  const overrides = {};
+  $$("[data-jog-direction]").forEach((select) => {
+    const joint = select.dataset.jogDirection;
+    overrides[joint] = Number(select.value) < 0 ? -1 : 1;
+  });
+  return overrides;
 }
 
 async function saveMotionTuning() {
@@ -2006,6 +2035,7 @@ async function saveMotionTuning() {
     continuous_update_hz: Number($("#continuousUpdateHz").value || 20),
     continuous_target_horizon_s: Number($("#continuousHorizon").value || 0.25),
     playback_update_hz: Number($("#playbackUpdateHz").value || 20),
+    jog_direction_overrides: readJogDirectionOverrides(),
   };
   try {
     const data = await postJson("/api/v1/motion/tuning", body);
@@ -2034,6 +2064,19 @@ function renderContinuousJog(jog) {
     ? `连续控制：${jog.joint_key || "--"} ${formatNum(jog.speed_deg_s, 1)} deg/s @ ${formatNum(jog.update_hz, 1)} Hz`
     : "连续控制：停止";
   $("#continuousJogStatus").className = `inline-status ${running ? "ok-text" : ""}`;
+  const detail = {
+    running,
+    joint_key: jog.joint_key || null,
+    direction: jog.direction ?? null,
+    speed_deg_s: jog.speed_deg_s ?? null,
+    update_hz: jog.update_hz ?? state.motionTuning?.continuous_update_hz ?? null,
+    target_horizon_s: jog.target_horizon_s ?? state.motionTuning?.continuous_target_horizon_s ?? null,
+    started_at: jog.started_at || null,
+    last_tick_at: jog.last_tick_at || null,
+    tick_count: jog.tick_count ?? null,
+    message: jog.message || null,
+  };
+  $("#continuousJogDetail").textContent = running || jog.message ? JSON.stringify(detail, null, 2) : "未运行";
 }
 
 function renderDependencies(deps) {

@@ -76,6 +76,7 @@
                   </div>
                 </div>
                 <div id="continuousJogStatus" class="inline-status">连续控制：停止</div>
+                <pre id="continuousJogDetail" class="jog-detail">未运行</pre>
                 <div id="jointControls" class="joint-list"></div>
               </section>
 
@@ -606,6 +607,10 @@
                   <label class="field"><span>长按刷新率 Hz</span><input id="continuousUpdateHz" type="number" min="2" max="60" step="1" /></label>
                   <label class="field"><span>长按前瞻 s</span><input id="continuousHorizon" type="number" min="0" max="2" step="0.05" /></label>
                   <label class="field"><span>播放刷新率 Hz</span><input id="playbackUpdateHz" type="number" min="2" max="60" step="1" /></label>
+                </div>
+                <div class="motion-direction-block">
+                  <div class="subhead">连续/快速方向修正</div>
+                  <div id="jogDirectionOverrides" class="direction-grid"></div>
                 </div>
                 <button id="saveMotionTuningBtn" class="primary">保存调参</button>
               </section>

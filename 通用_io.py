@@ -89,6 +89,27 @@ def atomic_write_json(path: str | Path, data: Any) -> None:
             tmp_path.unlink()
 
 
+def write_structured(path: str | Path, data: Mapping[str, Any]) -> None:
+    """写入 JSON/YAML 对象配置，格式由文件后缀决定。"""
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if target.suffix.lower() in {".yaml", ".yml"}:
+        import yaml  # type: ignore
+
+        target.write_text(yaml.safe_dump(dict(data), allow_unicode=True, sort_keys=False), encoding="utf-8")
+        return
+    write_json(target, dict(data))
+
+
+def update_structured_section(path: str | Path, section: str, value: Mapping[str, Any]) -> dict[str, Any]:
+    """更新配置文件中的一个对象 section，并返回完整配置。"""
+    target = Path(path)
+    data = read_structured(target)
+    data[str(section)] = dict(value)
+    write_structured(target, data)
+    return data
+
+
 def timestamped_json_path(directory: str | Path, prefix: str, timestamp: str | None = None) -> Path:
     """生成 ``prefix_YYYY-mm-ddTHH-MM-SS.json`` 形式的路径。"""
     base = Path(directory)

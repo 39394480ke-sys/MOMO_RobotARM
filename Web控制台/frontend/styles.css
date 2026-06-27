@@ -553,6 +553,8 @@ pre {
   border: 1px solid var(--line);
   border-radius: 8px;
   overflow: hidden;
+  cursor: crosshair;
+  user-select: none;
 }
 
 .vision-preview img {
@@ -592,6 +594,13 @@ pre {
   stroke: rgba(56, 189, 248, 0.72);
   stroke-dasharray: 6 4;
   stroke-width: 1.5;
+}
+
+.vision-overlay .selection-box {
+  fill: rgba(59, 130, 246, 0.16);
+  stroke: #f8fafc;
+  stroke-dasharray: 5 4;
+  stroke-width: 2;
 }
 
 .input-grid {

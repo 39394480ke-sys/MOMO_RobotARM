@@ -25,6 +25,7 @@ ensure_project_root_on_path()
 
 from 控制桥接_common import (  # noqa: E402
     DEFAULT_MOTION_TUNING,
+    FOLLOW_JOINT_AXES,
     JOINT_ORDER,
     normalize_control_mode,
     normalize_joint_key,
@@ -33,8 +34,10 @@ from 控制桥接_common import (  # noqa: E402
     real_confirm_required,
     real_confirm_text,
     resolve_base_path,
+    tool_result_fail,
+    tool_result_ok,
 )
-from 通用_io import read_json_object, read_structured_section  # noqa: E402
+from 通用_io import read_json_object, read_structured_section, update_structured_section  # noqa: E402
 
 from .controller_bridge import ControllerBridge
 from .errors import WebAPIError
@@ -51,6 +54,7 @@ from .schemas import (
     CinematicKeyframesRequest,
     ConnectRequest,
     ContinuousJogStartRequest,
+    FollowConfigRequest,
     FollowStartRequest,
     GotoPoseRequest,
     GripperRequest,
@@ -146,9 +150,35 @@ class WebControlService:
                 "max_turns": int(agent.get("max_turns", 0) or 0),
                 "allow_real_robot_tools": bool(safety.get("allow_real_robot_tools", False)),
                 "allowed_tools": list(safety.get("allowed_tools", [])) if isinstance(safety.get("allowed_tools", []), list) else [],
+                "tool_check": self.agent_tool_check(include_state=True),
             }
         except Exception as exc:
             return {"available": False, "message": str(exc)}
+
+    def agent_tool_check(self, include_state: bool = True) -> dict[str, Any]:
+        try:
+            config = self._load_agent_config()
+            safety = config.get("safety", {}) if isinstance(config.get("safety", {}), dict) else {}
+            result: dict[str, Any] = {
+                "ok": True,
+                "robot_api_base": str(config.get("robot_api", {}).get("base_url", "")),
+                "mode": self.bridge.mode,
+                "connected": bool(self.bridge.is_connected()),
+                "allow_real_robot_tools": bool(safety.get("allow_real_robot_tools", False)),
+                "message": "机器人状态工具可用。",
+            }
+            if include_state:
+                robot_state = self.get_robot_state()
+                joints = robot_state.get("joints_deg") if isinstance(robot_state.get("joints_deg"), dict) else {}
+                result["state_summary"] = {
+                    "mode": robot_state.get("mode"),
+                    "connected": robot_state.get("connected"),
+                    "joints": list(joints.keys()) if isinstance(joints, dict) else [],
+                    "raw_error": (robot_state.get("raw") or {}).get("错误") if isinstance(robot_state.get("raw"), dict) else "",
+                }
+            return result
+        except Exception as exc:
+            return {"ok": False, "message": str(exc)}
 
     def agent_ask(self, request: AgentAskRequest) -> dict[str, Any]:
         content = str(request.text or "").strip()
@@ -342,12 +372,14 @@ class WebControlService:
         payload = {key: value for key, value in request.dict(exclude_none=True).items()}
         tuning = normalize_motion_tuning(self.config.get("motion", {}), payload, joint_order=JOINT_ORDER)
         self.config.setdefault("motion", {}).update(tuning)
-        return {"message": "运动调参已更新。", "motion": tuning}
+        saved_paths = self._persist_motion_tuning(tuning)
+        return {"message": "运动调参已更新并同步到 GUI/Web 配置。", "motion": tuning, "saved_paths": saved_paths}
 
     def reset_motion_tuning(self) -> dict[str, Any]:
         tuning = normalize_motion_tuning(DEFAULT_MOTION_TUNING, {}, joint_order=JOINT_ORDER)
         self.config.setdefault("motion", {}).update(tuning)
-        return {"message": "运动调参已恢复推荐值。", "motion": tuning}
+        saved_paths = self._persist_motion_tuning(tuning)
+        return {"message": "运动调参已恢复推荐值并同步到 GUI/Web 配置。", "motion": tuning, "saved_paths": saved_paths}
 
     def continuous_jog_status(self) -> dict[str, Any]:
         status = dict(self._continuous_jog_status)
@@ -535,10 +567,19 @@ class WebControlService:
                 "effective_config": {
                     "pan_joint": follow_cfg.get("pan_joint", "j11"),
                     "tilt_joint": follow_cfg.get("tilt_joint", "j13"),
+                    "enabled_follow_joints": self._normalize_follow_joints(follow_cfg.get("enabled_follow_joints")),
                     "pan_sign": follow_cfg.get("pan_sign", 1.0),
                     "tilt_sign": follow_cfg.get("tilt_sign", -1.0),
+                    "pan_gain_deg_per_norm": follow_cfg.get("pan_gain_deg_per_norm", 4.8),
+                    "tilt_gain_deg_per_norm": follow_cfg.get("tilt_gain_deg_per_norm", 4.8),
                     "pan_dead_zone_norm": follow_cfg.get("pan_dead_zone_norm", 0.02),
                     "tilt_dead_zone_norm": follow_cfg.get("tilt_dead_zone_norm", 0.025),
+                    "pan_resume_zone_norm": follow_cfg.get("pan_resume_zone_norm", 0.05),
+                    "tilt_resume_zone_norm": follow_cfg.get("tilt_resume_zone_norm", 0.055),
+                    "min_pan_step_deg": follow_cfg.get("min_pan_step_deg", 0.5),
+                    "min_tilt_step_deg": follow_cfg.get("min_tilt_step_deg", 0.5),
+                    "pan_min_step_zone_norm": follow_cfg.get("pan_min_step_zone_norm", 0.12),
+                    "tilt_min_step_zone_norm": follow_cfg.get("tilt_min_step_zone_norm", 0.12),
                     "max_pan_step_deg": follow_cfg.get("max_pan_step_deg", 1.0),
                     "max_tilt_step_deg": follow_cfg.get("max_tilt_step_deg", 1.0),
                     "rail_cinematic": rail_cfg,
@@ -551,6 +592,38 @@ class WebControlService:
                 "message": "视觉跟随未启动。",
             }
         return self._follow_controller.get_status()
+
+    def follow_config(self) -> dict[str, Any]:
+        vision_root = self.base_dir.parent / "视觉识别与跟随"
+        follow = self._load_vision_follow_config(vision_root)
+        follow["enabled_follow_joints"] = self._normalize_follow_joints(follow.get("enabled_follow_joints"))
+        return {"follow": follow, "config_path": str(vision_root / "视觉配置.yaml")}
+
+    def set_follow_config(self, request: FollowConfigRequest) -> dict[str, Any]:
+        vision_root = self.base_dir.parent / "视觉识别与跟随"
+        config_path = vision_root / "视觉配置.yaml"
+        follow = self._load_vision_follow_config(vision_root)
+        payload = {key: value for key, value in request.dict(exclude_none=True).items()}
+        if "enabled_follow_joints" in payload:
+            payload["enabled_follow_joints"] = self._normalize_follow_joints(payload.get("enabled_follow_joints"))
+        if "pan_joint" in payload and payload["pan_joint"] is not None:
+            payload["pan_joint"] = normalize_joint_key(str(payload["pan_joint"]))
+        if "tilt_joint" in payload and payload["tilt_joint"] is not None:
+            payload["tilt_joint"] = normalize_joint_key(str(payload["tilt_joint"]))
+        if "rail_cinematic" in payload and isinstance(payload["rail_cinematic"], dict):
+            rail = dict(follow.get("rail_cinematic", {})) if isinstance(follow.get("rail_cinematic", {}), dict) else {}
+            rail.update(payload["rail_cinematic"])
+            payload["rail_cinematic"] = rail
+        follow.update(payload)
+        follow["enabled_follow_joints"] = self._normalize_follow_joints(follow.get("enabled_follow_joints"))
+        update_structured_section(config_path, "follow", follow)
+        if self._follow_controller is not None:
+            try:
+                self._follow_controller.stop()
+            except Exception:
+                pass
+            self._follow_controller = None
+        return {"message": "视觉跟随参数已保存。", "follow": follow, "config_path": str(config_path)}
 
     def start_follow(self, request: FollowStartRequest) -> dict[str, Any]:
         with self._lock:
@@ -849,8 +922,29 @@ class WebControlService:
 
             config = self._load_agent_config()
             config.setdefault("tts", {})["enabled"] = False
-            self._agent_app = AgentApp(config, force_new_session=force_new_session)
+            self._agent_app = AgentApp(config, force_new_session=force_new_session, tool_bridge=self._create_agent_tool_bridge(config))
         return self._agent_app
+
+    def _create_agent_tool_bridge(self, config: dict[str, Any]) -> Any:
+        service = self
+
+        class WebServiceToolBridge:
+            def execute(self, tool_name: str, arguments: dict[str, Any] | None = None) -> dict[str, Any]:
+                if tool_name == "get_robot_state":
+                    try:
+                        return tool_result_ok(tool_name, service.get_robot_state())
+                    except Exception as exc:
+                        return tool_result_fail(tool_name, f"读取 Web 同进程机械臂状态失败：{exc}")
+                if tool_name == "stop_robot":
+                    try:
+                        return tool_result_ok(tool_name, service.stop())
+                    except Exception as exc:
+                        return tool_result_fail(tool_name, f"停止命令失败：{exc}")
+                from agent.工具桥接_tool_bridge import RobotToolBridge
+
+                return RobotToolBridge(config).execute(tool_name, arguments or {})
+
+        return WebServiceToolBridge()
 
     @staticmethod
     def _latest_files(directory: Path, pattern: str, limit: int = 8) -> list[dict[str, Any]]:
@@ -903,10 +997,20 @@ class WebControlService:
             follow_cfg["pan_joint"] = normalize_joint_key(request.pan_joint)
         if request.tilt_joint is not None:
             follow_cfg["tilt_joint"] = normalize_joint_key(request.tilt_joint)
+        if request.enabled_follow_joints is not None:
+            follow_cfg["enabled_follow_joints"] = self._normalize_follow_joints(request.enabled_follow_joints)
         if request.pan_gain is not None:
             follow_cfg["pan_gain_deg_per_norm"] = float(request.pan_gain)
         if request.tilt_gain is not None:
             follow_cfg["tilt_gain_deg_per_norm"] = float(request.tilt_gain)
+        if request.pan_sign is not None:
+            follow_cfg["pan_sign"] = float(request.pan_sign)
+        if request.tilt_sign is not None:
+            follow_cfg["tilt_sign"] = float(request.tilt_sign)
+        if request.max_pan_step_deg is not None:
+            follow_cfg["max_pan_step_deg"] = float(request.max_pan_step_deg)
+        if request.max_tilt_step_deg is not None:
+            follow_cfg["max_tilt_step_deg"] = float(request.max_tilt_step_deg)
         if request.speed_percent is not None:
             follow_cfg["speed_percent"] = int(request.speed_percent)
         if request.poll_interval is not None:
@@ -938,6 +1042,30 @@ class WebControlService:
             return read_structured_section(config_path, "follow")
         except Exception:
             return {}
+
+    def _persist_motion_tuning(self, tuning: dict[str, Any]) -> list[str]:
+        paths = [self.base_dir / "Web配置.yaml", self.base_dir.parent / "GUI图形界面" / "GUI配置.yaml"]
+        saved: list[str] = []
+        for path in paths:
+            try:
+                update_structured_section(path, "motion", tuning)
+                saved.append(str(path))
+            except Exception as exc:
+                self._remember_error("MOTION_TUNING_SAVE_FAILED", f"{path}: {exc}")
+        return saved
+
+    @staticmethod
+    def _normalize_follow_joints(value: Any) -> list[str]:
+        raw = value if isinstance(value, list) else ["j11", "j13"]
+        result: list[str] = []
+        for item in raw:
+            try:
+                joint = normalize_joint_key(str(item))
+            except Exception:
+                continue
+            if joint in FOLLOW_JOINT_AXES and joint not in result:
+                result.append(joint)
+        return result or ["j11", "j13"]
 
     def _fetch_vision_json(self, path: str) -> dict[str, Any]:
         url = self._vision_service_url(path)

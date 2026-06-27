@@ -14,8 +14,10 @@ from .路径工具_path_utils import ensure_project_root_on_path
 ensure_project_root_on_path()
 
 from 控制桥接_common import (  # noqa: E402
+    FOLLOW_JOINT_AXES,
     RailSweepPlanner,
     compute_axis_step,
+    normalize_joint_key,
     read_smoothed_offset,
     unwrap_vision_payload,
     vision_target_guard,
@@ -54,6 +56,7 @@ class VisionFollowController:
         self._lock = threading.RLock()
         self._pan_active = False
         self._tilt_active = False
+        self._joint_active: dict[str, bool] = {joint: False for joint in FOLLOW_JOINT_AXES}
         self._last_command: dict[str, Any] | None = None
         self._last_result: dict[str, Any] | None = None
         self._last_error = ""
@@ -82,8 +85,7 @@ class VisionFollowController:
             self._running = False
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=1.0)
-        self._pan_active = False
-        self._tilt_active = False
+        self._reset_joint_activity()
         self._rail.stop("idle")
         return self.get_status()
 
@@ -94,6 +96,7 @@ class VisionFollowController:
         if target_safety is not None:
             self._pan_active = False
             self._tilt_active = False
+            self._reset_joint_activity()
             return self._remember_command(target_safety)
 
         offset = read_smoothed_offset(latest)
@@ -107,42 +110,13 @@ class VisionFollowController:
                 self._last_ndy = ndy
                 self._pan_active = False
                 self._tilt_active = False
+                self._reset_joint_activity()
                 return self._remember_noop("target_jump_guard", "目标偏移突然跳变，本帧不下发动作。")
         self._last_ndx = ndx
         self._last_ndy = ndy
         commands: list[dict[str, Any]] = []
 
-        pan_step = self._axis_step(
-            axis="pan",
-            norm_value=ndx,
-            active_attr="_pan_active",
-            gain_key="pan_gain_deg_per_norm",
-            gain_alias="pan_gain",
-            sign_key="pan_sign",
-            dead_key="pan_dead_zone_norm",
-            resume_key="pan_resume_zone_norm",
-            min_key="min_pan_step_deg",
-            min_zone_key="pan_min_step_zone_norm",
-            max_key="max_pan_step_deg",
-        )
-        if pan_step is not None:
-            commands.append({"joint_key": str(self.follow_cfg.get("pan_joint", "shoulder_pan")), "delta_deg": pan_step})
-
-        tilt_step = self._axis_step(
-            axis="tilt",
-            norm_value=ndy,
-            active_attr="_tilt_active",
-            gain_key="tilt_gain_deg_per_norm",
-            gain_alias="tilt_gain",
-            sign_key="tilt_sign",
-            dead_key="tilt_dead_zone_norm",
-            resume_key="tilt_resume_zone_norm",
-            min_key="min_tilt_step_deg",
-            min_zone_key="tilt_min_step_zone_norm",
-            max_key="max_tilt_step_deg",
-        )
-        if tilt_step is not None:
-            commands.append({"joint_key": str(self.follow_cfg.get("tilt_joint", "elbow_flex")), "delta_deg": tilt_step})
+        commands.extend(self._selected_follow_joint_commands(ndx, ndy))
 
         commands.extend(self._rail_commands())
 
@@ -209,6 +183,7 @@ class VisionFollowController:
                 "speed_percent": self.speed_percent,
                 "pan_joint": self.follow_cfg.get("pan_joint", "shoulder_pan"),
                 "tilt_joint": self.follow_cfg.get("tilt_joint", "elbow_flex"),
+                "enabled_follow_joints": self._enabled_follow_joints(),
                 "pan_sign": self.follow_cfg.get("pan_sign", 1.0),
                 "tilt_sign": self.follow_cfg.get("tilt_sign", -1.0),
                 "pan_gain_deg_per_norm": self.follow_cfg.get("pan_gain_deg_per_norm", self.follow_cfg.get("pan_gain", 1.0)),
@@ -224,6 +199,7 @@ class VisionFollowController:
             "rail": self._rail_status(),
             "pan_active": self._pan_active,
             "tilt_active": self._tilt_active,
+            "joint_active": dict(self._joint_active),
             "step_count": self._step_count,
             "last_command": self._last_command,
             "last_vision": {
@@ -262,6 +238,58 @@ class VisionFollowController:
             return unwrap_vision_payload(dict(self.engine.get_latest_result()))
         return unwrap_vision_payload(fetch_json_url(self.latest_url, self.http_timeout_sec))
 
+    def _enabled_follow_joints(self) -> list[str]:
+        raw = self.follow_cfg.get("enabled_follow_joints")
+        if not isinstance(raw, list) or not raw:
+            raw = [self.follow_cfg.get("pan_joint", "j11"), self.follow_cfg.get("tilt_joint", "j13")]
+        result: list[str] = []
+        for item in raw:
+            try:
+                joint = normalize_joint_key(str(item))
+            except Exception:
+                continue
+            if joint in FOLLOW_JOINT_AXES and joint not in result:
+                result.append(joint)
+        return result or ["j11", "j13"]
+
+    def _selected_follow_joint_commands(self, ndx: float, ndy: float) -> list[dict[str, Any]]:
+        commands: list[dict[str, Any]] = []
+        selected = set(self._enabled_follow_joints())
+        for joint in FOLLOW_JOINT_AXES:
+            if joint not in selected:
+                self._joint_active[joint] = False
+                continue
+            axis = FOLLOW_JOINT_AXES[joint]
+            if axis == "pan":
+                step = self._axis_step_for_joint(
+                    joint,
+                    ndx,
+                    gain_key="pan_gain_deg_per_norm",
+                    gain_alias="pan_gain",
+                    sign_key="pan_sign",
+                    dead_key="pan_dead_zone_norm",
+                    resume_key="pan_resume_zone_norm",
+                    min_key="min_pan_step_deg",
+                    min_zone_key="pan_min_step_zone_norm",
+                    max_key="max_pan_step_deg",
+                )
+            else:
+                step = self._axis_step_for_joint(
+                    joint,
+                    ndy,
+                    gain_key="tilt_gain_deg_per_norm",
+                    gain_alias="tilt_gain",
+                    sign_key="tilt_sign",
+                    dead_key="tilt_dead_zone_norm",
+                    resume_key="tilt_resume_zone_norm",
+                    min_key="min_tilt_step_deg",
+                    min_zone_key="tilt_min_step_zone_norm",
+                    max_key="max_tilt_step_deg",
+                )
+            if step is not None:
+                commands.append({"joint_key": joint, "delta_deg": step, "kind": "vision_follow", "axis": axis})
+        return commands
+
     def _axis_step(
         self,
         axis: str,
@@ -291,6 +319,41 @@ class VisionFollowController:
         )
         setattr(self, active_attr, next_active)
         return step
+
+    def _axis_step_for_joint(
+        self,
+        joint: str,
+        norm_value: float,
+        gain_key: str,
+        gain_alias: str,
+        sign_key: str,
+        dead_key: str,
+        resume_key: str,
+        min_key: str,
+        min_zone_key: str,
+        max_key: str,
+    ) -> float | None:
+        dead_zone = float(self.follow_cfg.get(dead_key, 0.02))
+        resume_zone = float(self.follow_cfg.get(resume_key, dead_zone))
+        step, next_active = compute_axis_step(
+            norm_value,
+            active=bool(self._joint_active.get(joint, False)),
+            gain=float(self.follow_cfg.get(gain_key, self.follow_cfg.get(gain_alias, 1.0))),
+            sign=float(self.follow_cfg.get(sign_key, 1.0)),
+            dead=dead_zone,
+            resume=resume_zone,
+            min_step=float(self.follow_cfg.get(min_key, 0.0)),
+            min_zone=float(self.follow_cfg.get(min_zone_key, 1.0)),
+            max_step=float(self.follow_cfg.get(max_key, 1.0)),
+        )
+        self._joint_active[joint] = next_active
+        return step
+
+    def _reset_joint_activity(self) -> None:
+        self._pan_active = False
+        self._tilt_active = False
+        for joint in self._joint_active:
+            self._joint_active[joint] = False
 
     def _load_rail_config(self) -> dict[str, Any]:
         raw = self.follow_cfg.get("rail_cinematic", {})

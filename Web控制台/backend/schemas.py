@@ -37,6 +37,30 @@ class MotionTuningRequest(BaseModel):
     jog_direction_overrides: dict[str, int] | None = None
 
 
+class FollowConfigRequest(BaseModel):
+    poll_interval_sec: float | None = Field(None, gt=0.0)
+    move_duration_sec: float | None = Field(None, gt=0.0)
+    speed_percent: int | None = Field(None, ge=1, le=100)
+    pan_joint: str | None = None
+    tilt_joint: str | None = None
+    enabled_follow_joints: list[str] | None = None
+    pan_sign: float | None = None
+    tilt_sign: float | None = None
+    pan_gain_deg_per_norm: float | None = Field(None, ge=0.0, le=30.0)
+    tilt_gain_deg_per_norm: float | None = Field(None, ge=0.0, le=30.0)
+    pan_dead_zone_norm: float | None = Field(None, ge=0.0, le=1.0)
+    tilt_dead_zone_norm: float | None = Field(None, ge=0.0, le=1.0)
+    pan_resume_zone_norm: float | None = Field(None, ge=0.0, le=1.0)
+    tilt_resume_zone_norm: float | None = Field(None, ge=0.0, le=1.0)
+    min_pan_step_deg: float | None = Field(None, ge=0.0, le=30.0)
+    min_tilt_step_deg: float | None = Field(None, ge=0.0, le=30.0)
+    pan_min_step_zone_norm: float | None = Field(None, ge=0.0, le=1.0)
+    tilt_min_step_zone_norm: float | None = Field(None, ge=0.0, le=1.0)
+    max_pan_step_deg: float | None = Field(None, ge=0.0, le=30.0)
+    max_tilt_step_deg: float | None = Field(None, ge=0.0, le=30.0)
+    rail_cinematic: dict[str, object] | None = None
+
+
 class CalibrationCurrentAngleRequest(BaseModel):
     joint_key: str = "j12"
     current_angle_deg: float
@@ -152,8 +176,13 @@ class FollowStartRequest(BaseModel):
     robot_api_base: str | None = None
     pan_joint: str | None = None
     tilt_joint: str | None = None
+    enabled_follow_joints: list[str] | None = None
     pan_gain: float | None = None
     tilt_gain: float | None = None
+    pan_sign: float | None = None
+    tilt_sign: float | None = None
+    max_pan_step_deg: float | None = Field(None, ge=0.0)
+    max_tilt_step_deg: float | None = Field(None, ge=0.0)
     dry_run: bool = True
     speed_percent: int | None = Field(None, ge=1, le=100)
     confirm_text: str = ""

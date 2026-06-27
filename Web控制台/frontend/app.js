@@ -21,6 +21,7 @@ const state = {
   pending: new Set(),
   lastIkTargets: null,
   follow: null,
+  followConfig: null,
   hardware: null,
   motionTuning: null,
   kinematicsStatus: null,
@@ -35,6 +36,7 @@ const state = {
   visionLiveTimer: null,
   latestVision: null,
   visionMockActive: false,
+  visionDrag: null,
   jointControlMode: "step",
   continuousJogActive: false,
   continuousJogStopping: false,
@@ -49,6 +51,7 @@ document.addEventListener("DOMContentLoaded", init);
 async function init() {
   $("#apiAddress").textContent = `API: ${location.origin}`;
   buildJointControls();
+  buildFollowJointChecks();
   buildJogDirectionOverrides();
   buildFkInputs();
   buildJogButtons();
@@ -81,6 +84,7 @@ function bindEvents() {
   $("#refreshFollowBtn").addEventListener("click", refreshFollow);
   $("#startFollowBtn").addEventListener("click", startFollow);
   $("#stopFollowBtn").addEventListener("click", stopFollow);
+  $("#saveFollowConfigBtn").addEventListener("click", saveFollowConfig);
   $("#followLatestUrl").addEventListener("input", () => {
     $("#followLatestUrl").dataset.userEdited = "1";
     renderVisionPreviewUrl();
@@ -94,7 +98,7 @@ function bindEvents() {
   $("#resetVisionTargetBtn").addEventListener("click", resetVisionTarget);
   $("#refreshVisionTargetBtn").addEventListener("click", refreshVisionTargetState);
   $("#visionPreviewFrame").addEventListener("load", () => renderVisionOverlay(state.latestVision));
-  $("#visionPreviewFrame").addEventListener("click", handleVisionFrameClick);
+  bindVisionDragSelect();
   window.addEventListener("resize", () => renderVisionOverlay(state.latestVision));
   $("#refreshAgentBtn").addEventListener("click", loadAgentStatus);
   $("#sendAgentBtn").addEventListener("click", sendAgentMessage);
@@ -205,7 +209,7 @@ async function loadConfig() {
 }
 
 async function refreshAll() {
-  await Promise.allSettled([refreshSession(), refreshState(), refreshFollow(), loadMotionTuning(), loadKinematicsStatus(), loadPoses(), loadActions(), loadCalibration(), loadDependencies()]);
+  await Promise.allSettled([refreshSession(), refreshState(), refreshFollow(), loadFollowConfig(), loadMotionTuning(), loadKinematicsStatus(), loadPoses(), loadActions(), loadCalibration(), loadDependencies()]);
 }
 
 async function refreshSession() {
@@ -321,6 +325,16 @@ async function refreshFollow() {
   try {
     state.follow = await getJson("/api/v1/follow/status");
     renderFollow();
+  } catch (error) {
+    showError(error);
+  }
+}
+
+async function loadFollowConfig() {
+  try {
+    const data = await getJson("/api/v1/follow/config");
+    state.followConfig = data.follow || {};
+    renderFollowConfig();
   } catch (error) {
     showError(error);
   }
@@ -549,6 +563,21 @@ function buildJogDirectionOverrides() {
       </select>
     </label>
   `).join("");
+}
+
+function buildFollowJointChecks() {
+  const wrap = $("#followJointChecks");
+  if (!wrap) return;
+  const axes = { j11: "水平", j12: "垂直", j13: "垂直", j14: "垂直", j15: "水平" };
+  wrap.innerHTML = Object.entries(axes)
+    .map(
+      ([joint, axis]) => `
+    <label class="direction-field check-field">
+      <span>${joint.toUpperCase()} ${axis}</span>
+      <input type="checkbox" data-follow-joint="${joint}" />
+    </label>`
+    )
+    .join("");
 }
 
 function buildFkInputs() {
@@ -850,13 +879,22 @@ async function switchMode() {
 
 async function startFollow() {
   const dryRun = $("#followDryRun").checked;
+  const followConfig = readFollowConfigForm();
   const body = {
     latest_url: $("#followLatestUrl").value.trim() || "http://127.0.0.1:8000/latest",
     poll_interval: Number($("#followPollInterval").value || 0.05),
+    move_duration: followConfig.move_duration_sec,
     speed_percent: Number($("#followSpeedPercent").value || 60),
     dry_run: dryRun,
     pan_joint: "j11",
     tilt_joint: "j13",
+    enabled_follow_joints: followConfig.enabled_follow_joints,
+    pan_gain: followConfig.pan_gain_deg_per_norm,
+    tilt_gain: followConfig.tilt_gain_deg_per_norm,
+    pan_sign: followConfig.pan_sign,
+    tilt_sign: followConfig.tilt_sign,
+    max_pan_step_deg: followConfig.max_pan_step_deg,
+    max_tilt_step_deg: followConfig.max_tilt_step_deg,
     rail_enabled: $("#railEnabled").checked,
     rail_start_mm: Number($("#railStartMm").value || -140),
     rail_end_mm: Number($("#railEndMm").value || 140),
@@ -883,6 +921,85 @@ async function stopFollow() {
     state.follow = data.follow || null;
     renderFollow();
   } catch (_) {}
+}
+
+function renderFollowConfig() {
+  const cfg = state.followConfig || state.follow?.effective_config || {};
+  $("#followPollInterval").value = formatNum(cfg.poll_interval_sec ?? 0.05, 3);
+  $("#followSpeedPercent").value = formatNum(cfg.speed_percent ?? 60, 0);
+  $("#followPanGain").value = formatNum(cfg.pan_gain_deg_per_norm ?? 4.8, 2);
+  $("#followTiltGain").value = formatNum(cfg.tilt_gain_deg_per_norm ?? 4.8, 2);
+  $("#followMaxPanStep").value = formatNum(cfg.max_pan_step_deg ?? 3, 2);
+  $("#followMaxTiltStep").value = formatNum(cfg.max_tilt_step_deg ?? 3, 2);
+  $("#followPanDead").value = formatNum(cfg.pan_dead_zone_norm ?? 0.03, 4);
+  $("#followTiltDead").value = formatNum(cfg.tilt_dead_zone_norm ?? 0.035, 4);
+  $("#followPanResume").value = formatNum(cfg.pan_resume_zone_norm ?? 0.05, 4);
+  $("#followTiltResume").value = formatNum(cfg.tilt_resume_zone_norm ?? 0.055, 4);
+  $("#followMinPanStep").value = formatNum(cfg.min_pan_step_deg ?? 0.5, 2);
+  $("#followMinTiltStep").value = formatNum(cfg.min_tilt_step_deg ?? 0.5, 2);
+  $("#followPanMinZone").value = formatNum(cfg.pan_min_step_zone_norm ?? 0.12, 4);
+  $("#followTiltMinZone").value = formatNum(cfg.tilt_min_step_zone_norm ?? 0.12, 4);
+  $("#followPanSign").value = String(Number(cfg.pan_sign ?? 1) < 0 ? -1 : 1);
+  $("#followTiltSign").value = String(Number(cfg.tilt_sign ?? 1) < 0 ? -1 : 1);
+  $("#followMoveDuration").value = formatNum(cfg.move_duration_sec ?? 0.25, 2);
+  const enabled = new Set(Array.isArray(cfg.enabled_follow_joints) ? cfg.enabled_follow_joints : ["j11", "j13"]);
+  $$("[data-follow-joint]").forEach((input) => {
+    input.checked = enabled.has(input.dataset.followJoint);
+  });
+  $("#followConfigState").textContent = "视觉参数已加载";
+  $("#followConfigState").className = "inline-status ok-text";
+}
+
+function readFollowConfigForm() {
+  const enabled = $$("[data-follow-joint]")
+    .filter((input) => input.checked)
+    .map((input) => input.dataset.followJoint);
+  return {
+    poll_interval_sec: Number($("#followPollInterval").value || 0.05),
+    move_duration_sec: Number($("#followMoveDuration").value || 0.25),
+    speed_percent: Number($("#followSpeedPercent").value || 60),
+    pan_joint: "j11",
+    tilt_joint: "j13",
+    enabled_follow_joints: enabled.length ? enabled : ["j11", "j13"],
+    pan_sign: Number($("#followPanSign").value || 1),
+    tilt_sign: Number($("#followTiltSign").value || 1),
+    pan_gain_deg_per_norm: Number($("#followPanGain").value || 4.8),
+    tilt_gain_deg_per_norm: Number($("#followTiltGain").value || 4.8),
+    pan_dead_zone_norm: Number($("#followPanDead").value || 0.03),
+    tilt_dead_zone_norm: Number($("#followTiltDead").value || 0.035),
+    pan_resume_zone_norm: Number($("#followPanResume").value || 0.05),
+    tilt_resume_zone_norm: Number($("#followTiltResume").value || 0.055),
+    min_pan_step_deg: Number($("#followMinPanStep").value || 0.5),
+    min_tilt_step_deg: Number($("#followMinTiltStep").value || 0.5),
+    pan_min_step_zone_norm: Number($("#followPanMinZone").value || 0.12),
+    tilt_min_step_zone_norm: Number($("#followTiltMinZone").value || 0.12),
+    max_pan_step_deg: Number($("#followMaxPanStep").value || 3),
+    max_tilt_step_deg: Number($("#followMaxTiltStep").value || 3),
+    rail_cinematic: {
+      enabled: $("#railEnabled").checked,
+      joint: "j10",
+      start_mm: Number($("#railStartMm").value || -140),
+      end_mm: Number($("#railEndMm").value || 140),
+      speed_mm_s: Number($("#railSpeedMmS").value || 5),
+      bounce: false,
+    },
+  };
+}
+
+async function saveFollowConfig() {
+  try {
+    const data = await postJson("/api/v1/follow/config", readFollowConfigForm());
+    state.followConfig = data.follow || {};
+    renderFollowConfig();
+    $("#followConfigState").textContent = "视觉参数已保存到 视觉配置.yaml";
+    $("#followConfigState").className = "inline-status ok-text";
+    log("info", "视觉跟随参数已保存");
+    await refreshFollow();
+  } catch (error) {
+    $("#followConfigState").textContent = error.message || String(error);
+    $("#followConfigState").className = "inline-status bad-text";
+    showError(error);
+  }
 }
 
 async function sendAgentMessage() {
@@ -1003,7 +1120,8 @@ function renderFollow() {
   $("#followRunning").textContent = follow.running ? "运行" : "停止";
   $("#followDryRunState").textContent = follow.dry_run === false ? "真实" : "dry-run";
   $("#followStepCount").textContent = String(follow.step_count ?? 0);
-  $("#followJointState").textContent = `pan ${cfg.pan_joint || "j11"} / tilt ${cfg.tilt_joint || "j13"}`;
+  const enabledJoints = Array.isArray(cfg.enabled_follow_joints) && cfg.enabled_follow_joints.length ? cfg.enabled_follow_joints : [cfg.pan_joint || "j11", cfg.tilt_joint || "j13"];
+  $("#followJointState").textContent = enabledJoints.map((joint) => String(joint).toUpperCase()).join(", ");
   $("#followDeadZoneState").textContent = `pan ${formatNum(cfg.pan_dead_zone_norm, 4)} / tilt ${formatNum(cfg.tilt_dead_zone_norm, 4)}`;
   $("#followRailState").textContent = rail.enabled
     ? `${rail.joint || "j10"} ${rail.running ? "运行" : rail.phase || "停止"} ${formatNum(rail.virtual_pos_mm, 2)}mm`
@@ -1034,6 +1152,9 @@ function renderAgentStatus() {
   $("#agentMaxTurns").textContent = agent.max_turns ? String(agent.max_turns) : "--";
   $("#agentRealTools").textContent = agent.allow_real_robot_tools ? "允许" : "禁止";
   $("#agentRealTools").className = agent.allow_real_robot_tools ? "bad-text" : "ok-text";
+  const toolCheck = agent.tool_check || {};
+  $("#agentToolCheck").textContent = toolCheck.ok ? "通过" : toolCheck.message || "--";
+  $("#agentToolCheck").className = toolCheck.ok ? "ok-text" : "bad-text";
   $("#agentToolsResult").textContent = JSON.stringify(
     {
       available: agent.available,
@@ -1041,6 +1162,7 @@ function renderAgentStatus() {
       model: agent.model,
       allowed_tools: agent.allowed_tools || [],
       allow_real_robot_tools: Boolean(agent.allow_real_robot_tools),
+      tool_check: agent.tool_check || {},
       message: agent.message || "",
     },
     null,
@@ -1564,6 +1686,103 @@ function visionImageRect() {
   };
 }
 
+function bindVisionDragSelect() {
+  const preview = $(".vision-preview");
+  const img = $("#visionPreviewFrame");
+  if (!preview || !img) return;
+  preview.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0) return;
+    const rect = img.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    event.preventDefault();
+    preview.setPointerCapture?.(event.pointerId);
+    state.visionDrag = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      endX: event.clientX,
+      endY: event.clientY,
+    };
+    renderVisionSelectionBox();
+  });
+  preview.addEventListener("pointermove", (event) => {
+    if (!state.visionDrag || state.visionDrag.pointerId !== event.pointerId) return;
+    state.visionDrag.endX = event.clientX;
+    state.visionDrag.endY = event.clientY;
+    renderVisionSelectionBox();
+  });
+  preview.addEventListener("pointerup", finishVisionDragSelect);
+  preview.addEventListener("pointercancel", clearVisionDragSelect);
+}
+
+function renderVisionSelectionBox() {
+  const overlay = $("#visionOverlay");
+  if (!overlay || !state.visionDrag) return;
+  const parent = $(".vision-preview").getBoundingClientRect();
+  const x1 = state.visionDrag.startX - parent.left;
+  const y1 = state.visionDrag.startY - parent.top;
+  const x2 = state.visionDrag.endX - parent.left;
+  const y2 = state.visionDrag.endY - parent.top;
+  let node = $("#visionSelectionBox");
+  if (!node) {
+    node = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    node.setAttribute("id", "visionSelectionBox");
+    node.setAttribute("class", "selection-box");
+    overlay.appendChild(node);
+  }
+  node.setAttribute("x", String(Math.min(x1, x2)));
+  node.setAttribute("y", String(Math.min(y1, y2)));
+  node.setAttribute("width", String(Math.abs(x2 - x1)));
+  node.setAttribute("height", String(Math.abs(y2 - y1)));
+}
+
+async function finishVisionDragSelect(event) {
+  if (!state.visionDrag || state.visionDrag.pointerId !== event.pointerId) return;
+  const body = visionDragToFrameBox();
+  clearVisionDragSelect();
+  if (!body) return;
+  $("#visionTargetX").value = String(body.x);
+  $("#visionTargetY").value = String(body.y);
+  $("#visionTargetW").value = String(body.w);
+  $("#visionTargetH").value = String(body.h);
+  try {
+    const result = await postJson("/api/v1/vision/target/select", body);
+    $("#visionTargetToolState").textContent = result.message || `已框选主体 x=${body.x}, y=${body.y}, w=${body.w}, h=${body.h}`;
+    await refreshVisionProxyStatus();
+    refreshVisionPreview();
+  } catch (error) {
+    showError(error);
+  }
+}
+
+function clearVisionDragSelect() {
+  state.visionDrag = null;
+  $("#visionSelectionBox")?.remove();
+}
+
+function visionDragToFrameBox() {
+  const latest = state.latestVision || {};
+  const camera = latest.camera || {};
+  const width = Number(camera.width || 0);
+  const height = Number(camera.height || 0);
+  const img = $("#visionPreviewFrame");
+  const rect = img.getBoundingClientRect();
+  const drag = state.visionDrag;
+  if (!drag || width <= 0 || height <= 0 || !rect.width || !rect.height) return null;
+  const x1 = Math.max(rect.left, Math.min(rect.right, drag.startX));
+  const y1 = Math.max(rect.top, Math.min(rect.bottom, drag.startY));
+  const x2 = Math.max(rect.left, Math.min(rect.right, drag.endX));
+  const y2 = Math.max(rect.top, Math.min(rect.bottom, drag.endY));
+  const sx = width / rect.width;
+  const sy = height / rect.height;
+  const x = Math.round((Math.min(x1, x2) - rect.left) * sx);
+  const y = Math.round((Math.min(y1, y2) - rect.top) * sy);
+  const w = Math.round(Math.abs(x2 - x1) * sx);
+  const h = Math.round(Math.abs(y2 - y1) * sy);
+  if (w < 8 || h < 8) return null;
+  return { x, y, w, h };
+}
+
 function handleVisionFrameClick(event) {
   const latest = state.latestVision || {};
   const camera = latest.camera || {};
@@ -2031,6 +2250,10 @@ function renderMotionTuning() {
     select.value = String(Number(overrides[joint] ?? 1) < 0 ? -1 : 1);
   });
   $("#continuousSpeedInput").disabled = state.jointControlMode !== "continuous";
+  if ($("#motionTuningState")) {
+    $("#motionTuningState").textContent = "当前调参已加载";
+    $("#motionTuningState").className = "inline-status ok-text";
+  }
 }
 
 function readJogDirectionOverrides() {
@@ -2056,6 +2279,8 @@ async function saveMotionTuning() {
     const data = await postJson("/api/v1/motion/tuning", body);
     state.motionTuning = data.motion || data;
     renderMotionTuning();
+    $("#motionTuningState").textContent = `已同步 ${Array.isArray(data.saved_paths) ? data.saved_paths.length : 0} 个配置文件`;
+    $("#motionTuningState").className = "inline-status ok-text";
     log("info", "运动调参已保存");
   } catch (error) {
     showError(error);
@@ -2067,6 +2292,8 @@ async function resetMotionTuning() {
     const data = await postJson("/api/v1/motion/tuning/reset", {});
     state.motionTuning = data.motion || data;
     renderMotionTuning();
+    $("#motionTuningState").textContent = `已恢复并同步 ${Array.isArray(data.saved_paths) ? data.saved_paths.length : 0} 个配置文件`;
+    $("#motionTuningState").className = "inline-status ok-text";
     log("info", "运动调参已恢复推荐值");
   } catch (error) {
     showError(error);
@@ -2141,6 +2368,7 @@ function showPage(name) {
   if (name === "actions") loadActions();
   if (name === "follow") {
     refreshFollow();
+    loadFollowConfig();
     refreshVisionPreview();
   }
   if (name === "agent") loadAgentStatus();

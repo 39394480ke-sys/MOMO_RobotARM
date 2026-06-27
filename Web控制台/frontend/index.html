@@ -217,6 +217,10 @@
                     <span>速度 %</span>
                     <input id="followSpeedPercent" type="number" min="1" max="100" step="1" value="60" />
                   </label>
+                  <label class="field">
+                    <span>移动用时 s</span>
+                    <input id="followMoveDuration" type="number" min="0.02" step="0.01" value="0.25" />
+                  </label>
                 </div>
                 <label class="check-inline">
                   <input id="followDryRun" type="checkbox" checked />
@@ -226,6 +230,34 @@
                   <span>real 确认文本</span>
                   <input id="followRealConfirm" placeholder="关闭 dry-run 时输入安全确认文本" disabled />
                 </label>
+              </section>
+
+              <section class="panel">
+                <div class="panel-head">
+                  <h3>跟随参数</h3>
+                  <button id="saveFollowConfigBtn">保存视觉参数</button>
+                </div>
+                <div class="input-grid two">
+                  <label class="field"><span>水平增益</span><input id="followPanGain" type="number" min="0" max="30" step="0.1" /></label>
+                  <label class="field"><span>垂直增益</span><input id="followTiltGain" type="number" min="0" max="30" step="0.1" /></label>
+                  <label class="field"><span>水平最大步进</span><input id="followMaxPanStep" type="number" min="0" max="30" step="0.1" /></label>
+                  <label class="field"><span>垂直最大步进</span><input id="followMaxTiltStep" type="number" min="0" max="30" step="0.1" /></label>
+                  <label class="field"><span>水平死区</span><input id="followPanDead" type="number" min="0" max="1" step="0.005" /></label>
+                  <label class="field"><span>垂直死区</span><input id="followTiltDead" type="number" min="0" max="1" step="0.005" /></label>
+                  <label class="field"><span>水平恢复区</span><input id="followPanResume" type="number" min="0" max="1" step="0.005" /></label>
+                  <label class="field"><span>垂直恢复区</span><input id="followTiltResume" type="number" min="0" max="1" step="0.005" /></label>
+                  <label class="field"><span>水平最小步进</span><input id="followMinPanStep" type="number" min="0" max="30" step="0.1" /></label>
+                  <label class="field"><span>垂直最小步进</span><input id="followMinTiltStep" type="number" min="0" max="30" step="0.1" /></label>
+                  <label class="field"><span>水平最小区</span><input id="followPanMinZone" type="number" min="0" max="1" step="0.005" /></label>
+                  <label class="field"><span>垂直最小区</span><input id="followTiltMinZone" type="number" min="0" max="1" step="0.005" /></label>
+                  <label class="field"><span>水平方向</span><select id="followPanSign"><option value="1">正常</option><option value="-1">反向</option></select></label>
+                  <label class="field"><span>垂直方向</span><select id="followTiltSign"><option value="1">正常</option><option value="-1">反向</option></select></label>
+                </div>
+                <div class="motion-direction-block">
+                  <div class="subhead">参与跟随关节</div>
+                  <div id="followJointChecks" class="direction-grid"></div>
+                </div>
+                <div id="followConfigState" class="inline-status">未加载视觉参数</div>
               </section>
 
               <section class="panel">
@@ -356,6 +388,7 @@
                   <dt>TTS</dt><dd id="agentTtsEnabled">--</dd>
                   <dt>max turns</dt><dd id="agentMaxTurns">--</dd>
                   <dt>真实工具</dt><dd id="agentRealTools">--</dd>
+                  <dt>工具自检</dt><dd id="agentToolCheck">--</dd>
                 </dl>
                 <pre id="agentToolsResult" class="result-box agent-tools-result"></pre>
               </section>
@@ -614,6 +647,7 @@
                   <div id="jogDirectionOverrides" class="direction-grid"></div>
                 </div>
                 <button id="saveMotionTuningBtn" class="primary">保存调参</button>
+                <div id="motionTuningState" class="inline-status">未同步</div>
               </section>
               <section class="panel module-links-panel">
                 <div class="panel-head"><h3>模块入口</h3></div>
@@ -657,6 +691,6 @@
       </div>
     </div>
 
-    <script src="/static/app.js?v=20260627-j14-multiturn-calibration"></script>
+    <script src="/static/app.js?v=20260627-web-gui-follow-sync"></script>
   </body>
 </html>

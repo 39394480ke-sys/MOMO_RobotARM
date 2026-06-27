@@ -29,6 +29,7 @@ from .schemas import (
     ConnectRequest,
     ContinuousJogStartRequest,
     FKRequest,
+    FollowConfigRequest,
     FollowStartRequest,
     GotoPoseRequest,
     GripperRequest,
@@ -147,6 +148,11 @@ async def config() -> dict[str, Any]:
 @app.get("/api/v1/agent/status")
 async def agent_status() -> dict[str, Any]:
     return api_success(service.agent_status())
+
+
+@app.get("/api/v1/agent/tool-check")
+async def agent_tool_check() -> dict[str, Any]:
+    return api_success(service.agent_tool_check())
 
 
 @app.post("/api/v1/agent/ask")
@@ -330,6 +336,16 @@ async def motion_gripper(request: GripperRequest) -> dict[str, Any]:
 @app.get("/api/v1/follow/status")
 async def follow_status() -> dict[str, Any]:
     return api_success(service.follow_status())
+
+
+@app.get("/api/v1/follow/config")
+async def follow_config() -> dict[str, Any]:
+    return api_success(service.follow_config())
+
+
+@app.post("/api/v1/follow/config")
+async def follow_config_update(request: FollowConfigRequest) -> dict[str, Any]:
+    return await _call(service.set_follow_config, request, broadcast=False)
 
 
 @app.post("/api/v1/follow/start")

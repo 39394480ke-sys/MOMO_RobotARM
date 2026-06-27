@@ -1286,10 +1286,42 @@ function renderRecordingStatus(latestPose = null) {
 async function showActionDetail(name) {
   try {
     const data = await getJson(`/api/v1/actions/${encodeURIComponent(name)}`);
-    log("info", `动作详情：${name} ${JSON.stringify(data.summary)}`);
+    renderActionDetail(name, data);
+    log("info", `动作详情已加载：${name}`);
   } catch (error) {
     showError(error);
   }
+}
+
+function renderActionDetail(name, detail) {
+  const action = detail.action || detail;
+  const poses = action.poses || action["poses"] || [];
+  const firstPose = poses[0] || null;
+  const lastPose = poses.length ? poses[poses.length - 1] : null;
+  $("#actionDetailName").textContent = name;
+  $("#actionDetailResult").textContent = JSON.stringify(
+    {
+      summary: detail.summary || action.summary || {},
+      path: detail.path || action.path || "",
+      pose_count: poses.length,
+      first_pose: compactActionPose(firstPose),
+      last_pose: compactActionPose(lastPose),
+      preview_poses: poses.slice(0, 5).map(compactActionPose),
+    },
+    null,
+    2
+  );
+}
+
+function compactActionPose(pose) {
+  if (!pose) return null;
+  return {
+    name: pose.name || pose["名称"] || "",
+    duration_sec: pose.duration_sec ?? pose["持续时间"] ?? pose["duration"],
+    joints_deg: pose.joints_deg || pose.joint_targets_deg || pose.replay_joint_targets_deg || pose["关节角度"] || {},
+    tcp_pose: pose.tcp_pose || pose["末端位姿"],
+    gripper: pose.gripper,
+  };
 }
 
 function renderCalibration(calib) {

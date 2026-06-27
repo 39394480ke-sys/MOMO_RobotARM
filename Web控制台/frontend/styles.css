@@ -423,6 +423,10 @@ pre {
   margin-bottom: 12px;
 }
 
+.action-detail-panel {
+  margin-bottom: 12px;
+}
+
 .recording-grid {
   display: grid;
   grid-template-columns: minmax(220px, 1fr) minmax(160px, 240px);

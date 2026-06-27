@@ -736,11 +736,24 @@ th {
   color: #c4b5fd;
 }
 
+.agent-quick-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
 .agent-input-row {
   margin-top: 10px;
   display: grid;
   grid-template-columns: 1fr 88px;
   gap: 8px;
+}
+
+.agent-reply-detail,
+.agent-tools-result {
+  margin-top: 10px;
+  max-height: 220px;
 }
 
 .compact-list {

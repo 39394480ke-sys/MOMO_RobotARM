@@ -27,6 +27,7 @@ const state = {
   recording: null,
   agent: null,
   agentMessages: [],
+  lastAgentReply: null,
   cinematic: null,
   cinematicProject: null,
   visionLiveTimer: null,
@@ -95,6 +96,8 @@ function bindEvents() {
   $("#refreshAgentBtn").addEventListener("click", loadAgentStatus);
   $("#sendAgentBtn").addEventListener("click", sendAgentMessage);
   $("#resetAgentBtn").addEventListener("click", resetAgentSession);
+  $("#clearAgentChatBtn").addEventListener("click", clearAgentChat);
+  $$(".agent-quick-btn").forEach((btn) => btn.addEventListener("click", () => useAgentPrompt(btn.dataset.agentPrompt || "")));
   $("#refreshCinematicBtn").addEventListener("click", loadCinematicStatus);
   $("#analyzeCinematicBtn").addEventListener("click", analyzeCinematicLatest);
   $("#keyframesCinematicBtn").addEventListener("click", generateCinematicKeyframes);
@@ -812,13 +815,20 @@ async function sendAgentMessage() {
   if (!text) return;
   input.value = "";
   appendAgentMessage("我", text, "user");
+  $("#agentReplyDetail").textContent = "AI 正在处理...";
+  $("#sendAgentBtn").disabled = true;
   try {
     const data = await postJson("/api/v1/agent/ask", { text, speak: false }, { timeout: 70000 });
+    state.lastAgentReply = data;
     appendAgentMessage("AI", data.reply || data.message || "已完成。", "ai");
+    renderAgentReplyDetail(data);
     log("info", "AI 对话完成");
   } catch (error) {
     appendAgentMessage("ERROR", error.message || String(error), "error");
+    $("#agentReplyDetail").textContent = error.message || String(error);
     showError(error);
+  } finally {
+    $("#sendAgentBtn").disabled = false;
   }
 }
 
@@ -826,11 +836,26 @@ async function resetAgentSession() {
   try {
     await postJson("/api/v1/agent/reset-session", {}, { timeout: 10000 });
     state.agentMessages = [];
+    state.lastAgentReply = null;
     renderAgentMessages();
+    $("#agentReplyDetail").textContent = "等待 AI 回复。";
     appendAgentMessage("SYSTEM", "AI 会话已重置。", "system");
   } catch (error) {
     showError(error);
   }
+}
+
+function clearAgentChat() {
+  state.agentMessages = [];
+  state.lastAgentReply = null;
+  renderAgentMessages();
+  $("#agentReplyDetail").textContent = "聊天记录已清空；后端会话未重置。";
+}
+
+function useAgentPrompt(text) {
+  const input = $("#agentInput");
+  input.value = text;
+  input.focus();
 }
 
 async function stopNow() {
@@ -905,8 +930,23 @@ function renderAgentStatus() {
   $("#agentModel").textContent = agent.model || "--";
   $("#agentApiBase").textContent = agent.api_base || "--";
   $("#agentRobotApi").textContent = agent.robot_api_base || "--";
-  $("#agentSttUrl").textContent = agent.stt_url || "--";
-  $("#agentTtsEnabled").textContent = agent.tts_enabled ? "开启" : "关闭";
+  $("#agentSttUrl").textContent = agent.stt_url ? `${agent.stt_provider || "http"} ${agent.stt_url}` : "--";
+  $("#agentTtsEnabled").textContent = agent.tts_enabled ? `开启 ${agent.tts_url || ""}` : "关闭";
+  $("#agentMaxTurns").textContent = agent.max_turns ? String(agent.max_turns) : "--";
+  $("#agentRealTools").textContent = agent.allow_real_robot_tools ? "允许" : "禁止";
+  $("#agentRealTools").className = agent.allow_real_robot_tools ? "bad-text" : "ok-text";
+  $("#agentToolsResult").textContent = JSON.stringify(
+    {
+      available: agent.available,
+      backend: agent.backend,
+      model: agent.model,
+      allowed_tools: agent.allowed_tools || [],
+      allow_real_robot_tools: Boolean(agent.allow_real_robot_tools),
+      message: agent.message || "",
+    },
+    null,
+    2
+  );
 }
 
 function appendAgentMessage(role, text, kind) {
@@ -925,6 +965,19 @@ function renderAgentMessages() {
     )
     .join("");
   $("#agentChatLog").scrollTop = $("#agentChatLog").scrollHeight;
+}
+
+function renderAgentReplyDetail(data) {
+  $("#agentReplyDetail").textContent = JSON.stringify(
+    {
+      message: data.message || "",
+      session_id: data.session_id || "",
+      reply_chars: String(data.reply || "").length,
+      raw_payload: data.raw_payload || {},
+    },
+    null,
+    2
+  );
 }
 
 function renderCinematicStatus() {

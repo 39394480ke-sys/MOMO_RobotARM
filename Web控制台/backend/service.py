@@ -132,6 +132,7 @@ class WebControlService:
             robot_api = config.get("robot_api", {})
             stt = config.get("stt", {})
             tts = config.get("tts", {})
+            safety = config.get("safety", {})
             return {
                 "available": True,
                 "backend": backend,
@@ -139,7 +140,12 @@ class WebControlService:
                 "api_base": str(openai_cfg.get("api_base", "")),
                 "robot_api_base": str(robot_api.get("base_url", "")),
                 "stt_url": str(stt.get("url", "")),
+                "stt_provider": str(stt.get("provider", "")),
                 "tts_enabled": bool(tts.get("enabled", True)),
+                "tts_url": str(tts.get("url", "")),
+                "max_turns": int(agent.get("max_turns", 0) or 0),
+                "allow_real_robot_tools": bool(safety.get("allow_real_robot_tools", False)),
+                "allowed_tools": list(safety.get("allowed_tools", [])) if isinstance(safety.get("allowed_tools", []), list) else [],
             }
         except Exception as exc:
             return {"available": False, "message": str(exc)}

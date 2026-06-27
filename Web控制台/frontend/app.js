@@ -29,6 +29,7 @@ const state = {
   agentMessages: [],
   cinematic: null,
   cinematicProject: null,
+  visionLiveTimer: null,
   jointControlMode: "step",
   continuousJogActive: false,
   continuousJogStopping: false,
@@ -79,6 +80,7 @@ function bindEvents() {
     renderVisionPreviewUrl();
   });
   $("#refreshVisionPreviewBtn").addEventListener("click", refreshVisionPreview);
+  $("#toggleVisionLiveBtn").addEventListener("click", toggleVisionLivePreview);
   $("#refreshAgentBtn").addEventListener("click", loadAgentStatus);
   $("#sendAgentBtn").addEventListener("click", sendAgentMessage);
   $("#resetAgentBtn").addEventListener("click", resetAgentSession);
@@ -1012,6 +1014,19 @@ function refreshVisionPreview() {
   refreshVisionProxyStatus();
 }
 
+function toggleVisionLivePreview() {
+  if (state.visionLiveTimer) {
+    clearInterval(state.visionLiveTimer);
+    state.visionLiveTimer = null;
+    $("#toggleVisionLiveBtn").textContent = "开始实时刷新";
+    $("#visionPreviewState").textContent = "实时刷新已停止";
+    return;
+  }
+  refreshVisionPreview();
+  state.visionLiveTimer = setInterval(refreshVisionPreview, 500);
+  $("#toggleVisionLiveBtn").textContent = "停止实时刷新";
+}
+
 function renderVisionPreviewUrl() {
   const frameUrl = "/api/v1/vision/frame.jpg";
   $("#visionPreviewUrl").textContent = frameUrl || "--";
@@ -1054,9 +1069,18 @@ function renderVisionLatestDebug(latest) {
   const smoothed = latest.smoothed_offset || {};
   const direction = latest.direction || {};
   const detector = latest.detector || {};
+  const bbox = latest.bbox || latest.target?.bbox || null;
+  const center = latest.center || latest.target?.center || offset.target_center || null;
+  const faces = Array.isArray(latest.faces) ? latest.faces : [];
+  $("#visionFrameId").textContent = latest.frame_id != null ? String(latest.frame_id) : "--";
+  $("#visionTrackingState").textContent = `${latest.target_source || "none"} / ${latest.tracking_state || "idle"}`;
   $("#visionFrameSize").textContent = camera.width && camera.height ? `${camera.width} x ${camera.height} @ ${formatNum(latest.fps, 1)}fps` : "--";
   $("#visionOffsetState").textContent = `ndx=${formatNum(offset.ndx, 4)}, ndy=${formatNum(offset.ndy, 4)} | smooth=${formatNum(smoothed.ndx, 4)},${formatNum(smoothed.ndy, 4)}`;
   $("#visionDirectionState").textContent = direction.combined || "--";
+  $("#visionBboxState").textContent = Array.isArray(bbox) ? bbox.map((value) => formatNum(value, 1)).join(", ") : "--";
+  $("#visionCenterState").textContent = Array.isArray(center) ? center.map((value) => formatNum(value, 1)).join(", ") : "--";
+  $("#visionConfidenceState").textContent = formatNum(latest.confidence ?? 0, 3);
+  $("#visionFacesState").textContent = `${faces.length}`;
   $("#visionDetectorState").textContent = detector.face_backend ? `${detector.face_backend}${detector.face_available === false ? " unavailable" : ""}` : "--";
   $("#visionLatestJson").textContent = JSON.stringify(
     {

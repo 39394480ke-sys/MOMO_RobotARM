@@ -243,7 +243,10 @@
               <section class="panel vision-preview-panel">
                 <div class="panel-head">
                   <h3>视觉预览</h3>
-                  <button id="refreshVisionPreviewBtn">刷新画面</button>
+                  <div class="inline-actions">
+                    <button id="refreshVisionPreviewBtn">刷新画面</button>
+                    <button id="toggleVisionLiveBtn">开始实时刷新</button>
+                  </div>
                 </div>
                 <div class="vision-preview">
                   <img id="visionPreviewFrame" alt="视觉服务画面预览" />
@@ -253,9 +256,15 @@
                   <dt>状态</dt><dd id="visionPreviewState">等待刷新</dd>
                   <dt>服务</dt><dd id="visionHealthState">--</dd>
                   <dt>目标</dt><dd id="visionLatestState">--</dd>
+                  <dt>帧</dt><dd id="visionFrameId">--</dd>
+                  <dt>跟踪</dt><dd id="visionTrackingState">--</dd>
                   <dt>画面</dt><dd id="visionFrameSize">--</dd>
                   <dt>偏移</dt><dd id="visionOffsetState">--</dd>
                   <dt>方向</dt><dd id="visionDirectionState">--</dd>
+                  <dt>目标框</dt><dd id="visionBboxState">--</dd>
+                  <dt>目标中心</dt><dd id="visionCenterState">--</dd>
+                  <dt>置信度</dt><dd id="visionConfidenceState">--</dd>
+                  <dt>人脸数</dt><dd id="visionFacesState">--</dd>
                   <dt>检测器</dt><dd id="visionDetectorState">--</dd>
                 </dl>
                 <pre id="visionLatestJson" class="result-box"></pre>

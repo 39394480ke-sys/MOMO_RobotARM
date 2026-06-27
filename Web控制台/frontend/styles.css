@@ -427,6 +427,15 @@ pre {
   margin-bottom: 12px;
 }
 
+.action-summary-text {
+  min-height: 150px;
+  white-space: pre-wrap;
+}
+
+.action-detail-json {
+  margin-top: 10px;
+}
+
 .recording-grid {
   display: grid;
   grid-template-columns: minmax(220px, 1fr) minmax(160px, 240px);

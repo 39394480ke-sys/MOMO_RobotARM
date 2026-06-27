@@ -1302,6 +1302,7 @@ async function deleteAction(name) {
     if (typed !== name) return;
     await deleteJson(`/api/v1/actions/${encodeURIComponent(name)}`, { timeout: 8000 });
     $("#actionDetailName").textContent = "未选择";
+    $("#actionDetailSummary").textContent = "请选择一个动作。";
     $("#actionDetailResult").textContent = "";
     log("warning", `动作已删除：${name}`);
     await loadActions();
@@ -1315,10 +1316,12 @@ function renderActionDetail(name, detail) {
   const poses = action.poses || action["poses"] || [];
   const firstPose = poses[0] || null;
   const lastPose = poses.length ? poses[poses.length - 1] : null;
+  const summary = detail.summary || action.summary || {};
   $("#actionDetailName").textContent = name;
+  $("#actionDetailSummary").textContent = formatActionSummaryDetail(name, summary, poses);
   $("#actionDetailResult").textContent = JSON.stringify(
     {
-      summary: detail.summary || action.summary || {},
+      summary,
       path: detail.path || action.path || "",
       pose_count: poses.length,
       first_pose: compactActionPose(firstPose),
@@ -1328,6 +1331,49 @@ function renderActionDetail(name, detail) {
     null,
     2
   );
+}
+
+function formatActionSummaryDetail(name, summary, poses) {
+  const lines = [`动作：${name}`, ""];
+  const fields = [
+    ["帧数", "pose_count"],
+    ["时长", "总时长"],
+    ["末端轨迹点", "末端轨迹点数"],
+    ["包含 raw", "是否包含 raw"],
+    ["包含 TCP", "是否包含 tcp_pose"],
+    ["包含夹爪", "是否包含 gripper"],
+    ["包含多圈", "是否包含 multi_turn_state"],
+    ["来源", "source"],
+    ["更新时间", "updated_at"],
+  ];
+  fields.forEach(([label, key]) => {
+    if (Object.prototype.hasOwnProperty.call(summary, key)) {
+      lines.push(`${label}: ${summary[key]}`);
+    }
+  });
+  if (!Object.prototype.hasOwnProperty.call(summary, "pose_count") && Object.prototype.hasOwnProperty.call(summary, "frame_count")) {
+    lines.push(`帧数: ${summary.frame_count}`);
+  }
+  if (!Object.prototype.hasOwnProperty.call(summary, "总时长") && Object.prototype.hasOwnProperty.call(summary, "duration_sec")) {
+    lines.push(`时长: ${summary.duration_sec}`);
+  }
+  const joints = summary.joints || summary.joint_names;
+  if (Array.isArray(joints)) lines.push(`关节: ${joints.join(", ")}`);
+  if (poses.length) {
+    lines.push("");
+    lines.push(`首帧: ${formatActionPoseLine(poses[0])}`);
+    lines.push(`尾帧: ${formatActionPoseLine(poses[poses.length - 1])}`);
+  }
+  if (lines.length <= 2) lines.push(JSON.stringify(summary, null, 2));
+  return lines.join("\n");
+}
+
+function formatActionPoseLine(pose) {
+  const compact = compactActionPose(pose);
+  if (!compact) return "--";
+  const joints = compact.joints_deg || {};
+  const jointText = JOINTS.map(([key]) => `${key}=${formatNum(joints[key], 2)}`).join(", ");
+  return `${compact.name || "--"} | ${formatNum(compact.duration_sec, 2)}s | ${jointText}`;
 }
 
 function compactActionPose(pose) {

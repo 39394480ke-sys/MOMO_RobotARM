@@ -32,6 +32,7 @@
           <button class="nav-item" data-page="actions">动作</button>
           <button class="nav-item" data-page="follow">视觉跟随</button>
           <button class="nav-item" data-page="agent">AI 对话</button>
+          <button class="nav-item" data-page="cinematic">AI 运镜</button>
           <button class="nav-item" data-page="kinematics">运动学</button>
           <button class="nav-item" data-page="calibration">标定</button>
           <button class="nav-item" data-page="settings">设置</button>
@@ -266,6 +267,39 @@
                   <dt>STT</dt><dd id="agentSttUrl">--</dd>
                   <dt>TTS</dt><dd id="agentTtsEnabled">--</dd>
                 </dl>
+              </section>
+            </div>
+          </section>
+
+          <section id="pageCinematic" class="page">
+            <div class="section-head">
+              <h2>AI 运镜</h2>
+              <button id="refreshCinematicBtn">刷新状态</button>
+            </div>
+            <div class="settings-grid">
+              <section class="panel cinematic-panel">
+                <div class="panel-head">
+                  <h3>试拍与导演项目</h3>
+                  <span id="cinematicStatusState" class="status-pill warn">未检查</span>
+                </div>
+                <dl class="kv wide">
+                  <dt>最新试拍</dt><dd id="cinematicLatestRecord">--</dd>
+                  <dt>最新项目</dt><dd id="cinematicLatestProject">--</dd>
+                  <dt>记录目录</dt><dd id="cinematicRecordDir">--</dd>
+                  <dt>项目目录</dt><dd id="cinematicProjectDir">--</dd>
+                </dl>
+              </section>
+              <section class="panel cinematic-panel">
+                <div class="panel-head"><h3>运镜参数</h3></div>
+                <pre id="cinematicConfigJson" class="result-box"></pre>
+              </section>
+              <section class="panel cinematic-list-panel">
+                <div class="panel-head"><h3>最近试拍记录</h3></div>
+                <div id="cinematicRecordsList" class="compact-list"></div>
+              </section>
+              <section class="panel cinematic-list-panel">
+                <div class="panel-head"><h3>最近导演项目</h3></div>
+                <div id="cinematicProjectsList" class="compact-list"></div>
               </section>
             </div>
           </section>

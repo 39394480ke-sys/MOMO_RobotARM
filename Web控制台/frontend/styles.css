@@ -580,6 +580,11 @@ th {
   grid-column: span 4;
 }
 
+.cinematic-panel,
+.cinematic-list-panel {
+  grid-column: span 6;
+}
+
 .motion-tuning-panel,
 .module-links-panel {
   grid-column: span 6;
@@ -625,6 +630,30 @@ th {
   display: grid;
   grid-template-columns: 1fr 88px;
   gap: 8px;
+}
+
+.compact-list {
+  display: grid;
+  gap: 8px;
+}
+
+.compact-list-row {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px 10px;
+  background: #f7f8fb;
+}
+
+.compact-list-row strong,
+.compact-list-row span {
+  display: block;
+}
+
+.compact-list-row span,
+.empty-text {
+  color: var(--muted);
+  font-size: 13px;
+  margin-top: 3px;
 }
 
 .calibration-diagnostics-panel {
@@ -746,6 +775,8 @@ th {
   .hardware-panel,
   .agent-chat-panel,
   .agent-config-panel,
+  .cinematic-panel,
+  .cinematic-list-panel,
   .motion-tuning-panel,
   .module-links-panel {
     grid-column: span 12;

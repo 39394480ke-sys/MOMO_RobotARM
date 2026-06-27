@@ -163,6 +163,28 @@ class WebControlService:
             self._remember_error("AGENT_RESET_FAILED", str(exc))
             raise WebAPIError("AGENT_RESET_FAILED", f"AI 会话重置失败：{exc}") from exc
 
+    def cinematic_status(self) -> dict[str, Any]:
+        vision_root = self.base_dir.parent / "视觉识别与跟随"
+        record_dir = vision_root / "runtime" / "cinematic_records"
+        project_dir = vision_root / "runtime" / "cinematic_director_projects"
+        records = self._latest_files(record_dir, "cinematic_rehearsal_*.json", limit=8)
+        projects = self._latest_files(project_dir, "*.json", limit=8)
+        follow_cfg = self._load_vision_follow_config(vision_root)
+        rail = follow_cfg.get("rail_cinematic", {}) if isinstance(follow_cfg.get("rail_cinematic"), dict) else {}
+        two_step = follow_cfg.get("two_step_cinematic", {}) if isinstance(follow_cfg.get("two_step_cinematic"), dict) else {}
+        return {
+            "available": True,
+            "record_dir": str(record_dir),
+            "project_dir": str(project_dir),
+            "latest_record": records[0] if records else None,
+            "latest_project": projects[0] if projects else None,
+            "records": records,
+            "projects": projects,
+            "rail": rail,
+            "two_step": two_step,
+            "message": "AI 运镜状态已读取。",
+        }
+
     # ------------------------------------------------------------------
     # 会话
     # ------------------------------------------------------------------
@@ -643,6 +665,24 @@ class WebControlService:
             config.setdefault("tts", {})["enabled"] = False
             self._agent_app = AgentApp(config, force_new_session=force_new_session)
         return self._agent_app
+
+    @staticmethod
+    def _latest_files(directory: Path, pattern: str, limit: int = 8) -> list[dict[str, Any]]:
+        if not directory.exists():
+            return []
+        items = sorted(directory.glob(pattern), key=lambda path: path.stat().st_mtime, reverse=True)
+        result = []
+        for path in items[: max(1, int(limit))]:
+            stat = path.stat()
+            result.append(
+                {
+                    "name": path.name,
+                    "path": str(path),
+                    "size": stat.st_size,
+                    "modified_at": stat.st_mtime,
+                }
+            )
+        return result
 
     def _remember_error(self, code: str, message: str) -> None:
         self.recent_error = {"code": str(code), "message": str(message), "time": time.time()}

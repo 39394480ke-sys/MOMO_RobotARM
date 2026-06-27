@@ -152,6 +152,11 @@ async def agent_reset_session() -> dict[str, Any]:
     return await _call(service.agent_reset_session, broadcast=False)
 
 
+@app.get("/api/v1/cinematic/status")
+async def cinematic_status() -> dict[str, Any]:
+    return api_success(service.cinematic_status())
+
+
 # ----------------------------------------------------------------------
 # 会话
 # ----------------------------------------------------------------------

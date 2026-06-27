@@ -25,6 +25,7 @@ const state = {
   motionTuning: null,
   agent: null,
   agentMessages: [],
+  cinematic: null,
   jointControlMode: "step",
   continuousJogActive: false,
   continuousJogStopping: false,
@@ -74,6 +75,7 @@ function bindEvents() {
   $("#refreshAgentBtn").addEventListener("click", loadAgentStatus);
   $("#sendAgentBtn").addEventListener("click", sendAgentMessage);
   $("#resetAgentBtn").addEventListener("click", resetAgentSession);
+  $("#refreshCinematicBtn").addEventListener("click", loadCinematicStatus);
   $("#agentInput").addEventListener("keydown", (event) => {
     if (event.key === "Enter") sendAgentMessage();
   });
@@ -256,6 +258,15 @@ async function loadAgentStatus() {
   try {
     state.agent = await getJson("/api/v1/agent/status");
     renderAgentStatus();
+  } catch (error) {
+    showError(error);
+  }
+}
+
+async function loadCinematicStatus() {
+  try {
+    state.cinematic = await getJson("/api/v1/cinematic/status", { timeout: 8000 });
+    renderCinematicStatus();
   } catch (error) {
     showError(error);
   }
@@ -723,6 +734,33 @@ function renderAgentMessages() {
   $("#agentChatLog").scrollTop = $("#agentChatLog").scrollHeight;
 }
 
+function renderCinematicStatus() {
+  const data = state.cinematic || {};
+  $("#cinematicStatusState").textContent = data.available ? "可用" : "不可用";
+  $("#cinematicStatusState").className = `status-pill ${data.available ? "good" : "bad"}`;
+  $("#cinematicLatestRecord").textContent = data.latest_record?.name || "--";
+  $("#cinematicLatestProject").textContent = data.latest_project?.name || "--";
+  $("#cinematicRecordDir").textContent = shortPath(data.record_dir || "");
+  $("#cinematicProjectDir").textContent = shortPath(data.project_dir || "");
+  $("#cinematicConfigJson").textContent = JSON.stringify({ rail: data.rail || {}, two_step: data.two_step || {} }, null, 2);
+  renderCompactFileList("#cinematicRecordsList", data.records || []);
+  renderCompactFileList("#cinematicProjectsList", data.projects || []);
+}
+
+function renderCompactFileList(selector, items) {
+  const wrap = $(selector);
+  wrap.innerHTML = items.length
+    ? items
+        .map(
+          (item) => `<div class="compact-list-row">
+            <strong>${escapeHtml(item.name)}</strong>
+            <span>${formatFileSize(item.size)} · ${new Date(Number(item.modified_at || 0) * 1000).toLocaleString()}</span>
+          </div>`
+        )
+        .join("")
+    : `<div class="empty-text">暂无文件</div>`;
+}
+
 function refreshVisionPreview() {
   const image = $("#visionPreviewFrame");
   const url = renderVisionPreviewUrl();
@@ -1076,6 +1114,7 @@ function showPage(name) {
     refreshVisionPreview();
   }
   if (name === "agent") loadAgentStatus();
+  if (name === "cinematic") loadCinematicStatus();
   if (name === "calibration") loadCalibration();
   if (name === "calibration") diagnoseJ12();
   if (name === "settings") {
@@ -1158,6 +1197,13 @@ function escapeAttr(value) {
 function shortPath(value) {
   const text = String(value || "");
   return text.length > 36 ? `...${text.slice(-33)}` : text;
+}
+
+function formatFileSize(value) {
+  const size = Number(value || 0);
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+  return `${(size / 1024 / 1024).toFixed(1)} MB`;
 }
 
 function capitalize(name) {

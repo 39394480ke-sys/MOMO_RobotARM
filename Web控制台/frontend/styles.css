@@ -532,6 +532,7 @@ pre {
 
 .vision-preview {
   margin-top: 10px;
+  position: relative;
   display: grid;
   place-items: center;
   min-height: 260px;
@@ -546,6 +547,38 @@ pre {
   width: 100%;
   max-height: 420px;
   object-fit: contain;
+}
+
+.vision-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.vision-overlay .bbox {
+  fill: none;
+  stroke: #22c55e;
+  stroke-width: 2;
+}
+
+.vision-overlay .desired {
+  stroke: #38bdf8;
+  stroke-width: 2;
+}
+
+.vision-overlay .center {
+  fill: #f97316;
+  stroke: #fff7ed;
+  stroke-width: 1.5;
+}
+
+.vision-overlay .dead-zone {
+  fill: rgba(56, 189, 248, 0.08);
+  stroke: rgba(56, 189, 248, 0.72);
+  stroke-dasharray: 6 4;
+  stroke-width: 1.5;
 }
 
 .input-grid {

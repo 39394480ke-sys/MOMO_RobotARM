@@ -704,6 +704,9 @@ class WebControlService:
     def vision_latest(self) -> dict[str, Any]:
         return self._fetch_vision_json("/latest")
 
+    def vision_status(self) -> dict[str, Any]:
+        return self._fetch_vision_json("/status")
+
     def vision_target_state(self) -> dict[str, Any]:
         return self._fetch_vision_json("/target/state")
 

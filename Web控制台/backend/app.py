@@ -346,6 +346,11 @@ async def vision_latest() -> dict[str, Any]:
     return api_success(service.vision_latest())
 
 
+@app.get("/api/v1/vision/status")
+async def vision_status() -> dict[str, Any]:
+    return api_success(service.vision_status())
+
+
 @app.get("/api/v1/vision/target/state")
 async def vision_target_state() -> dict[str, Any]:
     return api_success(service.vision_target_state())

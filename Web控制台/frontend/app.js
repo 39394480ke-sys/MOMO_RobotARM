@@ -30,6 +30,7 @@ const state = {
   cinematic: null,
   cinematicProject: null,
   visionLiveTimer: null,
+  latestVision: null,
   jointControlMode: "step",
   continuousJogActive: false,
   continuousJogStopping: false,
@@ -84,6 +85,9 @@ function bindEvents() {
   $("#selectVisionTargetBtn").addEventListener("click", selectVisionTarget);
   $("#resetVisionTargetBtn").addEventListener("click", resetVisionTarget);
   $("#refreshVisionTargetBtn").addEventListener("click", refreshVisionTargetState);
+  $("#visionPreviewFrame").addEventListener("load", () => renderVisionOverlay(state.latestVision));
+  $("#visionPreviewFrame").addEventListener("click", handleVisionFrameClick);
+  window.addEventListener("resize", () => renderVisionOverlay(state.latestVision));
   $("#refreshAgentBtn").addEventListener("click", loadAgentStatus);
   $("#sendAgentBtn").addEventListener("click", sendAgentMessage);
   $("#resetAgentBtn").addEventListener("click", resetAgentSession);
@@ -1062,13 +1066,15 @@ function frameUrlFromLatest(latestUrl) {
 
 async function refreshVisionProxyStatus() {
   try {
-    const [health, latest, targetState] = await Promise.all([
+    const [health, latest, targetState, engineStatus] = await Promise.all([
       getJson("/api/v1/vision/health", { timeout: 3000 }),
       getJson("/api/v1/vision/latest", { timeout: 3000 }),
       getJson("/api/v1/vision/target/state", { timeout: 3000 }),
+      getJson("/api/v1/vision/status", { timeout: 3000 }),
     ]);
     $("#visionHealthState").textContent = health.camera_available ? "camera ok" : health.running ? "running" : "未启动";
     $("#visionHealthState").className = health.camera_available ? "ok-text" : "bad-text";
+    renderVisionEngineStatus(engineStatus);
     $("#visionLatestState").textContent = latest.detected ? "检测到目标" : latest.message || "未检测";
     $("#visionLatestState").className = latest.detected ? "ok-text" : "";
     renderVisionTargetState(targetState);
@@ -1076,8 +1082,11 @@ async function refreshVisionProxyStatus() {
   } catch (error) {
     $("#visionHealthState").textContent = "视觉服务不可用";
     $("#visionHealthState").className = "bad-text";
+    $("#visionEngineState").textContent = "--";
     $("#visionLatestState").textContent = error.message || String(error);
     $("#visionLatestJson").textContent = "";
+    state.latestVision = null;
+    renderVisionOverlay(null);
   }
 }
 
@@ -1097,6 +1106,15 @@ function renderVisionTargetState(targetState) {
   $("#visionTargetToolState").textContent = Array.isArray(bbox)
     ? `目标 ${mode} / ${tracking} / bbox=${bbox.map((value) => formatNum(value, 0)).join(",")}`
     : `目标 ${mode} / ${tracking}`;
+}
+
+function renderVisionEngineStatus(status) {
+  const running = status.running ? "running" : "stopped";
+  const camera = status.camera || status.source || {};
+  const cameraText = camera.available === false ? "camera unavailable" : camera.index != null ? `camera ${camera.index}` : "";
+  const frameId = status.frame_id ?? status.latest_frame_id ?? "";
+  $("#visionEngineState").textContent = [running, cameraText, frameId !== "" ? `frame ${frameId}` : ""].filter(Boolean).join(" / ");
+  $("#visionEngineState").className = status.running ? "ok-text" : "bad-text";
 }
 
 async function selectVisionTarget() {
@@ -1131,6 +1149,7 @@ async function resetVisionTarget() {
 }
 
 function renderVisionLatestDebug(latest) {
+  state.latestVision = latest;
   const camera = latest.camera || {};
   const offset = latest.offset || {};
   const smoothed = latest.smoothed_offset || {};
@@ -1164,6 +1183,92 @@ function renderVisionLatestDebug(latest) {
     null,
     2
   );
+  renderVisionOverlay(latest);
+}
+
+function renderVisionOverlay(latest) {
+  const overlay = $("#visionOverlay");
+  if (!overlay) return;
+  overlay.replaceChildren();
+  if (!latest) return;
+  const rect = visionImageRect();
+  const camera = latest.camera || {};
+  const width = Number(camera.width || 0);
+  const height = Number(camera.height || 0);
+  if (!rect || width <= 0 || height <= 0) return;
+  const sx = rect.width / width;
+  const sy = rect.height / height;
+  const toX = (x) => rect.x + Number(x || 0) * sx;
+  const toY = (y) => rect.y + Number(y || 0) * sy;
+  const make = (tag, attrs) => {
+    const node = document.createElementNS("http://www.w3.org/2000/svg", tag);
+    Object.entries(attrs).forEach(([key, value]) => node.setAttribute(key, String(value)));
+    overlay.appendChild(node);
+    return node;
+  };
+  const offset = latest.offset || {};
+  const desired = offset.desired_center || latest.desired_center || null;
+  const deadZoneX = Number(offset.dead_zone_x_norm ?? latest.dead_zone_x_norm ?? 0.02) * width;
+  const deadZoneY = Number(offset.dead_zone_y_norm ?? latest.dead_zone_y_norm ?? 0.025) * height;
+  if (Array.isArray(desired) && desired.length >= 2) {
+    make("rect", {
+      class: "dead-zone",
+      x: toX(Number(desired[0]) - deadZoneX),
+      y: toY(Number(desired[1]) - deadZoneY),
+      width: Math.max(1, deadZoneX * 2 * sx),
+      height: Math.max(1, deadZoneY * 2 * sy),
+    });
+    make("line", { class: "desired", x1: toX(desired[0]) - 12, y1: toY(desired[1]), x2: toX(desired[0]) + 12, y2: toY(desired[1]) });
+    make("line", { class: "desired", x1: toX(desired[0]), y1: toY(desired[1]) - 12, x2: toX(desired[0]), y2: toY(desired[1]) + 12 });
+  }
+  const bbox = latest.bbox || latest.target?.bbox || null;
+  if (Array.isArray(bbox) && bbox.length >= 4) {
+    make("rect", {
+      class: "bbox",
+      x: toX(bbox[0]),
+      y: toY(bbox[1]),
+      width: Math.max(1, Number(bbox[2] || 0) * sx),
+      height: Math.max(1, Number(bbox[3] || 0) * sy),
+    });
+  }
+  const center = latest.center || latest.target?.center || offset.target_center || null;
+  if (Array.isArray(center) && center.length >= 2) {
+    make("circle", { class: "center", cx: toX(center[0]), cy: toY(center[1]), r: 5 });
+  }
+}
+
+function visionImageRect() {
+  const preview = $(".vision-preview");
+  const img = $("#visionPreviewFrame");
+  if (!preview || !img) return null;
+  const parent = preview.getBoundingClientRect();
+  const rect = img.getBoundingClientRect();
+  if (!rect.width || !rect.height) return null;
+  return {
+    x: rect.left - parent.left,
+    y: rect.top - parent.top,
+    width: rect.width,
+    height: rect.height,
+  };
+}
+
+function handleVisionFrameClick(event) {
+  const latest = state.latestVision || {};
+  const camera = latest.camera || {};
+  const width = Number(camera.width || 0);
+  const height = Number(camera.height || 0);
+  const rect = $("#visionPreviewFrame").getBoundingClientRect();
+  if (width <= 0 || height <= 0 || !rect.width || !rect.height) return;
+  const x = Math.round(((event.clientX - rect.left) / rect.width) * width);
+  const y = Math.round(((event.clientY - rect.top) / rect.height) * height);
+  const bbox = latest.bbox || latest.target?.bbox || null;
+  const defaultW = Array.isArray(bbox) && bbox.length >= 4 ? Math.max(1, Math.round(Number(bbox[2]) || 80)) : 80;
+  const defaultH = Array.isArray(bbox) && bbox.length >= 4 ? Math.max(1, Math.round(Number(bbox[3]) || 80)) : 80;
+  $("#visionTargetX").value = String(Math.max(0, x - Math.round(defaultW / 2)));
+  $("#visionTargetY").value = String(Math.max(0, y - Math.round(defaultH / 2)));
+  $("#visionTargetW").value = String(defaultW);
+  $("#visionTargetH").value = String(defaultH);
+  $("#visionTargetToolState").textContent = `已填入点击坐标：x=${x}, y=${y}`;
 }
 
 function renderRobot() {

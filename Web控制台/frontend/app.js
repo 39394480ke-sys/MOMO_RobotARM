@@ -31,6 +31,7 @@ const state = {
   cinematicProject: null,
   visionLiveTimer: null,
   latestVision: null,
+  visionMockActive: false,
   jointControlMode: "step",
   continuousJogActive: false,
   continuousJogStopping: false,
@@ -82,6 +83,8 @@ function bindEvents() {
   });
   $("#refreshVisionPreviewBtn").addEventListener("click", refreshVisionPreview);
   $("#toggleVisionLiveBtn").addEventListener("click", toggleVisionLivePreview);
+  $("#loadVisionMockBtn").addEventListener("click", loadVisionMock);
+  $("#clearVisionMockBtn").addEventListener("click", clearVisionMock);
   $("#selectVisionTargetBtn").addEventListener("click", selectVisionTarget);
   $("#resetVisionTargetBtn").addEventListener("click", resetVisionTarget);
   $("#refreshVisionTargetBtn").addEventListener("click", refreshVisionTargetState);
@@ -1020,6 +1023,7 @@ function renderCompactFileList(selector, items) {
 }
 
 function refreshVisionPreview() {
+  state.visionMockActive = false;
   const image = $("#visionPreviewFrame");
   const url = renderVisionPreviewUrl();
   if (!url) return;
@@ -1032,6 +1036,39 @@ function refreshVisionPreview() {
   };
   image.src = `${url}${url.includes("?") ? "&" : "?"}t=${Date.now()}`;
   refreshVisionProxyStatus();
+}
+
+function loadVisionMock() {
+  state.visionMockActive = true;
+  if (state.visionLiveTimer) {
+    clearInterval(state.visionLiveTimer);
+    state.visionLiveTimer = null;
+    $("#toggleVisionLiveBtn").textContent = "开始实时刷新";
+  }
+  const latest = buildVisionMockLatest();
+  const image = $("#visionPreviewFrame");
+  image.onload = () => renderVisionOverlay(latest);
+  image.src = buildVisionMockFrameDataUrl();
+  $("#visionPreviewUrl").textContent = "mock://vision/latest";
+  $("#visionPreviewState").textContent = "模拟目标已加载";
+  $("#visionHealthState").textContent = "mock camera ok";
+  $("#visionHealthState").className = "ok-text";
+  $("#visionEngineState").textContent = "mock / camera 0 / frame 1";
+  $("#visionEngineState").className = "ok-text";
+  $("#visionLatestState").textContent = "检测到模拟目标";
+  $("#visionLatestState").className = "ok-text";
+  renderVisionTargetState({
+    target_mode: "mock",
+    tracking_state: "locked",
+    target: latest.target,
+  });
+  renderVisionLatestDebug(latest);
+}
+
+function clearVisionMock() {
+  state.visionMockActive = false;
+  $("#visionPreviewState").textContent = "模拟已退出";
+  refreshVisionPreview();
 }
 
 function toggleVisionLivePreview() {
@@ -1184,6 +1221,78 @@ function renderVisionLatestDebug(latest) {
     2
   );
   renderVisionOverlay(latest);
+}
+
+function buildVisionMockLatest() {
+  const width = 1280;
+  const height = 720;
+  const bbox = [760, 210, 210, 260];
+  const center = [bbox[0] + bbox[2] / 2, bbox[1] + bbox[3] / 2];
+  const desired = [width * 0.5, height * 0.42];
+  const dx = center[0] - desired[0];
+  const dy = center[1] - desired[1];
+  const ndx = dx / (width / 2);
+  const ndy = dy / (height / 2);
+  return {
+    timestamp: Date.now() / 1000,
+    frame_id: 1,
+    detected: true,
+    has_target: true,
+    target_source: "mock",
+    tracking_state: "locked",
+    target: { bbox, center, area: bbox[2] * bbox[3], confidence: 0.92 },
+    bbox,
+    center,
+    confidence: 0.92,
+    faces: [{ bbox, center, area: bbox[2] * bbox[3], confidence: 0.92 }],
+    offset: {
+      dx,
+      dy,
+      ndx,
+      ndy,
+      desired_center: desired,
+      target_center: center,
+      in_dead_zone: Math.abs(ndx) < 0.02 && Math.abs(ndy) < 0.025,
+      valid: true,
+      dead_zone_x_norm: 0.02,
+      dead_zone_y_norm: 0.025,
+    },
+    smoothed_offset: { ndx: ndx * 0.72, ndy: ndy * 0.72, valid: true, kept: false },
+    direction: {
+      horizontal: ndx > 0 ? "right" : ndx < 0 ? "left" : "center",
+      vertical: ndy > 0 ? "down" : ndy < 0 ? "up" : "center",
+      combined: "right-down",
+    },
+    gesture: { available: false, raw: "", stable: "", confidence: 0 },
+    fps: 30,
+    camera: { source_type: "mock", camera_index: 0, available: true, width, height },
+    detector: { face_backend: "mock", face_available: true, face_error: "" },
+    message: "模拟视觉目标。不会访问摄像头，也不会控制机械臂。",
+  };
+}
+
+function buildVisionMockFrameDataUrl() {
+  const svg = `
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#111827"/>
+      <stop offset="1" stop-color="#1f2937"/>
+    </linearGradient>
+  </defs>
+  <rect width="1280" height="720" fill="url(#bg)"/>
+  <g opacity="0.35" stroke="#64748b" stroke-width="1">
+    ${Array.from({ length: 16 }, (_, index) => `<line x1="${index * 80}" y1="0" x2="${index * 80}" y2="720"/>`).join("")}
+    ${Array.from({ length: 9 }, (_, index) => `<line x1="0" y1="${index * 80}" x2="1280" y2="${index * 80}"/>`).join("")}
+  </g>
+  <rect x="760" y="210" width="210" height="260" rx="18" fill="#334155" stroke="#94a3b8" stroke-width="4"/>
+  <circle cx="825" cy="295" r="18" fill="#e2e8f0"/>
+  <circle cx="905" cy="295" r="18" fill="#e2e8f0"/>
+  <path d="M820 390 Q865 430 920 390" fill="none" stroke="#e2e8f0" stroke-width="10" stroke-linecap="round"/>
+  <text x="44" y="70" fill="#e5e7eb" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="32">Mock Vision Frame</text>
+  <text x="44" y="116" fill="#94a3b8" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="22">用于验证目标框、中心点、期望中心和死区叠加层</text>
+</svg>`;
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
 function renderVisionOverlay(latest) {

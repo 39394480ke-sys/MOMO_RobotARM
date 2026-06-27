@@ -372,6 +372,27 @@ class 真实_FeetechServoDriver(BaseServoDriver):
     def _bus_write(self, register_name: str, joint_key: str, raw_value: int) -> None:
         """兼容 LeRobot 不同版本的 raw 写入参数。"""
 
+        attempts = max(1, int(self.config.get("transport", {}).get("write_retries", 3)))
+        delay_s = max(0.0, float(self.config.get("transport", {}).get("write_retry_delay_s", 0.03)))
+        last_error: Exception | None = None
+        for index in range(attempts):
+            try:
+                self._bus_write_once(register_name, joint_key, int(raw_value))
+                return
+            except Exception as error:
+                last_error = error
+                self._recover_after_comm_error()
+                if index + 1 < attempts:
+                    time.sleep(delay_s)
+        motor_id = self._motor_id_for_message(joint_key)
+        raise RuntimeError(
+            f"写入 {register_name} ID {motor_id} 失败（重试 {attempts} 次）：{last_error}。"
+            "请先做只读总线扫描；如果只在 Home 或连续控制时出现，优先检查该 ID 的电源/线序/负载和串口稳定性。"
+        )
+
+    def _bus_write_once(self, register_name: str, joint_key: str, raw_value: int) -> None:
+        """执行一次 raw 写入，不做重试。"""
+
         try:
             self.bus.write(register_name, joint_key, int(raw_value), normalize=False)
             return
@@ -382,6 +403,23 @@ class 真实_FeetechServoDriver(BaseServoDriver):
             return
         except TypeError:
             self.bus.write(register_name, {joint_key: int(raw_value)})
+
+    def _recover_after_comm_error(self) -> None:
+        port_handler = getattr(self.bus, "port_handler", None)
+        if port_handler is not None and hasattr(port_handler, "clearPort"):
+            try:
+                port_handler.clearPort()
+            except Exception:
+                pass
+
+    def _motor_id_for_message(self, joint_key: str) -> int | str:
+        entry = self.calibration_data.get(joint_key, {})
+        if "id" in entry:
+            return int(entry["id"])
+        try:
+            return self._config_motor_id(joint_key)
+        except Exception:
+            return joint_key
 
     def _bus_sync_read(self, register_name: str, joint_keys: list[str]):
         """兼容批量 raw 读取。"""
@@ -567,10 +605,24 @@ class 轻量_FeetechSDKServoDriver(BaseServoDriver):
                 return
             except Exception as error:
                 last_error = error
+                self._recover_after_comm_error()
                 if index + 1 < attempts:
                     time.sleep(delay_s)
         motor_id = self.motor_ids_by_joint.get(joint_key, joint_key)
-        raise RuntimeError(f"写入 {register_name} ID {motor_id} 失败（重试 {attempts} 次）：{last_error}")
+        raise RuntimeError(
+            f"写入 {register_name} ID {motor_id} 失败（重试 {attempts} 次）：{last_error}。"
+            "请先做只读总线扫描；如果只在 Home 或连续控制时出现，优先检查该 ID 的电源/线序/负载和串口稳定性。"
+        )
+
+    def _recover_after_comm_error(self) -> None:
+        if self.bus is None:
+            return
+        port_handler = getattr(self.bus, "port_handler", None)
+        if port_handler is not None and hasattr(port_handler, "clearPort"):
+            try:
+                port_handler.clearPort()
+            except Exception:
+                pass
 
     def _disconnect_after_failed_connect(self) -> None:
         if self.bus is None:

@@ -768,6 +768,19 @@ th {
   background: #f7f8fb;
 }
 
+.compact-list-button {
+  width: 100%;
+  display: block;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+}
+
+.compact-list-button:hover {
+  border-color: var(--accent);
+  background: #eef6ff;
+}
+
 .compact-list-row strong,
 .compact-list-row span {
   display: block;

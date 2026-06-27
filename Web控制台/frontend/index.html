@@ -376,13 +376,35 @@
               <section class="panel cinematic-panel">
                 <div class="panel-head"><h3>运镜参数</h3></div>
                 <label class="field">
+                  <span>试拍记录</span>
+                  <input id="cinematicRecordPath" placeholder="点击最近试拍记录自动填入" />
+                </label>
+                <label class="field">
+                  <span>导演项目</span>
+                  <input id="cinematicProjectPath" placeholder="点击最近导演项目自动填入" />
+                </label>
+                <div class="input-grid two">
+                  <label class="field">
+                    <span>最少关键帧</span>
+                    <input id="cinematicMinKeyframes" type="number" min="3" max="8" step="1" value="3" />
+                  </label>
+                  <label class="field">
+                    <span>最多关键帧</span>
+                    <input id="cinematicMaxKeyframes" type="number" min="3" max="8" step="1" value="8" />
+                  </label>
+                </div>
+                <label class="field">
                   <span>动作名称</span>
                   <input id="cinematicActionName" placeholder="例如：AI运镜_产品展示_01" />
                 </label>
+                <button id="playCinematicActionBtn">播放生成动作</button>
                 <pre id="cinematicConfigJson" class="result-box"></pre>
               </section>
               <section class="panel cinematic-result-panel">
-                <div class="panel-head"><h3>处理结果</h3></div>
+                <div class="panel-head">
+                  <h3>处理结果</h3>
+                  <span id="cinematicProjectStage" class="inline-status">未加载项目</span>
+                </div>
                 <pre id="cinematicResultJson" class="result-box"></pre>
               </section>
               <section class="panel cinematic-detail-panel">

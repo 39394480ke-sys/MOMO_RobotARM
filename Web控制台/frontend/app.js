@@ -30,6 +30,8 @@ const state = {
   lastAgentReply: null,
   cinematic: null,
   cinematicProject: null,
+  cinematicProjectPath: "",
+  cinematicGeneratedAction: "",
   visionLiveTimer: null,
   latestVision: null,
   visionMockActive: false,
@@ -102,6 +104,9 @@ function bindEvents() {
   $("#analyzeCinematicBtn").addEventListener("click", analyzeCinematicLatest);
   $("#keyframesCinematicBtn").addEventListener("click", generateCinematicKeyframes);
   $("#generateCinematicActionBtn").addEventListener("click", generateCinematicAction);
+  $("#playCinematicActionBtn").addEventListener("click", playGeneratedCinematicAction);
+  $("#cinematicRecordsList").addEventListener("click", handleCinematicRecordClick);
+  $("#cinematicProjectsList").addEventListener("click", handleCinematicProjectClick);
   $("#agentInput").addEventListener("keydown", (event) => {
     if (event.key === "Enter") sendAgentMessage();
   });
@@ -335,6 +340,12 @@ async function loadCinematicStatus() {
   try {
     state.cinematic = await getJson("/api/v1/cinematic/status", { timeout: 8000 });
     renderCinematicStatus();
+    if (!$("#cinematicRecordPath").value && state.cinematic?.latest_record?.path) {
+      $("#cinematicRecordPath").value = state.cinematic.latest_record.path;
+    }
+    if (!$("#cinematicProjectPath").value && state.cinematic?.latest_project?.path) {
+      $("#cinematicProjectPath").value = state.cinematic.latest_project.path;
+    }
     await loadCinematicProject();
   } catch (error) {
     showError(error);
@@ -342,9 +353,10 @@ async function loadCinematicStatus() {
 }
 
 async function loadCinematicProject(projectPath = "") {
-  const selectedPath = projectPath || state.cinematic?.latest_project?.path || "";
+  const selectedPath = projectPath || $("#cinematicProjectPath").value.trim() || state.cinematic?.latest_project?.path || "";
   if (!selectedPath) {
     state.cinematicProject = null;
+    state.cinematicProjectPath = "";
     renderCinematicProject(null);
     return;
   }
@@ -352,16 +364,19 @@ async function loadCinematicProject(projectPath = "") {
     const query = new URLSearchParams({ project_path: selectedPath });
     const data = await getJson(`/api/v1/cinematic/project?${query.toString()}`, { timeout: 8000 });
     state.cinematicProject = data.project || null;
+    state.cinematicProjectPath = data.project_path || selectedPath;
+    $("#cinematicProjectPath").value = state.cinematicProjectPath;
     renderCinematicProject(state.cinematicProject);
   } catch (error) {
     state.cinematicProject = null;
+    state.cinematicProjectPath = "";
     renderCinematicProject(null);
     showError(error);
   }
 }
 
 async function analyzeCinematicLatest() {
-  const recordPath = state.cinematic?.latest_record?.path || "";
+  const recordPath = $("#cinematicRecordPath").value.trim() || state.cinematic?.latest_record?.path || "";
   if (!recordPath) {
     showError(new ApiError("NO_CINEMATIC_RECORD", "没有可分析的试拍记录。"));
     return;
@@ -369,6 +384,8 @@ async function analyzeCinematicLatest() {
   try {
     const data = await postJson("/api/v1/cinematic/analyze", { record_path: recordPath }, { timeout: 30000 });
     $("#cinematicResultJson").textContent = JSON.stringify(summarizeCinematicResult(data), null, 2);
+    state.cinematicProjectPath = data.project_path || "";
+    if (state.cinematicProjectPath) $("#cinematicProjectPath").value = state.cinematicProjectPath;
     renderCinematicProject(data.project || null);
     await loadCinematicStatus();
     log("info", "AI 运镜试拍分析完成");
@@ -378,14 +395,17 @@ async function analyzeCinematicLatest() {
 }
 
 async function generateCinematicKeyframes() {
-  const projectPath = state.cinematic?.latest_project?.path || "";
+  const projectPath = currentCinematicProjectPath();
   if (!projectPath) {
     showError(new ApiError("NO_CINEMATIC_PROJECT", "没有可生成关键帧的导演项目。"));
     return;
   }
+  const minCount = clampInt(Number($("#cinematicMinKeyframes").value || 3), 3, 8);
+  const maxCount = clampInt(Number($("#cinematicMaxKeyframes").value || 8), minCount, 8);
   try {
-    const data = await postJson("/api/v1/cinematic/keyframes", { project_path: projectPath, min_count: 3, max_count: 8 }, { timeout: 30000 });
+    const data = await postJson("/api/v1/cinematic/keyframes", { project_path: projectPath, min_count: minCount, max_count: maxCount }, { timeout: 30000 });
     $("#cinematicResultJson").textContent = JSON.stringify(summarizeCinematicResult(data), null, 2);
+    state.cinematicProjectPath = data.project_path || projectPath;
     renderCinematicProject(data.project || null);
     await loadCinematicStatus();
     log("info", "AI 运镜关键帧已生成");
@@ -395,7 +415,7 @@ async function generateCinematicKeyframes() {
 }
 
 async function generateCinematicAction() {
-  const projectPath = state.cinematic?.latest_project?.path || "";
+  const projectPath = currentCinematicProjectPath();
   if (!projectPath) {
     showError(new ApiError("NO_CINEMATIC_PROJECT", "没有可生成动作的导演项目。"));
     return;
@@ -407,12 +427,51 @@ async function generateCinematicAction() {
       { timeout: 30000 }
     );
     $("#cinematicResultJson").textContent = JSON.stringify(summarizeCinematicResult(data), null, 2);
+    state.cinematicProjectPath = data.project_path || projectPath;
+    state.cinematicGeneratedAction = data.action_name || data.project?.generated_action?.name || "";
     renderCinematicProject(data.project || null);
     await Promise.allSettled([loadCinematicStatus(), loadActions()]);
     log("info", "AI 运镜动作已生成");
   } catch (error) {
     showError(error);
   }
+}
+
+async function playGeneratedCinematicAction() {
+  const name = state.cinematicGeneratedAction || state.cinematicProject?.generated_action?.name || "";
+  if (!name) {
+    showError(new ApiError("NO_CINEMATIC_ACTION", "当前导演项目还没有生成动作。"));
+    return;
+  }
+  try {
+    await playAction(name);
+  } catch (error) {
+    showError(error);
+  }
+}
+
+function currentCinematicProjectPath() {
+  return $("#cinematicProjectPath").value.trim() || state.cinematicProjectPath || state.cinematic?.latest_project?.path || "";
+}
+
+function clampInt(value, min, max) {
+  if (!Number.isFinite(value)) return min;
+  return Math.max(min, Math.min(max, Math.round(value)));
+}
+
+function handleCinematicRecordClick(event) {
+  const row = event.target.closest("[data-cinematic-record-path]");
+  if (!row) return;
+  $("#cinematicRecordPath").value = row.dataset.cinematicRecordPath || "";
+  log("info", `已选择试拍记录：${row.dataset.cinematicRecordName || ""}`);
+}
+
+function handleCinematicProjectClick(event) {
+  const row = event.target.closest("[data-cinematic-project-path]");
+  if (!row) return;
+  const path = row.dataset.cinematicProjectPath || "";
+  $("#cinematicProjectPath").value = path;
+  loadCinematicProject(path);
 }
 
 function connectWebSocket() {
@@ -989,12 +1048,16 @@ function renderCinematicStatus() {
   $("#cinematicRecordDir").textContent = shortPath(data.record_dir || "");
   $("#cinematicProjectDir").textContent = shortPath(data.project_dir || "");
   $("#cinematicConfigJson").textContent = JSON.stringify({ rail: data.rail || {}, two_step: data.two_step || {} }, null, 2);
-  renderCompactFileList("#cinematicRecordsList", data.records || []);
-  renderCompactFileList("#cinematicProjectsList", data.projects || []);
+  renderCinematicFileList("#cinematicRecordsList", data.records || [], "record");
+  renderCinematicFileList("#cinematicProjectsList", data.projects || [], "project");
 }
 
 function renderCinematicProject(project) {
   const item = project || {};
+  const stage = item.workflow_stage || "--";
+  const generated = item.generated_action || {};
+  state.cinematicGeneratedAction = project ? generated.name || state.cinematicGeneratedAction || "" : "";
+  $("#cinematicProjectStage").textContent = project ? `阶段：${stage}${generated.name ? ` / 动作：${generated.name}` : ""}` : "未加载项目";
   $("#cinematicAnalysisText").textContent = item.motion_analysis ? formatCinematicAnalysis(item) : "等待试拍分析。";
   $("#cinematicKeyframesText").textContent = Array.isArray(item.director_keyframes) ? formatCinematicKeyframes(item.director_keyframes) : "等待关键帧生成。";
   $("#cinematicTrajectoryText").textContent = item.trajectory_plan || item.generated_action ? formatCinematicTrajectory(item) : "等待轨迹生成。";
@@ -1074,6 +1137,24 @@ function renderCompactFileList(selector, items) {
             <span>${formatFileSize(item.size)} · ${new Date(Number(item.modified_at || 0) * 1000).toLocaleString()}</span>
           </div>`
         )
+        .join("")
+    : `<div class="empty-text">暂无文件</div>`;
+}
+
+function renderCinematicFileList(selector, items, kind) {
+  const wrap = $(selector);
+  wrap.innerHTML = items.length
+    ? items
+        .map((item) => {
+          const attrs =
+            kind === "record"
+              ? `data-cinematic-record-path="${escapeAttr(item.path || "")}" data-cinematic-record-name="${escapeAttr(item.name || "")}"`
+              : `data-cinematic-project-path="${escapeAttr(item.path || "")}" data-cinematic-project-name="${escapeAttr(item.name || "")}"`;
+          return `<button class="compact-list-row compact-list-button" ${attrs}>
+            <strong>${escapeHtml(item.name)}</strong>
+            <span>${formatFileSize(item.size)} · ${new Date(Number(item.modified_at || 0) * 1000).toLocaleString()}</span>
+          </button>`;
+        })
         .join("")
     : `<div class="empty-text">暂无文件</div>`;
 }

@@ -375,6 +375,11 @@ async def poses() -> dict[str, Any]:
     return api_success(service.list_poses())
 
 
+@app.get("/api/v1/poses/{name}")
+async def poses_detail(name: str) -> dict[str, Any]:
+    return api_success(service.get_pose(name))
+
+
 @app.post("/api/v1/poses/save")
 async def poses_save(request: SavePoseRequest) -> dict[str, Any]:
     return await _call(service.save_pose, request)

@@ -855,6 +855,16 @@ class ControllerBridge:
         except Exception as exc:
             return self._exception("读取姿态列表失败", exc)
 
+    def get_pose(self, name: str) -> dict[str, Any]:
+        try:
+            pose = self._get_pose_manager().获取姿态(name)
+            if pose is None:
+                return bridge_fail(f"姿态不存在：{name}")
+            description = pose.get("说明", "") if isinstance(pose, Mapping) else ""
+            return bridge_ok(f"姿态详情已加载：{name}", {"name": name, "description": description, "pose": pose})
+        except Exception as exc:
+            return self._exception("读取姿态详情失败", exc)
+
     def save_pose(self, name: str, description: str = "") -> dict[str, Any]:
         try:
             state_result = self.get_state()

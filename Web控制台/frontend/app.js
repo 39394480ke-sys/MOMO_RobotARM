@@ -621,8 +621,21 @@ async function gotoPose(name) {
 async function deletePose(name) {
   try {
     await withPending(`pose-${name}`, () => deleteJson(`/api/v1/poses/${encodeURIComponent(name)}`));
+    $("#poseDetailName").textContent = "未选择";
+    $("#poseDetailSummary").textContent = "请选择一个姿态。";
+    $("#poseDetailResult").textContent = "";
     log("info", `已删除姿态：${name}`);
     await loadPoses();
+  } catch (error) {
+    showError(error);
+  }
+}
+
+async function showPoseDetail(name) {
+  try {
+    const data = await getJson(`/api/v1/poses/${encodeURIComponent(name)}`);
+    renderPoseDetail(name, data);
+    log("info", `姿态详情已加载：${name}`);
   } catch (error) {
     showError(error);
   }
@@ -1213,6 +1226,7 @@ function renderPoses(poses) {
           <p>关节：${escapeHtml(angles)}</p>
           <p>夹爪：${formatNum(item.pose?.夹爪 ?? 50, 0)}%</p>
           <div class="button-row">
+            <button data-pose-detail="${escapeAttr(item.name)}">详情</button>
             <button data-pose-goto="${escapeAttr(item.name)}">前往</button>
             <button data-pose-delete="${escapeAttr(item.name)}">删除</button>
           </div>
@@ -1220,11 +1234,71 @@ function renderPoses(poses) {
     })
     .join("");
   $("#posesList").onclick = (event) => {
+    const detailBtn = event.target.closest("button[data-pose-detail]");
     const gotoBtn = event.target.closest("button[data-pose-goto]");
     const delBtn = event.target.closest("button[data-pose-delete]");
+    if (detailBtn) showPoseDetail(detailBtn.dataset.poseDetail);
     if (gotoBtn) gotoPose(gotoBtn.dataset.poseGoto);
     if (delBtn) deletePose(delBtn.dataset.poseDelete);
   };
+}
+
+function renderPoseDetail(name, detail) {
+  const pose = detail.pose || detail;
+  $("#poseDetailName").textContent = name;
+  $("#poseDetailSummary").textContent = formatPoseSummaryDetail(name, pose, detail.description);
+  $("#poseDetailResult").textContent = JSON.stringify(compactPoseDetail(pose), null, 2);
+}
+
+function formatPoseSummaryDetail(name, pose, description = "") {
+  const lines = [`姿态：${name}`, ""];
+  const desc = description || pose?.说明 || pose?.description || "";
+  if (desc) lines.push(`说明: ${desc}`);
+  const joints = normalizePoseJoints(pose);
+  if (Object.keys(joints).length) {
+    if (lines[lines.length - 1] !== "") lines.push("");
+    lines.push("关节角度");
+    JOINTS.forEach(([key, label]) => {
+      if (Object.prototype.hasOwnProperty.call(joints, key)) {
+        lines.push(`  ${label}: ${formatNum(joints[key], 2)} deg`);
+      }
+    });
+  }
+  const gripper = pose?.夹爪 ?? pose?.gripper;
+  if (gripper !== undefined && gripper !== null) {
+    if (lines[lines.length - 1] !== "") lines.push("");
+    lines.push(`夹爪: ${formatNum(gripper, 1)}%`);
+  }
+  const tcp = pose?.tcp_pose || pose?.tcp || pose?.末端位姿;
+  if (tcp) {
+    if (lines[lines.length - 1] !== "") lines.push("");
+    lines.push("TCP");
+    if (Array.isArray(tcp.xyz)) lines.push(`  XYZ: ${tcp.xyz.map((value) => formatNum(value, 4)).join(", ")} m`);
+    if (Array.isArray(tcp.rpy)) lines.push(`  RPY: ${tcp.rpy.map((value) => formatNum(Number(value) * 57.2958, 2)).join(", ")} deg`);
+  }
+  if (lines.length <= 2) lines.push(JSON.stringify(pose || {}, null, 2));
+  return lines.join("\n");
+}
+
+function compactPoseDetail(pose) {
+  return {
+    description: pose?.说明 || pose?.description || "",
+    joints_deg: normalizePoseJoints(pose),
+    tcp_pose: pose?.tcp_pose || pose?.tcp || pose?.末端位姿 || null,
+    gripper: pose?.夹爪 ?? pose?.gripper ?? null,
+    raw_present_position: pose?.raw_present_position || pose?.raw || null,
+    multi_turn_state: pose?.multi_turn_state || null,
+  };
+}
+
+function normalizePoseJoints(pose) {
+  if (!pose) return {};
+  const source = pose.joints_deg || pose.joints || pose.targets_deg || pose.关节角度 || {};
+  if (Array.isArray(source)) {
+    return Object.fromEntries(JOINTS.map(([key], index) => [key, Number(source[index] || 0)]));
+  }
+  if (source && typeof source === "object") return { ...source };
+  return {};
 }
 
 function renderActions(actions) {

@@ -550,6 +550,10 @@ class WebControlService:
         with self._lock:
             return self._unwrap_bridge(self.bridge.list_poses(), code="POSE_LIST_FAILED")
 
+    def get_pose(self, name: str) -> dict[str, Any]:
+        with self._lock:
+            return self._unwrap_bridge(self.bridge.get_pose(name), code="POSE_DETAIL_FAILED")
+
     def save_pose(self, request: SavePoseRequest) -> dict[str, Any]:
         return self._unwrap_bridge(self.bridge.save_pose(request.name, request.description), code="POSE_SAVE_FAILED")
 

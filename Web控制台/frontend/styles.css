@@ -423,16 +423,19 @@ pre {
   margin-bottom: 12px;
 }
 
-.action-detail-panel {
+.action-detail-panel,
+.pose-detail-panel {
   margin-bottom: 12px;
 }
 
-.action-summary-text {
+.action-summary-text,
+.pose-summary-text {
   min-height: 150px;
   white-space: pre-wrap;
 }
 
-.action-detail-json {
+.action-detail-json,
+.pose-detail-json {
   margin-top: 10px;
 }
 

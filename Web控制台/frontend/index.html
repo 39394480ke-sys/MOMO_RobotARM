@@ -361,6 +361,7 @@
               <div class="inline-actions">
                 <button id="kinRefreshBtn">刷新 TCP</button>
                 <button id="kinStatusBtn">刷新仿真状态</button>
+                <button id="kinRenderBtn">刷新仿真快照</button>
               </div>
             </div>
             <div class="kin-grid">
@@ -376,6 +377,15 @@
                   <dt>PyBullet</dt><dd id="kinModelState">--</dd>
                 </dl>
                 <pre id="kinStatusResult" class="result-box"></pre>
+              </section>
+              <section class="panel kin-render-panel">
+                <div class="panel-head">
+                  <h3>仿真快照</h3>
+                  <span id="kinRenderState" class="inline-status">未刷新</span>
+                </div>
+                <div class="kin-render-frame">
+                  <img id="kinRenderImage" alt="PyBullet 仿真快照" />
+                </div>
               </section>
               <section class="panel">
                 <div class="panel-head"><h3>FK</h3></div>

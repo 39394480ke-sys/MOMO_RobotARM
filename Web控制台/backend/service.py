@@ -650,6 +650,15 @@ class WebControlService:
     def kinematics_status(self) -> dict[str, Any]:
         return self._unwrap_bridge(self.bridge.kinematics_status(), code="KINEMATICS_STATUS_FAILED")
 
+    def kinematics_render(self, width: int = 960, height: int = 640) -> tuple[bytes, str]:
+        result = self.bridge.render_kinematics_snapshot(width=width, height=height)
+        data = self._unwrap_bridge(result, code="KINEMATICS_RENDER_FAILED")
+        image_bytes = data.get("image_bytes", b"")
+        media_type = str(data.get("media_type") or "image/jpeg")
+        if not isinstance(image_bytes, (bytes, bytearray)) or not image_bytes:
+            raise WebAPIError("KINEMATICS_RENDER_FAILED", "仿真快照为空。", status_code=500)
+        return bytes(image_bytes), media_type
+
     # ------------------------------------------------------------------
     # WebSocket 状态
     # ------------------------------------------------------------------

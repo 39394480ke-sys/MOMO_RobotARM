@@ -16,6 +16,7 @@ import shutil
 import subprocess
 import time
 import traceback
+import math
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -1155,6 +1156,84 @@ class ControllerBridge:
         except Exception as exc:
             return self._exception("读取运动学状态失败", exc)
 
+    def render_kinematics_snapshot(self, width: int = 960, height: int = 640) -> dict[str, Any]:
+        """渲染当前姿态的 PyBullet 快照，供 Web 仿真视图使用。"""
+
+        try:
+            import cv2
+            import numpy as np
+            import pybullet as pb
+
+            model = self._get_kinematics_model()
+            if model is None:
+                return bridge_fail(self.last_error or "运动学模型不可用，无法渲染仿真快照。")
+
+            width = max(320, min(1600, int(width or 960)))
+            height = max(240, min(1200, int(height or 640)))
+            q_user = self._current_visual_q_user(model)
+            tcp = model.forward(q_user)
+
+            yaw = math.radians(-55.0)
+            pitch = math.radians(28.0)
+            distance = 0.62
+            target = [0.0, 0.0, 0.16]
+            horizontal = distance * math.cos(pitch)
+            eye = [
+                target[0] + horizontal * math.cos(yaw),
+                target[1] + horizontal * math.sin(yaw),
+                target[2] + distance * math.sin(pitch),
+            ]
+            view = pb.computeViewMatrix(
+                cameraEyePosition=eye,
+                cameraTargetPosition=target,
+                cameraUpVector=[0.0, 0.0, 1.0],
+            )
+            projection = pb.computeProjectionMatrixFOV(
+                fov=45.0,
+                aspect=float(width) / float(height),
+                nearVal=0.01,
+                farVal=4.0,
+            )
+            try:
+                _, _, rgba, _, _ = pb.getCameraImage(
+                    width,
+                    height,
+                    viewMatrix=view,
+                    projectionMatrix=projection,
+                    renderer=pb.ER_BULLET_HARDWARE_OPENGL,
+                    physicsClientId=model._client_id,
+                )
+            except Exception:
+                _, _, rgba, _, _ = pb.getCameraImage(
+                    width,
+                    height,
+                    viewMatrix=view,
+                    projectionMatrix=projection,
+                    renderer=pb.ER_TINY_RENDERER,
+                    physicsClientId=model._client_id,
+                )
+
+            rgb = np.asarray(rgba, dtype=np.uint8).reshape((height, width, 4))[:, :, :3]
+            ok, buffer = cv2.imencode(
+                ".jpg",
+                cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR),
+                [int(cv2.IMWRITE_JPEG_QUALITY), 90],
+            )
+            if not ok:
+                return bridge_fail("仿真快照编码失败。")
+            return bridge_ok(
+                "仿真快照已渲染。",
+                {
+                    "image_bytes": bytes(buffer),
+                    "media_type": "image/jpeg",
+                    "width": width,
+                    "height": height,
+                    "tcp_pose": tcp,
+                },
+            )
+        except Exception as exc:
+            return self._exception("渲染仿真快照失败", exc)
+
     # ------------------------------------------------------------------
     # 内部对象创建
     # ------------------------------------------------------------------
@@ -1201,6 +1280,27 @@ class ControllerBridge:
             return self.kinematics_model
         self.kinematics_model, self.last_error = load_kinematics_model(self._resolve_config("kinematics_config_path"))
         return self.kinematics_model
+
+    def _current_visual_q_user(self, model: Any) -> list[float]:
+        if self.controller is None:
+            self._ensure_controller()
+        joints_deg = current_joints_for_controller(self.controller, prefer_detailed=False)
+        q_user = [
+            float(joints_deg.get(joint, 0.0)) / 1000.0 if joint == "j10" else math.radians(float(joints_deg.get(joint, 0.0)))
+            for joint in JOINT_ORDER
+        ]
+        limits = getattr(model, "ordered_joint_user_limits", None)
+        if not limits:
+            return q_user
+
+        clipped: list[float] = []
+        for index, value in enumerate(q_user):
+            if index >= len(limits):
+                clipped.append(value)
+                continue
+            lower, upper = limits[index]
+            clipped.append(max(float(lower), min(float(upper), float(value))))
+        return clipped
 
     # ------------------------------------------------------------------
     # 数据整理

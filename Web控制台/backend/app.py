@@ -440,6 +440,12 @@ async def kinematics_status() -> dict[str, Any]:
     return api_success(service.kinematics_status())
 
 
+@app.get("/api/v1/kinematics/render.jpg")
+async def kinematics_render(width: int = Query(960, ge=320, le=1600), height: int = Query(640, ge=240, le=1200)) -> Response:
+    image_bytes, media_type = service.kinematics_render(width=width, height=height)
+    return Response(content=image_bytes, media_type=media_type, headers={"Cache-Control": "no-store"})
+
+
 @app.post("/api/v1/kinematics/fk")
 async def kinematics_fk(request: FKRequest) -> dict[str, Any]:
     return api_success(service.compute_fk(request.joints_deg))

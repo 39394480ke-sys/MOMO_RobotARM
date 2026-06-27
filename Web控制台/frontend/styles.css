@@ -483,6 +483,29 @@ pre {
   grid-column: span 12;
 }
 
+.kin-render-panel {
+  grid-column: span 12;
+}
+
+.kin-render-frame {
+  width: 100%;
+  aspect-ratio: 3 / 2;
+  min-height: 280px;
+  background: #111827;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+}
+
+.kin-render-frame img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
 .jog-panel {
   grid-column: span 12;
 }

@@ -91,6 +91,7 @@ function bindEvents() {
   });
   $("#kinRefreshBtn").addEventListener("click", refreshState);
   $("#kinStatusBtn").addEventListener("click", loadKinematicsStatus);
+  $("#kinRenderBtn").addEventListener("click", refreshKinematicsRender);
   $("#fkBtn").addEventListener("click", computeFk);
   $("#ikBtn").addEventListener("click", computeIk);
   $("#executeIkBtn").addEventListener("click", executeIk);
@@ -272,9 +273,26 @@ async function loadKinematicsStatus() {
   try {
     state.kinematicsStatus = await getJson("/api/v1/kinematics/status", { timeout: 12000 });
     renderKinematicsStatus();
+    refreshKinematicsRender();
   } catch (error) {
     showError(error);
   }
+}
+
+function refreshKinematicsRender() {
+  const img = $("#kinRenderImage");
+  const stateEl = $("#kinRenderState");
+  stateEl.textContent = "刷新中";
+  stateEl.className = "inline-status";
+  img.onload = () => {
+    stateEl.textContent = `已刷新 ${new Date().toLocaleTimeString()}`;
+    stateEl.className = "inline-status ok-text";
+  };
+  img.onerror = () => {
+    stateEl.textContent = "快照失败";
+    stateEl.className = "inline-status bad-text";
+  };
+  img.src = `/api/v1/kinematics/render.jpg?width=960&height=640&t=${Date.now()}`;
 }
 
 async function refreshFollow() {
@@ -1419,7 +1437,10 @@ function showPage(name) {
   }
   if (name === "agent") loadAgentStatus();
   if (name === "cinematic") loadCinematicStatus();
-  if (name === "kinematics") loadKinematicsStatus();
+  if (name === "kinematics") {
+    loadKinematicsStatus();
+    refreshKinematicsRender();
+  }
   if (name === "calibration") loadCalibration();
   if (name === "calibration") diagnoseJ12();
   if (name === "settings") {

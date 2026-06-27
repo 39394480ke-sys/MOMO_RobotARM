@@ -78,11 +78,18 @@ def main() -> None:
     include_gripper = bool(config.get("transport", {}).get("gripper_available", True))
     backend = str(config.get("transport", {}).get("driver_backend", "sdk")).strip().lower()
     baudrate = int(config.get("transport", {}).get("baudrate", 1_000_000))
-    if args.apply_registers and backend in {"sdk", "lightweight", "scservo", "feetech-sdk"}:
+    if is_lightweight_backend(backend) and args.apply_registers:
         raise SystemExit(
             "当前 driver_backend 使用轻量 SDK。轻量标定路线只读取 Present_Position 并生成标定文件，"
             "不写 Operating_Mode/Homing_Offset/Phase 等底层寄存器。\n"
             "如确实需要写寄存器，请先确认风险，再改用 transport.driver_backend=lerobot。"
+        )
+    if is_lightweight_backend(backend) and args.recalibrate_single:
+        raise SystemExit(
+            "当前 driver_backend 使用轻量 SDK。轻量标定路线不执行 J14/夹爪单圈重标定，"
+            "因为该流程需要写 Homing_Offset 和采样单圈限位。\n"
+            "开发板推荐做法：保留已有 J14/夹爪单圈标定，只用 "
+            "标定当前角度_calibrate_current_angle.py / Web 批量标定修正多圈关节。"
         )
     print(f"后端：{backend}  baudrate={baudrate}")
     bus, include_gripper = connect_optional_gripper_bus(port, include_gripper, backend=backend, baudrate=baudrate)
@@ -146,6 +153,10 @@ def connect_optional_gripper_bus(port: str, include_gripper: bool, backend: str 
             pass
         bus = connect_feetech_bus(port, include_gripper=False, backend=backend, baudrate=baudrate)
         return bus, False
+
+
+def is_lightweight_backend(backend: str) -> bool:
+    return str(backend or "sdk").strip().lower() in {"sdk", "lightweight", "scservo", "feetech-sdk"}
 
 
 def parse_args() -> argparse.Namespace:

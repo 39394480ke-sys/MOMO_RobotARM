@@ -74,14 +74,34 @@ Web 控制台也走同一条轻量 SDK 逻辑：
 
 Web 页面默认仍保持 dry-run；写真实标定文件时需要安全确认文本。
 
-## 不推荐在开发板优先使用的旧流程
+## 完整标定脚本在开发板上的定位
 
-`标定程序_calibrate.py` 是完整标定脚本，历史上依赖真实舵机后端和 `lerobot`。ARM 开发板上不优先使用它作为第一路线。
+`标定程序_calibrate.py` 已改为默认优先使用轻量 SDK 后端，不再要求 `lerobot / torch`。
+但在开发板路线上，它只推荐用于：
+
+- 读取当前 `Present_Position`。
+- 生成/更新多圈关节 `home_present_raw`。
+- 复用已有 J14/夹爪单圈标定。
+
+轻量 SDK 路线不会执行：
+
+- `--apply-registers` 写 `Operating_Mode / Homing_Offset / Phase / Limit`。
+- `--recalibrate-single` 重新采样 J14/夹爪单圈限位。
+
+这两类操作会被脚本明确拒绝，避免误写寄存器。需要这类底层寄存器流程时，必须显式切到 `transport.driver_backend=lerobot` 并确认依赖与风险。
+
+开发板上可以这样做 dry-run 预览：
+
+```bash
+python 真实舵机控制/标定程序_calibrate.py --dry-run
+```
+
+如果只想修 J12/J13/J15 等角度偏差，仍然优先使用“批量当前角度标定”。
 
 开发板优先顺序：
 
 1. 只读总线诊断。
 2. 轻量 SDK 当前角度标定。
 3. Web 标定页批量修正。
-4. J12 等越界关节修正后再做真实动作测试。
-
+4. 必要时用完整标定脚本读取多圈 home 并复用已有单圈标定。
+5. J12 等越界关节修正后再做真实动作测试。

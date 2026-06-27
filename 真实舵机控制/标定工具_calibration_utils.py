@@ -69,15 +69,27 @@ def import_feetech_classes():
         from lerobot.motors.feetech import FeetechMotorsBus
     except ImportError as error:
         raise RuntimeError(
-            "缺少真实舵机依赖。请先执行：\n"
+            "缺少 LeRobot 真实舵机依赖。开发板默认推荐轻量 SDK；"
+            "只有 transport.driver_backend=lerobot 时才需要安装这些包。\n"
+            "如确认要使用 LeRobot 后端，请执行：\n"
             "  mamba run -n momo_rebot python -m pip install lerobot feetech-servo-sdk pyserial pyyaml\n"
-            "dry-run 主程序不需要这些依赖，但标定程序和真实控制需要。"
+            "dry-run 主程序和轻量 SDK 标定不需要 LeRobot/Torch。"
         ) from error
     return Motor, MotorNormMode, FeetechMotorsBus
 
 
-def create_feetech_bus(port: str, include_gripper: bool = True):
+def create_feetech_bus(port: str, include_gripper: bool = True, backend: str = "sdk", baudrate: int = 1_000_000):
     """创建 FeetechMotorsBus。"""
+
+    backend = str(backend or "sdk").strip().lower()
+    if backend in {"sdk", "lightweight", "scservo", "feetech-sdk"}:
+        from 轻量舵机驱动_lightweight_feetech_driver import LightweightFeetechBus
+
+        joint_names = list(JOINTS)
+        if include_gripper:
+            joint_names.append(GRIPPER_JOINT)
+        motor_ids = {joint_name: ARM_MOTOR_IDS[joint_name] for joint_name in joint_names}
+        return LightweightFeetechBus(port, motor_ids, baudrate=int(baudrate))
 
     Motor, MotorNormMode, FeetechMotorsBus = import_feetech_classes()
     joint_names = list(JOINTS)
@@ -90,10 +102,10 @@ def create_feetech_bus(port: str, include_gripper: bool = True):
     return FeetechMotorsBus(port=port, motors=motors)
 
 
-def connect_feetech_bus(port: str, include_gripper: bool = True):
+def connect_feetech_bus(port: str, include_gripper: bool = True, backend: str = "sdk", baudrate: int = 1_000_000):
     """创建并连接 Feetech 总线，失败时补充硬件排查提示。"""
 
-    bus = create_feetech_bus(port, include_gripper=include_gripper)
+    bus = create_feetech_bus(port, include_gripper=include_gripper, backend=backend, baudrate=baudrate)
     try:
         bus.connect()
     except Exception as error:

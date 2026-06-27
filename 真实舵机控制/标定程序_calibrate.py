@@ -76,7 +76,16 @@ def main() -> None:
         print("已传入 --apply-registers：会写入标定寄存器。")
 
     include_gripper = bool(config.get("transport", {}).get("gripper_available", True))
-    bus, include_gripper = connect_optional_gripper_bus(port, include_gripper)
+    backend = str(config.get("transport", {}).get("driver_backend", "sdk")).strip().lower()
+    baudrate = int(config.get("transport", {}).get("baudrate", 1_000_000))
+    if args.apply_registers and backend in {"sdk", "lightweight", "scservo", "feetech-sdk"}:
+        raise SystemExit(
+            "当前 driver_backend 使用轻量 SDK。轻量标定路线只读取 Present_Position 并生成标定文件，"
+            "不写 Operating_Mode/Homing_Offset/Phase 等底层寄存器。\n"
+            "如确实需要写寄存器，请先确认风险，再改用 transport.driver_backend=lerobot。"
+        )
+    print(f"后端：{backend}  baudrate={baudrate}")
+    bus, include_gripper = connect_optional_gripper_bus(port, include_gripper, backend=backend, baudrate=baudrate)
     try:
         print("已连接 Feetech 舵机总线。")
         print_hardware_status(bus, include_gripper=include_gripper)
@@ -114,15 +123,15 @@ def main() -> None:
             pass
 
 
-def connect_optional_gripper_bus(port: str, include_gripper: bool) -> tuple[Any, bool]:
+def connect_optional_gripper_bus(port: str, include_gripper: bool, backend: str = "sdk", baudrate: int = 1_000_000) -> tuple[Any, bool]:
     """连接总线。配置带夹爪但 ID16 不在线时，自动降级为无夹爪模式。"""
 
     if not include_gripper:
         print("配置 transport.gripper_available=false：本次标定按无夹爪 5 轴模式运行。")
-        bus = connect_feetech_bus(port, include_gripper=False)
+        bus = connect_feetech_bus(port, include_gripper=False, backend=backend, baudrate=baudrate)
         return bus, False
 
-    bus = create_feetech_bus(port, include_gripper=True)
+    bus = create_feetech_bus(port, include_gripper=True, backend=backend, baudrate=baudrate)
     try:
         bus.connect()
         return bus, True
@@ -135,7 +144,7 @@ def connect_optional_gripper_bus(port: str, include_gripper: bool) -> tuple[Any,
             bus.disconnect()
         except Exception:
             pass
-        bus = connect_feetech_bus(port, include_gripper=False)
+        bus = connect_feetech_bus(port, include_gripper=False, backend=backend, baudrate=baudrate)
         return bus, False
 
 

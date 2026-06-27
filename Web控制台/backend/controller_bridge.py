@@ -633,6 +633,30 @@ class ControllerBridge:
         except Exception as exc:
             return self._exception("关节微调失败", exc)
 
+    def move_single_joint_target(self, joint_key: str, target_deg: float) -> dict[str, Any]:
+        """移动单个关节到绝对逻辑角度，不把目标补齐成全关节。"""
+
+        try:
+            self._ensure_connected_for_motion()
+            joint = normalize_joint_key(joint_key)
+            target = float(target_deg)
+            self._ensure_controller()
+            if self.mode in {"dry_run", "real"} and hasattr(self.controller, "move_joints"):
+                result = self.controller.move_joints({joint: target})
+                normalized = normalize_bridge_result(result, "单关节移动完成。", {"targets_deg": {joint: target}})
+            else:
+                state_result = self.get_state()
+                if not state_result.get("ok"):
+                    return state_result
+                current = state_result.get("data", {}).get("joints_deg", {})
+                targets = {key: float(current.get(key, 0.0)) for key in JOINT_ORDER}
+                targets[joint] = target
+                normalized = self.move_joints(targets)
+            self._log("info" if normalized["ok"] else "error", "single_joint_target", normalized["message"], joint_key=joint, target_deg=target)
+            return normalized
+        except Exception as exc:
+            return self._exception("单关节移动失败", exc)
+
     def move_joints(self, targets_deg: Mapping[str, float]) -> dict[str, Any]:
         try:
             self._ensure_connected_for_motion()

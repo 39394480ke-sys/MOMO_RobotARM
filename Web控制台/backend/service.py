@@ -327,10 +327,15 @@ class WebControlService:
             direction = 1 if int(request.direction) > 0 else -1
             direction *= int(tuning.get("jog_direction_overrides", {}).get(joint, 1))
             update_hz = max(2.0, float(tuning.get("continuous_update_hz", 20.0)))
+            horizon_s = max(0.0, float(tuning.get("continuous_target_horizon_s", 0.25)))
             sleep_s = 1.0 / update_hz
             max_step = self._manual_step_limit()
             speed = min(abs(float(request.speed_deg_s)), max_step * update_hz)
-            delta = max(0.02, min(max_step, speed / update_hz)) * direction
+            delta_per_tick = max(0.02, min(max_step, speed / update_hz)) * direction
+            state_result = self.bridge.get_state()
+            state_data = self._unwrap_bridge(state_result, code="CONTINUOUS_JOG_STATE_FAILED")
+            current_joints = state_data.get("joints_deg", {})
+            start_deg = float(current_joints.get(joint, 0.0))
             stop_event = threading.Event()
             self._continuous_jog_stop = stop_event
             self._continuous_jog_status = {
@@ -339,29 +344,30 @@ class WebControlService:
                 "direction": direction,
                 "speed_deg_s": speed,
                 "update_hz": update_hz,
-                "delta_per_tick": delta,
+                "horizon_s": horizon_s,
+                "start_deg": start_deg,
+                "target_deg": start_deg,
+                "delta_per_tick": delta_per_tick,
                 "started_at": time.time(),
                 "tick_count": 0,
                 "message": "连续控制运行中。",
             }
-            first_result = self.bridge.move_joint_delta(joint, delta)
-            if not first_result.get("ok"):
-                self._continuous_jog_status.update(
-                    running=False,
-                    message=str(first_result.get("message", "连续控制启动失败。")),
-                    stopped_at=time.time(),
-                )
-                return self._unwrap_bridge(first_result, code="CONTINUOUS_JOG_FAILED")
-            self._continuous_jog_status["tick_count"] = 1
+            started_monotonic = time.monotonic()
 
             def worker() -> None:
+                last_target = start_deg
                 try:
                     while not stop_event.is_set():
-                        stop_event.wait(sleep_s)
-                        if stop_event.is_set():
-                            break
+                        elapsed = time.monotonic() - started_monotonic
+                        ideal_target = start_deg + direction * speed * elapsed
+                        step_delta = max(-max_step, min(max_step, ideal_target - last_target))
+                        if abs(step_delta) < 1e-6:
+                            if stop_event.wait(sleep_s):
+                                break
+                            continue
+                        target_deg = last_target + step_delta
                         with self._lock:
-                            result = self.bridge.move_joint_delta(joint, delta)
+                            result = self.bridge.move_single_joint_target(joint, target_deg)
                             if not result.get("ok"):
                                 self._continuous_jog_status.update(
                                     running=False,
@@ -369,8 +375,11 @@ class WebControlService:
                                     stopped_at=time.time(),
                                 )
                                 return
+                            last_target = target_deg
+                            self._continuous_jog_status["target_deg"] = target_deg
                             self._continuous_jog_status["tick_count"] = int(self._continuous_jog_status.get("tick_count", 0)) + 1
-                        stop_event.wait(sleep_s)
+                        if stop_event.wait(sleep_s):
+                            break
                 except Exception as exc:
                     self._continuous_jog_status.update(running=False, message=f"连续控制异常：{exc}", stopped_at=time.time())
                     self._remember_error("CONTINUOUS_JOG_FAILED", str(exc))

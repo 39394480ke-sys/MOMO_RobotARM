@@ -550,6 +550,14 @@ pre {
   grid-template-columns: repeat(2, minmax(0, 160px));
 }
 
+.input-grid.four {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.vision-target-tools {
+  margin-top: 12px;
+}
+
 .result-box {
   min-height: 100px;
   background: #f3f5f8;

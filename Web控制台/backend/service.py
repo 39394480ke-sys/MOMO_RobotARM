@@ -691,6 +691,15 @@ class WebControlService:
     def vision_latest(self) -> dict[str, Any]:
         return self._fetch_vision_json("/latest")
 
+    def vision_target_state(self) -> dict[str, Any]:
+        return self._fetch_vision_json("/target/state")
+
+    def vision_select_target(self, x: int, y: int, w: int, h: int) -> dict[str, Any]:
+        return self._post_vision_json("/target/select", {"x": int(x), "y": int(y), "w": int(w), "h": int(h)})
+
+    def vision_reset_target(self) -> dict[str, Any]:
+        return self._post_vision_json("/target/reset", {})
+
     def vision_frame(self) -> tuple[bytes, str]:
         url = self._vision_service_url("/frame.jpg")
         try:
@@ -861,6 +870,29 @@ class WebControlService:
                     payload.setdefault("proxy_url", url)
                     return payload
                 return {"value": payload, "proxy_url": url}
+        except urllib.error.HTTPError as exc:
+            raise WebAPIError("VISION_HTTP_ERROR", f"视觉服务 HTTP {exc.code}：{url}", status_code=502)
+        except Exception as exc:
+            raise WebAPIError("VISION_UNAVAILABLE", f"视觉服务不可用：{url}，{exc}", status_code=502)
+
+    def _post_vision_json(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
+        url = self._vision_service_url(path)
+        try:
+            import json
+
+            body = json.dumps(payload).encode("utf-8")
+            request = urllib.request.Request(
+                url,
+                data=body,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(request, timeout=3.0) as response:
+                result = json.loads(response.read().decode("utf-8"))
+                if isinstance(result, dict):
+                    result.setdefault("proxy_url", url)
+                    return result
+                return {"value": result, "proxy_url": url}
         except urllib.error.HTTPError as exc:
             raise WebAPIError("VISION_HTTP_ERROR", f"视觉服务 HTTP {exc.code}：{url}", status_code=502)
         except Exception as exc:

@@ -163,3 +163,10 @@ class FollowStartRequest(BaseModel):
     rail_speed_mm_s: float | None = Field(None, gt=0.0)
     rail_step_mm: float | None = Field(None, gt=0.0)
     rail_interval_sec: float | None = Field(None, gt=0.0)
+
+
+class VisionTargetSelectRequest(BaseModel):
+    x: int = Field(..., ge=0)
+    y: int = Field(..., ge=0)
+    w: int = Field(..., ge=1)
+    h: int = Field(..., ge=1)

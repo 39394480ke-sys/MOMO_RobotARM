@@ -81,6 +81,9 @@ function bindEvents() {
   });
   $("#refreshVisionPreviewBtn").addEventListener("click", refreshVisionPreview);
   $("#toggleVisionLiveBtn").addEventListener("click", toggleVisionLivePreview);
+  $("#selectVisionTargetBtn").addEventListener("click", selectVisionTarget);
+  $("#resetVisionTargetBtn").addEventListener("click", resetVisionTarget);
+  $("#refreshVisionTargetBtn").addEventListener("click", refreshVisionTargetState);
   $("#refreshAgentBtn").addEventListener("click", loadAgentStatus);
   $("#sendAgentBtn").addEventListener("click", sendAgentMessage);
   $("#resetAgentBtn").addEventListener("click", resetAgentSession);
@@ -1046,20 +1049,71 @@ function frameUrlFromLatest(latestUrl) {
 
 async function refreshVisionProxyStatus() {
   try {
-    const [health, latest] = await Promise.all([
+    const [health, latest, targetState] = await Promise.all([
       getJson("/api/v1/vision/health", { timeout: 3000 }),
       getJson("/api/v1/vision/latest", { timeout: 3000 }),
+      getJson("/api/v1/vision/target/state", { timeout: 3000 }),
     ]);
     $("#visionHealthState").textContent = health.camera_available ? "camera ok" : health.running ? "running" : "未启动";
     $("#visionHealthState").className = health.camera_available ? "ok-text" : "bad-text";
     $("#visionLatestState").textContent = latest.detected ? "检测到目标" : latest.message || "未检测";
     $("#visionLatestState").className = latest.detected ? "ok-text" : "";
+    renderVisionTargetState(targetState);
     renderVisionLatestDebug(latest);
   } catch (error) {
     $("#visionHealthState").textContent = "视觉服务不可用";
     $("#visionHealthState").className = "bad-text";
     $("#visionLatestState").textContent = error.message || String(error);
     $("#visionLatestJson").textContent = "";
+  }
+}
+
+async function refreshVisionTargetState() {
+  try {
+    const targetState = await getJson("/api/v1/vision/target/state", { timeout: 3000 });
+    renderVisionTargetState(targetState);
+  } catch (error) {
+    showError(error);
+  }
+}
+
+function renderVisionTargetState(targetState) {
+  const mode = targetState.target_mode || "--";
+  const tracking = targetState.tracking_state || "--";
+  const bbox = targetState.tracker_last_bbox || targetState.manual_reference_bbox || targetState.target?.bbox || null;
+  $("#visionTargetToolState").textContent = Array.isArray(bbox)
+    ? `目标 ${mode} / ${tracking} / bbox=${bbox.map((value) => formatNum(value, 0)).join(",")}`
+    : `目标 ${mode} / ${tracking}`;
+}
+
+async function selectVisionTarget() {
+  try {
+    const body = {
+      x: Number($("#visionTargetX").value),
+      y: Number($("#visionTargetY").value),
+      w: Number($("#visionTargetW").value),
+      h: Number($("#visionTargetH").value),
+    };
+    if (!Number.isFinite(body.x) || !Number.isFinite(body.y) || !Number.isFinite(body.w) || !Number.isFinite(body.h) || body.w < 1 || body.h < 1) {
+      throw new ApiError("BAD_VISION_TARGET", "请输入有效的 x/y/w/h 像素框。");
+    }
+    const result = await postJson("/api/v1/vision/target/select", body);
+    $("#visionTargetToolState").textContent = result.message || "手动目标已选择";
+    await refreshVisionProxyStatus();
+    refreshVisionPreview();
+  } catch (error) {
+    showError(error);
+  }
+}
+
+async function resetVisionTarget() {
+  try {
+    const result = await postJson("/api/v1/vision/target/reset", {});
+    $("#visionTargetToolState").textContent = result.message || "目标已重置";
+    await refreshVisionProxyStatus();
+    refreshVisionPreview();
+  } catch (error) {
+    showError(error);
   }
 }
 

@@ -41,6 +41,7 @@ from .schemas import (
     MovePoseRequest,
     PlayActionRequest,
     SavePoseRequest,
+    VisionTargetSelectRequest,
 )
 from .service import WebControlService
 from .static_server import install_static_routes
@@ -343,6 +344,21 @@ async def vision_health() -> dict[str, Any]:
 @app.get("/api/v1/vision/latest")
 async def vision_latest() -> dict[str, Any]:
     return api_success(service.vision_latest())
+
+
+@app.get("/api/v1/vision/target/state")
+async def vision_target_state() -> dict[str, Any]:
+    return api_success(service.vision_target_state())
+
+
+@app.post("/api/v1/vision/target/select")
+async def vision_target_select(request: VisionTargetSelectRequest) -> dict[str, Any]:
+    return api_success(service.vision_select_target(request.x, request.y, request.w, request.h))
+
+
+@app.post("/api/v1/vision/target/reset")
+async def vision_target_reset() -> dict[str, Any]:
+    return api_success(service.vision_reset_target())
 
 
 @app.get("/api/v1/vision/frame.jpg")

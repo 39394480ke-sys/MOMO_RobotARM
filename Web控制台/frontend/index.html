@@ -267,6 +267,20 @@
                   <dt>人脸数</dt><dd id="visionFacesState">--</dd>
                   <dt>检测器</dt><dd id="visionDetectorState">--</dd>
                 </dl>
+                <div class="vision-target-tools">
+                  <div class="input-grid four">
+                    <input id="visionTargetX" type="number" min="0" step="1" placeholder="x" />
+                    <input id="visionTargetY" type="number" min="0" step="1" placeholder="y" />
+                    <input id="visionTargetW" type="number" min="1" step="1" placeholder="w" />
+                    <input id="visionTargetH" type="number" min="1" step="1" placeholder="h" />
+                  </div>
+                  <div class="inline-actions">
+                    <button id="selectVisionTargetBtn">选择手动目标</button>
+                    <button id="resetVisionTargetBtn">重置目标</button>
+                    <button id="refreshVisionTargetBtn">刷新目标状态</button>
+                  </div>
+                  <div id="visionTargetToolState" class="inline-status">手动目标未操作</div>
+                </div>
                 <pre id="visionLatestJson" class="result-box"></pre>
               </section>
             </div>

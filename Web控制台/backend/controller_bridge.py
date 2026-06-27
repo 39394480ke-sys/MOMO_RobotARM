@@ -92,7 +92,7 @@ class ControllerBridge:
             "started_at": None,
             "finished_at": None,
         }
-        install_stage_paths(self.project_root)
+        install_stage_paths(self.project_root, include_vision=True)
 
     # ------------------------------------------------------------------
     # 会话 / 控制器生命周期

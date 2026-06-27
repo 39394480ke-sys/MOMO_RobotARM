@@ -585,6 +585,10 @@ th {
   grid-column: span 6;
 }
 
+.cinematic-result-panel {
+  grid-column: span 12;
+}
+
 .motion-tuning-panel,
 .module-links-panel {
   grid-column: span 6;
@@ -788,6 +792,7 @@ th {
   .agent-config-panel,
   .cinematic-panel,
   .cinematic-list-panel,
+  .cinematic-result-panel,
   .motion-tuning-panel,
   .module-links-panel {
     grid-column: span 12;

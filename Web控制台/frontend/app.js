@@ -76,6 +76,9 @@ function bindEvents() {
   $("#sendAgentBtn").addEventListener("click", sendAgentMessage);
   $("#resetAgentBtn").addEventListener("click", resetAgentSession);
   $("#refreshCinematicBtn").addEventListener("click", loadCinematicStatus);
+  $("#analyzeCinematicBtn").addEventListener("click", analyzeCinematicLatest);
+  $("#keyframesCinematicBtn").addEventListener("click", generateCinematicKeyframes);
+  $("#generateCinematicActionBtn").addEventListener("click", generateCinematicAction);
   $("#agentInput").addEventListener("keydown", (event) => {
     if (event.key === "Enter") sendAgentMessage();
   });
@@ -268,6 +271,58 @@ async function loadCinematicStatus() {
   try {
     state.cinematic = await getJson("/api/v1/cinematic/status", { timeout: 8000 });
     renderCinematicStatus();
+  } catch (error) {
+    showError(error);
+  }
+}
+
+async function analyzeCinematicLatest() {
+  const recordPath = state.cinematic?.latest_record?.path || "";
+  if (!recordPath) {
+    showError(new ApiError("NO_CINEMATIC_RECORD", "没有可分析的试拍记录。"));
+    return;
+  }
+  try {
+    const data = await postJson("/api/v1/cinematic/analyze", { record_path: recordPath }, { timeout: 30000 });
+    $("#cinematicResultJson").textContent = JSON.stringify(summarizeCinematicResult(data), null, 2);
+    await loadCinematicStatus();
+    log("info", "AI 运镜试拍分析完成");
+  } catch (error) {
+    showError(error);
+  }
+}
+
+async function generateCinematicKeyframes() {
+  const projectPath = state.cinematic?.latest_project?.path || "";
+  if (!projectPath) {
+    showError(new ApiError("NO_CINEMATIC_PROJECT", "没有可生成关键帧的导演项目。"));
+    return;
+  }
+  try {
+    const data = await postJson("/api/v1/cinematic/keyframes", { project_path: projectPath, min_count: 3, max_count: 8 }, { timeout: 30000 });
+    $("#cinematicResultJson").textContent = JSON.stringify(summarizeCinematicResult(data), null, 2);
+    await loadCinematicStatus();
+    log("info", "AI 运镜关键帧已生成");
+  } catch (error) {
+    showError(error);
+  }
+}
+
+async function generateCinematicAction() {
+  const projectPath = state.cinematic?.latest_project?.path || "";
+  if (!projectPath) {
+    showError(new ApiError("NO_CINEMATIC_PROJECT", "没有可生成动作的导演项目。"));
+    return;
+  }
+  try {
+    const data = await postJson(
+      "/api/v1/cinematic/generate-action",
+      { project_path: projectPath, action_name: $("#cinematicActionName").value.trim() },
+      { timeout: 30000 }
+    );
+    $("#cinematicResultJson").textContent = JSON.stringify(summarizeCinematicResult(data), null, 2);
+    await Promise.allSettled([loadCinematicStatus(), loadActions()]);
+    log("info", "AI 运镜动作已生成");
   } catch (error) {
     showError(error);
   }
@@ -746,6 +801,22 @@ function renderCinematicStatus() {
   $("#cinematicConfigJson").textContent = JSON.stringify({ rail: data.rail || {}, two_step: data.two_step || {} }, null, 2);
   renderCompactFileList("#cinematicRecordsList", data.records || []);
   renderCompactFileList("#cinematicProjectsList", data.projects || []);
+}
+
+function summarizeCinematicResult(data) {
+  const project = data.project || {};
+  const analysis = project.motion_analysis || {};
+  return {
+    message: data.message,
+    project_path: data.project_path,
+    action_name: data.action_name,
+    action_path: data.action_path,
+    pose_count: data.pose_count,
+    workflow_stage: project.workflow_stage,
+    summary: analysis.summary,
+    keyframe_count: Array.isArray(data.keyframes) ? data.keyframes.length : Array.isArray(project.director_keyframes) ? project.director_keyframes.length : undefined,
+    generated_action: project.generated_action,
+  };
 }
 
 function renderCompactFileList(selector, items) {

@@ -21,6 +21,9 @@ from .schemas import (
     CartesianJogRequest,
     CalibrationBatchCurrentAngleRequest,
     CalibrationCurrentAngleRequest,
+    CinematicAnalyzeRequest,
+    CinematicGenerateActionRequest,
+    CinematicKeyframesRequest,
     ConnectRequest,
     ContinuousJogStartRequest,
     FKRequest,
@@ -156,6 +159,21 @@ async def agent_reset_session() -> dict[str, Any]:
 @app.get("/api/v1/cinematic/status")
 async def cinematic_status() -> dict[str, Any]:
     return api_success(service.cinematic_status())
+
+
+@app.post("/api/v1/cinematic/analyze")
+async def cinematic_analyze(request: CinematicAnalyzeRequest) -> dict[str, Any]:
+    return await _call(service.cinematic_analyze, request, broadcast=False)
+
+
+@app.post("/api/v1/cinematic/keyframes")
+async def cinematic_keyframes(request: CinematicKeyframesRequest) -> dict[str, Any]:
+    return await _call(service.cinematic_keyframes, request, broadcast=False)
+
+
+@app.post("/api/v1/cinematic/generate-action")
+async def cinematic_generate_action(request: CinematicGenerateActionRequest) -> dict[str, Any]:
+    return await _call(service.cinematic_generate_action, request, broadcast=False)
 
 
 # ----------------------------------------------------------------------

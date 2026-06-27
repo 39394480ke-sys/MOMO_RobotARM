@@ -27,6 +27,7 @@ from 控制桥接_common import (  # noqa: E402
     JOINT_ORDER,
     build_exception_context,
     check_python_modules,
+    cinematic_real_speed_percent,
     clamp_percent,
     clamp_symmetric,
     compute_fk_payload,
@@ -55,9 +56,11 @@ from 控制桥接_common import (  # noqa: E402
     normalize_robot_state_payload,
     play_action_from_library,
     read_controller_state,
+    resolve_base_path,
     result_fail as bridge_fail,
     result_ok as bridge_ok,
     save_pose_from_state,
+    sanitize_action_name,
     set_controller_gripper,
     state_tcp_pose,
 )
@@ -916,6 +919,97 @@ class ControllerBridge:
         return bridge_ok("动作已停止。")
 
     # ------------------------------------------------------------------
+    # AI 运镜
+    # ------------------------------------------------------------------
+    def cinematic_analyze(self, record_path: str = "", video_path: str = "") -> dict[str, Any]:
+        try:
+            from 运镜导演_cinematic_director import CinematicDirector
+
+            director = CinematicDirector(self.project_root)
+            record = director.load_record(record_path) if str(record_path).strip() else {}
+            project = director.analyze_take(video_path=str(video_path).strip() or None, record=record)
+            project["source_record_path"] = str(record_path).strip()
+            project["workflow_stage"] = "motion_analysis"
+            project_path = director.save_project(project)
+            summary = project.get("motion_analysis", {}).get("summary", {})
+            self._log("info", "cinematic_analyze", "AI 运镜试拍分析完成。", project_path=str(project_path), summary=summary)
+            return bridge_ok("AI 运镜试拍分析完成。", {"project_path": str(project_path), "project": project})
+        except Exception as exc:
+            return self._exception("AI 运镜分析失败", exc)
+
+    def cinematic_select_keyframes(self, project_path: str, min_count: int = 3, max_count: int = 8) -> dict[str, Any]:
+        try:
+            from 运镜导演_cinematic_director import CinematicDirector, DirectorDefaults, load_project
+
+            path = self._resolve_project_path(project_path)
+            director = CinematicDirector(
+                self.project_root,
+                DirectorDefaults(target_fps=float(self.config.get("motion", {}).get("playback_update_hz", 20.0))),
+            )
+            project = load_project(path)
+            keyframes = director.select_keyframes(project, min_count=min_count, max_count=max_count)
+            project["director_keyframes"] = keyframes
+            project["workflow_stage"] = "director_keyframes"
+            atomic_write_json(path, project)
+            self._log("info", "cinematic_keyframes", "AI 运镜关键帧已生成。", project_path=str(path), keyframe_count=len(keyframes))
+            return bridge_ok("AI 运镜关键帧已生成。", {"project_path": str(path), "project": project, "keyframes": keyframes})
+        except Exception as exc:
+            return self._exception("AI 运镜关键帧生成失败", exc)
+
+    def cinematic_generate_action(self, project_path: str, action_name: str = "") -> dict[str, Any]:
+        try:
+            from 运镜导演_cinematic_director import CinematicDirector, DirectorDefaults, load_project
+
+            path = self._resolve_project_path(project_path)
+            motion = self.config.get("motion", {})
+            speed_percent = float(motion.get("default_speed_percent", 50.0))
+            director = CinematicDirector(
+                self.project_root,
+                DirectorDefaults(
+                    target_fps=float(motion.get("playback_update_hz", 20.0)),
+                    dry_run_speed_percent=speed_percent,
+                    real_speed_percent=cinematic_real_speed_percent(speed_percent),
+                ),
+            )
+            project = load_project(path)
+            keyframes = project.get("director_keyframes", [])
+            if not isinstance(keyframes, list) or len(keyframes) < 2:
+                keyframes = director.select_keyframes(project)
+                project["director_keyframes"] = keyframes
+            if any(not item.get("pose", {}).get("joints_deg") for item in keyframes if isinstance(item, dict)):
+                return bridge_fail("关键帧缺少同步关节状态，不能生成可执行动作。")
+            trajectory = director.build_trajectory(keyframes)
+            name = sanitize_action_name(action_name or f"AI运镜_{time.strftime('%H%M%S')}")
+            payload = director.build_action_payload(name, project, trajectory)
+            library = self._get_action_library()
+            saved_path = library.save_action(name, payload)
+            project["trajectory_plan"] = trajectory
+            project["generated_action"] = {"name": name, "path": str(saved_path), "pose_count": payload.get("pose_count", 0)}
+            project["workflow_stage"] = "action_generated"
+            atomic_write_json(path, project)
+            self._log(
+                "info",
+                "cinematic_generate_action",
+                "AI 运镜动作已生成。",
+                project_path=str(path),
+                action_name=name,
+                action_path=str(saved_path),
+                pose_count=payload.get("pose_count", 0),
+            )
+            return bridge_ok(
+                f"AI 运镜动作已生成：{name}",
+                {
+                    "project_path": str(path),
+                    "project": project,
+                    "action_name": name,
+                    "action_path": str(saved_path),
+                    "pose_count": payload.get("pose_count", 0),
+                },
+            )
+        except Exception as exc:
+            return self._exception("AI 运镜动作生成失败", exc)
+
+    # ------------------------------------------------------------------
     # 运动学计算
     # ------------------------------------------------------------------
     def compute_fk(self, joints_deg: list[float]) -> dict[str, Any]:
@@ -1004,6 +1098,9 @@ class ControllerBridge:
     # ------------------------------------------------------------------
     def _resolve_config(self, key: str, fallback_names: list[str] | None = None) -> Path:
         return self._config_resolver(key, fallback_names)
+
+    def _resolve_project_path(self, path_value: str | Path) -> Path:
+        return resolve_base_path(path_value, self.project_root)
 
     # ------------------------------------------------------------------
     # 安全 / 日志

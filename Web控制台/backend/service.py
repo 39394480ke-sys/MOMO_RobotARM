@@ -43,6 +43,9 @@ from .schemas import (
     CalibrationBatchCurrentAngleRequest,
     CalibrationCurrentAngleRequest,
     CartesianJogRequest,
+    CinematicAnalyzeRequest,
+    CinematicGenerateActionRequest,
+    CinematicKeyframesRequest,
     ConnectRequest,
     ContinuousJogStartRequest,
     FollowStartRequest,
@@ -185,6 +188,18 @@ class WebControlService:
             "two_step": two_step,
             "message": "AI 运镜状态已读取。",
         }
+
+    def cinematic_analyze(self, request: CinematicAnalyzeRequest) -> dict[str, Any]:
+        result = self.bridge.cinematic_analyze(request.record_path, request.video_path)
+        return self._unwrap_bridge(result, code="CINEMATIC_ANALYZE_FAILED")
+
+    def cinematic_keyframes(self, request: CinematicKeyframesRequest) -> dict[str, Any]:
+        result = self.bridge.cinematic_select_keyframes(request.project_path, request.min_count, request.max_count)
+        return self._unwrap_bridge(result, code="CINEMATIC_KEYFRAMES_FAILED")
+
+    def cinematic_generate_action(self, request: CinematicGenerateActionRequest) -> dict[str, Any]:
+        result = self.bridge.cinematic_generate_action(request.project_path, request.action_name)
+        return self._unwrap_bridge(result, code="CINEMATIC_ACTION_FAILED")
 
     # ------------------------------------------------------------------
     # 会话

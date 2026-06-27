@@ -274,7 +274,12 @@
           <section id="pageCinematic" class="page">
             <div class="section-head">
               <h2>AI 运镜</h2>
-              <button id="refreshCinematicBtn">刷新状态</button>
+              <div class="inline-actions">
+                <button id="refreshCinematicBtn">刷新状态</button>
+                <button id="analyzeCinematicBtn" class="primary">分析最新试拍</button>
+                <button id="keyframesCinematicBtn">生成关键帧</button>
+                <button id="generateCinematicActionBtn">生成动作</button>
+              </div>
             </div>
             <div class="settings-grid">
               <section class="panel cinematic-panel">
@@ -291,7 +296,15 @@
               </section>
               <section class="panel cinematic-panel">
                 <div class="panel-head"><h3>运镜参数</h3></div>
+                <label class="field">
+                  <span>动作名称</span>
+                  <input id="cinematicActionName" placeholder="例如：AI运镜_产品展示_01" />
+                </label>
                 <pre id="cinematicConfigJson" class="result-box"></pre>
+              </section>
+              <section class="panel cinematic-result-panel">
+                <div class="panel-head"><h3>处理结果</h3></div>
+                <pre id="cinematicResultJson" class="result-box"></pre>
               </section>
               <section class="panel cinematic-list-panel">
                 <div class="panel-head"><h3>最近试拍记录</h3></div>

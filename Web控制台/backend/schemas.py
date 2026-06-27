@@ -54,6 +54,22 @@ class AgentAskRequest(BaseModel):
     force_new_session: bool = False
 
 
+class CinematicAnalyzeRequest(BaseModel):
+    record_path: str = ""
+    video_path: str = ""
+
+
+class CinematicKeyframesRequest(BaseModel):
+    project_path: str = Field(..., min_length=1)
+    min_count: int = Field(3, ge=3, le=8)
+    max_count: int = Field(8, ge=3, le=8)
+
+
+class CinematicGenerateActionRequest(BaseModel):
+    project_path: str = Field(..., min_length=1)
+    action_name: str = ""
+
+
 class MoveJointsRequest(BaseModel):
     targets_deg: dict[str, float]
     speed_percent: int = Field(50, ge=1, le=100)

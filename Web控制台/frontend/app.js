@@ -1017,6 +1017,9 @@ async function sendAgentMessage() {
     state.lastAgentReply = data;
     appendAgentMessage("AI", data.reply || data.message || "已完成。", "ai");
     log("info", "AI 对话完成");
+    if (data.raw_payload?.agent_demo) {
+      await Promise.allSettled([refreshSession(), refreshState(), loadActions()]);
+    }
   } catch (error) {
     appendAgentMessage("ERROR", error.message || String(error), "error");
     showError(error);

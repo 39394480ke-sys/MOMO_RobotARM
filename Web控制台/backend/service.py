@@ -94,6 +94,7 @@ class WebControlService:
         self._continuous_jog_status: dict[str, Any] = {"running": False, "message": "连续控制未启动。"}
         self.recent_error: dict[str, Any] | None = None
         self._agent_app: Any | None = None
+        self._agent_demo_pending_action: dict[str, Any] | None = None
 
     # ------------------------------------------------------------------
     # 基础信息
@@ -122,6 +123,7 @@ class WebControlService:
             },
             "motion": self.config.get("motion", {}),
             "follow": self.config.get("follow", {}),
+            "agent_demo": self._agent_demo_public_config(),
         }
 
     # ------------------------------------------------------------------
@@ -184,6 +186,9 @@ class WebControlService:
         content = str(request.text or "").strip()
         if not content:
             raise WebAPIError("BAD_INPUT", "请输入要发送给 AI 的内容。")
+        demo_reply = self._handle_agent_demo_message(content)
+        if demo_reply is not None:
+            return demo_reply
         try:
             app = self._get_agent_app(force_new_session=bool(request.force_new_session))
             reply = app.ask_text(content, speak=bool(request.speak))
@@ -199,12 +204,76 @@ class WebControlService:
 
     def agent_reset_session(self) -> dict[str, Any]:
         try:
+            self._agent_demo_pending_action = None
             app = self._get_agent_app(force_new_session=True)
             app.reset_session()
             return {"message": "AI 会话已重置。"}
         except Exception as exc:
             self._remember_error("AGENT_RESET_FAILED", str(exc))
             raise WebAPIError("AGENT_RESET_FAILED", f"AI 会话重置失败：{exc}") from exc
+
+    def _handle_agent_demo_message(self, content: str) -> dict[str, Any] | None:
+        demo = self.config.get("agent_demo", {})
+        if not isinstance(demo, dict) or not bool(demo.get("enabled", False)):
+            return None
+        trigger_text = str(demo.get("trigger_text", "")).strip()
+        action_name = str(demo.get("action_name", "环绕运镜")).strip()
+        execute_texts = [str(item).strip() for item in demo.get("execute_texts", []) if str(item).strip()]
+        normalized = content.strip()
+        if trigger_text and normalized == trigger_text:
+            self._agent_demo_pending_action = {
+                "name": action_name,
+                "speed": float(demo.get("speed", 1.0) or 1.0),
+                "created_at": time.time(),
+            }
+            return {
+                "message": "AI 演示轨迹已生成。",
+                "reply": "已生成一条环绕主体运镜轨迹。轨迹会围绕主体做稳定环绕，并保持主体在画面中心。要执行吗？",
+                "session_id": "agent-demo",
+                "raw_payload": {"agent_demo": True, "pending_action": action_name},
+            }
+        if normalized in execute_texts and self._agent_demo_pending_action is not None:
+            pending = dict(self._agent_demo_pending_action)
+            self._agent_demo_pending_action = None
+            action_name = str(pending.get("name") or action_name).strip()
+            if not self._action_exists(action_name):
+                raise WebAPIError("AGENT_DEMO_ACTION_NOT_FOUND", f"请先在动作示教里保存动作：{action_name}")
+            result = self.play_action(
+                PlayActionRequest(
+                    name=action_name,
+                    speed=float(pending.get("speed", demo.get("speed", 1.0)) or 1.0),
+                    loop=False,
+                    confirm_text="",
+                )
+            )
+            return {
+                "message": "AI 演示动作已开始。",
+                "reply": f"已开始执行环绕主体运镜轨迹，正在播放动作：{action_name}。",
+                "session_id": "agent-demo",
+                "raw_payload": {"agent_demo": True, "action": result},
+            }
+        return None
+
+    def _action_exists(self, action_name: str) -> bool:
+        actions = self.list_actions().get("actions", [])
+        for item in actions:
+            if isinstance(item, dict) and str(item.get("name", "")) == action_name:
+                return True
+            if str(item) == action_name:
+                return True
+        return False
+
+    def _agent_demo_public_config(self) -> dict[str, Any]:
+        demo = self.config.get("agent_demo", {})
+        if not isinstance(demo, dict):
+            return {"enabled": False}
+        return {
+            "enabled": bool(demo.get("enabled", False)),
+            "trigger_text": str(demo.get("trigger_text", "")),
+            "execute_texts": [str(item) for item in demo.get("execute_texts", [])],
+            "action_name": str(demo.get("action_name", "")),
+            "speed": float(demo.get("speed", 1.0) or 1.0),
+        }
 
     def cinematic_status(self) -> dict[str, Any]:
         vision_root = self.base_dir.parent / "视觉识别与跟随"

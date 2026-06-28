@@ -16,6 +16,16 @@ app:
   log_path: runtime/logs/web_api.log
   session_state_path: runtime/state/session_state.json
 
+agent_demo:
+  enabled: true
+  trigger_text: 帮我生成一个环绕主体运镜的轨迹
+  execute_texts:
+    - 执行
+    - 开始执行
+    - 播放
+  action_name: 环绕运镜
+  speed: 1.0
+
 controller:
   sim_config_path: ../仿真控制系统/配置.yaml
   real_config_path: ../真实舵机控制/真实配置.yaml

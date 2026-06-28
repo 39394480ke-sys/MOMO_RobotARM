@@ -10,6 +10,7 @@ service.py 只处理业务规则：
 
 from __future__ import annotations
 
+import json
 import threading
 import time
 import traceback
@@ -221,18 +222,26 @@ class WebControlService:
         execute_texts = [str(item).strip() for item in demo.get("execute_texts", []) if str(item).strip()]
         normalized = content.strip()
         if trigger_text and normalized == trigger_text:
+            self._agent_demo_delay(demo)
             self._agent_demo_pending_action = {
                 "name": action_name,
                 "speed": float(demo.get("speed", 1.0) or 1.0),
                 "created_at": time.time(),
             }
+            trajectory_params = self._agent_demo_trajectory_params(demo, action_name)
             return {
                 "message": "AI 演示轨迹已生成。",
-                "reply": "已生成一条环绕主体运镜轨迹。轨迹会围绕主体做稳定环绕，并保持主体在画面中心。要执行吗？",
+                "reply": (
+                    "已生成一条环绕主体运镜轨迹。轨迹会围绕主体做稳定环绕，并保持主体在画面中心。\n\n"
+                    "生成参数：\n"
+                    f"{json.dumps(trajectory_params, ensure_ascii=False, indent=2)}\n\n"
+                    "要执行吗？"
+                ),
                 "session_id": "agent-demo",
-                "raw_payload": {"agent_demo": True, "pending_action": action_name},
+                "raw_payload": {"agent_demo": True, "pending_action": action_name, "trajectory_params": trajectory_params},
             }
         if normalized in execute_texts and self._agent_demo_pending_action is not None:
+            self._agent_demo_delay(demo)
             pending = dict(self._agent_demo_pending_action)
             self._agent_demo_pending_action = None
             action_name = str(pending.get("name") or action_name).strip()
@@ -254,6 +263,25 @@ class WebControlService:
             }
         return None
 
+    def _agent_demo_delay(self, demo: dict[str, Any]) -> None:
+        delay = max(0.0, min(10.0, float(demo.get("response_delay_sec", 0.0) or 0.0)))
+        if delay > 0:
+            time.sleep(delay)
+
+    def _agent_demo_trajectory_params(self, demo: dict[str, Any], action_name: str) -> dict[str, Any]:
+        params = demo.get("trajectory_params", {})
+        if not isinstance(params, dict):
+            params = {}
+        payload = dict(params)
+        payload.setdefault("trajectory_name", "环绕主体运镜")
+        payload.setdefault("action_binding", action_name)
+        payload.setdefault("mode", "subject_orbit")
+        payload.setdefault("duration_sec", 8.0)
+        payload.setdefault("playback_speed", float(demo.get("speed", 1.0) or 1.0))
+        payload["action_binding"] = action_name
+        payload["playback_speed"] = float(demo.get("speed", payload.get("playback_speed", 1.0)) or 1.0)
+        return payload
+
     def _action_exists(self, action_name: str) -> bool:
         actions = self.list_actions().get("actions", [])
         for item in actions:
@@ -273,6 +301,8 @@ class WebControlService:
             "execute_texts": [str(item) for item in demo.get("execute_texts", [])],
             "action_name": str(demo.get("action_name", "")),
             "speed": float(demo.get("speed", 1.0) or 1.0),
+            "response_delay_sec": float(demo.get("response_delay_sec", 0.0) or 0.0),
+            "trajectory_params": self._agent_demo_trajectory_params(demo, str(demo.get("action_name", ""))),
         }
 
     def cinematic_status(self) -> dict[str, Any]:

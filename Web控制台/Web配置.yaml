@@ -25,6 +25,32 @@ agent_demo:
     - 播放
   action_name: 环绕运镜
   speed: 1.0
+  response_delay_sec: 3.0
+  trajectory_params:
+    trajectory_name: 环绕主体运镜
+    action_binding: 环绕运镜
+    mode: subject_orbit
+    duration_sec: 8.0
+    playback_speed: 1.0
+    target_lock:
+      subject: selected_subject
+      keep_centered: true
+      framing: medium_close
+    camera_motion:
+      orbit_angle_deg: 180
+      orbit_direction: clockwise
+      radius_mm: 420
+      height_offset_mm: 80
+      easing: ease_in_out
+    robot_joints:
+      rail_joint: j10
+      pan_joint: j11
+      tilt_joint: j13
+      wrist_stabilize_joint: j14
+    safety:
+      run_once: true
+      stop_available: true
+      real_session_required: true
 
 controller:
   sim_config_path: ../仿真控制系统/配置.yaml

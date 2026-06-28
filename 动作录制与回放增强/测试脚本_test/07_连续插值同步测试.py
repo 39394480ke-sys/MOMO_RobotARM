@@ -11,6 +11,7 @@ from 动作工具_common import JOINT_ORDER, build_empty_sequence, load_config, 
 class RecordingController:
     def __init__(self):
         self.current = {joint: 0.0 for joint in JOINT_ORDER}
+        self.current.update({"j10": -40.0, "j11": -4.0})
         self.frames: list[dict[str, float]] = []
 
     def is_dry_run(self) -> bool:
@@ -36,9 +37,14 @@ class NoSleepSequencePlayer(SequencePlayer):
     def __init__(self, controller, config):
         super().__init__(controller, config)
         self.sleep_calls: list[float] = []
+        self.play_pose_calls = 0
 
     def _sleep_with_controls(self, seconds: float) -> None:
         self.sleep_calls.append(float(seconds))
+
+    def play_pose(self, pose: Mapping[str, Any], duration_sec: float, wait_until_reached: bool = True) -> bool:
+        self.play_pose_calls += 1
+        return super().play_pose(pose, duration_sec, wait_until_reached)
 
 
 def make_three_pose_sequence() -> dict[str, Any]:
@@ -67,7 +73,6 @@ def make_three_pose_sequence() -> dict[str, Any]:
 
 
 config = load_config()
-config["playback"]["return_to_first_pose_before_replay"] = False
 config["playback"]["continuous_interpolation_default"] = True
 config["playback"]["synchronized_segment_timing"] = True
 config["playback"]["auto_duration_from_distance"] = False
@@ -79,8 +84,15 @@ player = NoSleepSequencePlayer(controller, config)
 sequence = make_three_pose_sequence()
 ok = player.play(sequence)
 assert ok is True
+assert player.play_pose_calls == 0
 
 assert all(call < 0.3 for call in player.sleep_calls), player.sleep_calls
+
+first_segment_frames = controller.frames[:4]
+assert first_segment_frames[0]["j10"] == -30.0
+assert first_segment_frames[0]["j11"] == -3.0
+assert first_segment_frames[-1]["j10"] == 0.0
+assert first_segment_frames[-1]["j11"] == 0.0
 
 ab_frames = controller.frames[4:8]
 assert len(ab_frames) >= 3, ab_frames

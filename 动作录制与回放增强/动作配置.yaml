@@ -60,7 +60,7 @@ playback:
   dry_run_default: true
   clamp_to_limits: true
   stop_on_limit_violation: true
-  return_to_first_pose_before_replay: true
+  return_to_first_pose_before_replay: false
 
 safety:
   max_single_step_deg: 15.0

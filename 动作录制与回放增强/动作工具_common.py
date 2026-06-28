@@ -92,7 +92,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "dry_run_default": True,
         "clamp_to_limits": True,
         "stop_on_limit_violation": True,
-        "return_to_first_pose_before_replay": True,
+        "return_to_first_pose_before_replay": False,
     },
     "safety": {
         "max_single_step_deg": 15.0,

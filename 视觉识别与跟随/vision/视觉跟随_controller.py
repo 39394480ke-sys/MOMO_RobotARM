@@ -27,13 +27,17 @@ from .WebAPI客户端_robot_api_client import RobotAPIClient, fetch_json_url
 
 
 MANUAL_TRACKER_PROFILE = {
-    "gain_scale": 0.35,
-    "max_step_deg": 0.25,
-    "min_step_deg": 0.0,
+    "gain_scale": 1.0,
+    "max_step_deg": 0.0,
+    "min_step_deg": -1.0,
     "dead_zone_norm": 0.06,
     "resume_zone_norm": 0.10,
-    "min_step_zone_norm": 1.0,
+    "min_step_zone_norm": -1.0,
 }
+
+SPEED_BASELINE_PERCENT = 60.0
+MIN_SPEED_STEP_SCALE = 0.2
+MAX_SPEED_STEP_SCALE = 2.0
 
 
 class VisionFollowController:
@@ -55,6 +59,7 @@ class VisionFollowController:
         self.move_duration_sec = float(self.follow_cfg.get("move_duration_sec", self.follow_cfg.get("move_duration", 0.20)))
         self.command_mode = str(self.follow_cfg.get("command_mode", "stream"))
         self.speed_percent = int(self.follow_cfg.get("speed_percent", 50))
+        self._speed_step_scale = self._calc_speed_step_scale(self.speed_percent)
         self.dry_run = bool(self.follow_cfg.get("dry_run_default", True) if dry_run is None else dry_run)
         self.robot_client = RobotAPIClient(
             str(self.follow_cfg.get("robot_api_base", "http://127.0.0.1:8010")),
@@ -192,6 +197,7 @@ class VisionFollowController:
                 "poll_interval_sec": self.poll_interval_sec,
                 "move_duration_sec": self.move_duration_sec,
                 "speed_percent": self.speed_percent,
+                "speed_step_scale": self._speed_step_scale,
                 "pan_joint": self.follow_cfg.get("pan_joint", "shoulder_pan"),
                 "tilt_joint": self.follow_cfg.get("tilt_joint", "elbow_flex"),
                 "enabled_follow_joints": self._enabled_follow_joints(),
@@ -362,14 +368,18 @@ class VisionFollowController:
         min_step = float(self.follow_cfg.get(min_key, 0.0))
         min_zone = float(self.follow_cfg.get(min_zone_key, 1.0))
         max_step = float(self.follow_cfg.get(max_key, 1.0))
+        gain *= self._speed_step_scale
         if manual_tracker:
             profile = self._manual_tracker_profile()
             dead_zone = float(profile["dead_zone_norm"])
             resume_zone = float(profile["resume_zone_norm"])
             gain *= float(profile["gain_scale"])
-            min_step = float(profile["min_step_deg"])
-            min_zone = float(profile["min_step_zone_norm"])
-            max_step = min(max_step, float(profile["max_step_deg"]))
+            if float(profile["min_step_deg"]) >= 0:
+                min_step = float(profile["min_step_deg"])
+            if float(profile["min_step_zone_norm"]) >= 0:
+                min_zone = float(profile["min_step_zone_norm"])
+            if float(profile["max_step_deg"]) > 0:
+                max_step = min(max_step, float(profile["max_step_deg"]))
         step, next_active = compute_axis_step(
             norm_value,
             active=bool(self._joint_active.get(joint, False)),
@@ -413,6 +423,16 @@ class VisionFollowController:
         min_interval = max(0.15, float(self.move_duration_sec))
         last_at = float(self._manual_axis_command_at.get(axis, 0.0))
         return last_at > 0 and time.monotonic() - last_at < min_interval
+
+    @staticmethod
+    def _calc_speed_step_scale(speed_percent: int | float) -> float:
+        try:
+            raw = float(speed_percent)
+        except (TypeError, ValueError):
+            raw = SPEED_BASELINE_PERCENT
+        scale = raw / SPEED_BASELINE_PERCENT
+        scale = max(MIN_SPEED_STEP_SCALE, min(MAX_SPEED_STEP_SCALE, scale))
+        return round(scale, 4)
 
     @staticmethod
     def _is_manual_tracker(latest: dict[str, Any]) -> bool:

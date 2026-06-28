@@ -1015,9 +1015,10 @@ async function sendAgentMessage() {
   try {
     const data = await postJson("/api/v1/agent/ask", { text, speak: false }, { timeout: 70000 });
     state.lastAgentReply = data;
-    appendAgentMessage("AI", data.reply || data.message || "已完成。", "ai");
+    const posterUrl = data.raw_payload?.poster_demo ? data.raw_payload?.poster_url : "";
+    appendAgentMessage("AI", data.reply || data.message || "已完成。", "ai", posterUrl ? { type: "image", url: posterUrl, title: "AI 海报" } : null);
     log("info", "AI 对话完成");
-    if (data.raw_payload?.agent_demo) {
+    if (data.raw_payload?.agent_demo || data.raw_payload?.poster_demo) {
       await Promise.allSettled([refreshSession(), refreshState(), loadActions()]);
     }
   } catch (error) {
@@ -1158,8 +1159,8 @@ function renderAgentStatus() {
   $("#agentToolCheck").className = toolCheck.ok ? "ok-text" : "bad-text";
 }
 
-function appendAgentMessage(role, text, kind) {
-  state.agentMessages.push({ role, text, kind, time: new Date().toLocaleTimeString() });
+function appendAgentMessage(role, text, kind, attachment = null) {
+  state.agentMessages.push({ role, text, kind, attachment, time: new Date().toLocaleTimeString() });
   state.agentMessages = state.agentMessages.slice(-80);
   renderAgentMessages();
 }
@@ -1169,11 +1170,21 @@ function renderAgentMessages() {
     .map(
       (item) => `<div class="agent-message ${escapeAttr(item.kind)}">
         <strong>[${escapeHtml(item.role)}]</strong>
-        <span>${escapeHtml(item.text).replace(/\n/g, "<br>")}</span>
+        <span>${escapeHtml(item.text).replace(/\n/g, "<br>")}${renderAgentAttachment(item.attachment)}</span>
       </div>`
     )
     .join("");
   $("#agentChatLog").scrollTop = $("#agentChatLog").scrollHeight;
+}
+
+function renderAgentAttachment(attachment) {
+  if (!attachment || attachment.type !== "image" || !attachment.url) return "";
+  const src = `${attachment.url}${String(attachment.url).includes("?") ? "&" : "?"}t=${Date.now()}`;
+  return `
+    <figure class="agent-image-attachment">
+      <img src="${escapeAttr(src)}" alt="${escapeAttr(attachment.title || "AI 海报")}" />
+      <figcaption>${escapeHtml(attachment.title || "AI 海报")}</figcaption>
+    </figure>`;
 }
 
 function renderCinematicStatus() {

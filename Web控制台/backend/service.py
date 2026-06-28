@@ -11,6 +11,7 @@ service.py 只处理业务规则：
 from __future__ import annotations
 
 import json
+from io import BytesIO
 import threading
 import time
 import traceback
@@ -125,6 +126,7 @@ class WebControlService:
             "motion": self.config.get("motion", {}),
             "follow": self.config.get("follow", {}),
             "agent_demo": self._agent_demo_public_config(),
+            "poster_demo": self._poster_demo_public_config(),
         }
 
     # ------------------------------------------------------------------
@@ -190,6 +192,9 @@ class WebControlService:
         demo_reply = self._handle_agent_demo_message(content)
         if demo_reply is not None:
             return demo_reply
+        poster_reply = self._handle_poster_demo_message(content)
+        if poster_reply is not None:
+            return poster_reply
         try:
             app = self._get_agent_app(force_new_session=bool(request.force_new_session))
             reply = app.ask_text(content, speak=bool(request.speak))
@@ -303,6 +308,164 @@ class WebControlService:
             "speed": float(demo.get("speed", 1.0) or 1.0),
             "response_delay_sec": float(demo.get("response_delay_sec", 0.0) or 0.0),
             "trajectory_params": self._agent_demo_trajectory_params(demo, str(demo.get("action_name", ""))),
+        }
+
+    def _handle_poster_demo_message(self, content: str) -> dict[str, Any] | None:
+        demo = self.config.get("poster_demo", {})
+        if not isinstance(demo, dict) or not bool(demo.get("enabled", False)):
+            return None
+        normalized = content.strip()
+        trigger_keywords = [str(item).strip() for item in demo.get("trigger_keywords", []) if str(item).strip()]
+        intent_keywords = [str(item).strip() for item in demo.get("intent_keywords", []) if str(item).strip()]
+        has_trigger = any(keyword in normalized for keyword in trigger_keywords)
+        has_intent = any(keyword in normalized for keyword in intent_keywords) if intent_keywords else True
+        if not (has_trigger and has_intent):
+            return None
+        self._agent_demo_delay(demo)
+        try:
+            poster = self.generate_poster_from_current_frame(demo)
+        except Exception as exc:
+            message = "当前没有可用画面，请先打开视觉预览/启动视觉服务。"
+            self.logger.log("warning", "poster_demo_failed", f"{message} 原因：{exc}")
+            return {
+                "message": "AI 海报生成未完成。",
+                "reply": message,
+                "session_id": "poster-demo",
+                "raw_payload": {"poster_demo": True, "error": str(exc)},
+            }
+        params_text = json.dumps(poster.get("params", {}), ensure_ascii=False, indent=2)
+        reply = (
+            f"{demo.get('response_text', '已抓取当前画面，并生成一张 AI 海报。')}\n\n"
+            "生成参数：\n"
+            f"{params_text}"
+        )
+        return {
+            "message": "AI 海报已生成。",
+            "reply": reply,
+            "session_id": "poster-demo",
+            "raw_payload": {"poster_demo": True, **poster},
+        }
+
+    def generate_poster_from_current_frame(self, demo: dict[str, Any] | None = None) -> dict[str, Any]:
+        cfg = demo if isinstance(demo, dict) else self.config.get("poster_demo", {})
+        frame_bytes, _media_type = self.vision_frame()
+        poster = self._render_poster(frame_bytes, cfg)
+        output_dir = self._resolve_app_path(str(cfg.get("output_dir", "runtime/posters"))).resolve()
+        output_dir.mkdir(parents=True, exist_ok=True)
+        filename = time.strftime("poster_%Y%m%d_%H%M%S.jpg")
+        path = output_dir / filename
+        poster.save(path, format="JPEG", quality=92, optimize=True)
+        params = {
+            "style": str(cfg.get("style_name", "cinematic_robot_poster")),
+            "source": "current_vision_frame",
+            "size": {"width": poster.width, "height": poster.height},
+            "title": str(cfg.get("title", "MOMO AI POSTER")),
+            "subtitle": str(cfg.get("subtitle", "LIVE ROBOT CAMERA CAPTURE")),
+            "output": filename,
+        }
+        return {
+            "poster_url": f"/api/v1/posters/{filename}",
+            "poster_path": str(path),
+            "params": params,
+        }
+
+    def get_poster_file(self, filename: str) -> tuple[Path, str]:
+        name = Path(str(filename)).name
+        if name != filename or not name.lower().endswith((".jpg", ".jpeg", ".png")):
+            raise WebAPIError("POSTER_PATH_INVALID", "海报文件名不合法。", status_code=404)
+        cfg = self.config.get("poster_demo", {}) if isinstance(self.config.get("poster_demo", {}), dict) else {}
+        output_dir = self._resolve_app_path(str(cfg.get("output_dir", "runtime/posters"))).resolve()
+        path = (output_dir / name).resolve()
+        try:
+            path.relative_to(output_dir)
+        except ValueError as exc:
+            raise WebAPIError("POSTER_PATH_INVALID", "海报路径不合法。", status_code=404) from exc
+        if not path.exists() or not path.is_file():
+            raise WebAPIError("POSTER_NOT_FOUND", "海报文件不存在。", status_code=404)
+        media_type = "image/png" if path.suffix.lower() == ".png" else "image/jpeg"
+        return path, media_type
+
+    def _render_poster(self, frame_bytes: bytes, cfg: dict[str, Any]) -> Any:
+        try:
+            from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont, ImageOps
+        except Exception as exc:
+            raise RuntimeError("PIL 不可用，无法生成海报。") from exc
+
+        width = int(cfg.get("width", 1080) or 1080)
+        height = int(cfg.get("height", 1440) or 1440)
+        border = int(cfg.get("border_px", 34) or 34)
+        accent = str(cfg.get("accent_color", "#38bdf8"))
+        title = str(cfg.get("title", "MOMO AI POSTER"))
+        subtitle = str(cfg.get("subtitle", "LIVE ROBOT CAMERA CAPTURE"))
+        footer = str(cfg.get("footer", "Generated from current vision frame"))
+
+        source = Image.open(BytesIO(frame_bytes)).convert("RGB")
+        resampling = getattr(getattr(Image, "Resampling", Image), "LANCZOS")
+        poster = ImageOps.fit(source, (width, height), method=resampling, centering=(0.5, 0.5))
+        poster = ImageEnhance.Contrast(poster).enhance(1.18)
+        poster = ImageEnhance.Color(poster).enhance(1.12)
+        poster = poster.filter(ImageFilter.UnsharpMask(radius=1.6, percent=130, threshold=3))
+
+        overlay = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(overlay)
+        draw.rectangle((0, 0, width, int(height * 0.22)), fill=(0, 0, 0, 118))
+        draw.rectangle((0, int(height * 0.70), width, height), fill=(0, 0, 0, 150))
+        for i in range(22):
+            alpha = int(8 + i * 4)
+            draw.rectangle((i, i, width - i, height - i), outline=(0, 0, 0, min(alpha, 110)))
+        draw.rectangle((border, border, width - border, height - border), outline=self._hex_to_rgba(accent, 210), width=4)
+        draw.line((border, height - border - 120, width - border, height - border - 120), fill=self._hex_to_rgba(accent, 190), width=3)
+
+        title_font = self._poster_font(74, bold=True)
+        subtitle_font = self._poster_font(34)
+        footer_font = self._poster_font(30)
+        tag_font = self._poster_font(24)
+        draw.text((border + 20, border + 28), title, font=title_font, fill=(255, 255, 255, 245))
+        draw.text((border + 24, border + 118), subtitle, font=subtitle_font, fill=self._hex_to_rgba(accent, 235))
+        draw.text((border + 24, height - border - 92), footer, font=footer_font, fill=(245, 247, 250, 235))
+        draw.text((border + 24, height - border - 46), time.strftime("VISION FRAME  %Y.%m.%d  %H:%M:%S"), font=tag_font, fill=(209, 213, 219, 230))
+
+        return Image.alpha_composite(poster.convert("RGBA"), overlay).convert("RGB")
+
+    @staticmethod
+    def _hex_to_rgba(value: str, alpha: int) -> tuple[int, int, int, int]:
+        text = str(value or "#38bdf8").strip().lstrip("#")
+        if len(text) != 6:
+            text = "38bdf8"
+        try:
+            return (int(text[0:2], 16), int(text[2:4], 16), int(text[4:6], 16), int(alpha))
+        except Exception:
+            return (56, 189, 248, int(alpha))
+
+    @staticmethod
+    def _poster_font(size: int, bold: bool = False) -> Any:
+        from PIL import ImageFont
+
+        candidates = [
+            "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc" if bold else "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            "/System/Library/Fonts/PingFang.ttc",
+            "/Library/Fonts/Arial Unicode.ttf",
+        ]
+        for path in candidates:
+            try:
+                if path and Path(path).exists():
+                    return ImageFont.truetype(path, int(size))
+            except Exception:
+                continue
+        return ImageFont.load_default()
+
+    def _poster_demo_public_config(self) -> dict[str, Any]:
+        demo = self.config.get("poster_demo", {})
+        if not isinstance(demo, dict):
+            return {"enabled": False}
+        return {
+            "enabled": bool(demo.get("enabled", False)),
+            "response_delay_sec": float(demo.get("response_delay_sec", 0.0) or 0.0),
+            "trigger_keywords": [str(item) for item in demo.get("trigger_keywords", [])],
+            "intent_keywords": [str(item) for item in demo.get("intent_keywords", [])],
+            "output_dir": str(demo.get("output_dir", "runtime/posters")),
+            "style_name": str(demo.get("style_name", "cinematic_robot_poster")),
         }
 
     def cinematic_status(self) -> dict[str, Any]:

@@ -868,6 +868,25 @@ th {
   color: #c4b5fd;
 }
 
+.agent-image-attachment {
+  margin: 12px 0 0;
+  max-width: 360px;
+}
+
+.agent-image-attachment img {
+  display: block;
+  width: 100%;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 8px;
+  background: #020617;
+}
+
+.agent-image-attachment figcaption {
+  margin-top: 6px;
+  color: #9ca3af;
+  font-size: 12px;
+}
+
 .agent-quick-row {
   display: flex;
   flex-wrap: wrap;

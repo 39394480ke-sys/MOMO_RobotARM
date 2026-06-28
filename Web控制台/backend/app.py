@@ -11,7 +11,7 @@ from typing import Any, Callable
 from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, Response
 
 from .path_utils import PROJECT_ROOT, WEB_DIR, ensure_project_root_on_path
 from 控制桥接_common import api_error, api_success
@@ -163,6 +163,12 @@ async def agent_ask(request: AgentAskRequest) -> dict[str, Any]:
 @app.post("/api/v1/agent/reset-session")
 async def agent_reset_session() -> dict[str, Any]:
     return await _call(service.agent_reset_session, broadcast=False)
+
+
+@app.get("/api/v1/posters/{filename}")
+async def poster_file(filename: str) -> FileResponse:
+    path, media_type = service.get_poster_file(filename)
+    return FileResponse(path, media_type=media_type, headers={"Cache-Control": "no-store"})
 
 
 @app.get("/api/v1/cinematic/status")

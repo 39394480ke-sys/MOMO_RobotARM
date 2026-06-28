@@ -52,6 +52,27 @@ agent_demo:
       stop_available: true
       real_session_required: true
 
+poster_demo:
+  enabled: true
+  response_delay_sec: 3.0
+  trigger_keywords:
+    - 海报
+  intent_keywords:
+    - 生成
+    - 做
+    - 制作
+    - 出一张
+  output_dir: runtime/posters
+  width: 1080
+  height: 1440
+  title: MOMO AI POSTER
+  subtitle: LIVE ROBOT CAMERA CAPTURE
+  footer: Generated from current vision frame
+  style_name: cinematic_robot_poster
+  accent_color: "#38bdf8"
+  border_px: 34
+  response_text: 已抓取当前画面，并生成一张 AI 海报。
+
 controller:
   sim_config_path: ../仿真控制系统/配置.yaml
   real_config_path: ../真实舵机控制/真实配置.yaml

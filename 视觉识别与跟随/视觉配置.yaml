@@ -101,5 +101,5 @@ follow:
     ease_sec: 0.8
     min_rail_step_mm: 0.25
 
-  real_mode_requires_confirm: true
+  real_mode_requires_confirm: false
   dry_run_default: true

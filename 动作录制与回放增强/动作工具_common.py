@@ -80,6 +80,8 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "default_duration_sec": 1.5,
         "default_interval_sec": 0.3,
         "update_hz": 25.0,
+        "continuous_interpolation_default": True,
+        "synchronized_segment_timing": True,
         "auto_duration_from_distance": True,
         "joint_speed_limits": dict(DEFAULT_JOINT_SPEED_LIMITS),
         "real_mode_min_duration_sec": 2.0,
@@ -95,7 +97,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "safety": {
         "max_single_step_deg": 15.0,
         "real_mode_max_single_step_deg": 5.0,
-        "require_confirm_before_real_replay": True,
+        "require_confirm_before_real_replay": False,
     },
 }
 

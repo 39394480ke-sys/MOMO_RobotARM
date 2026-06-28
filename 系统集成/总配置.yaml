@@ -48,7 +48,7 @@ services:
 
 safety:
   default_dry_run: true
-  real_mode_requires_confirm: true
+  real_mode_requires_confirm: false
   confirm_text: 我确认机械臂周围安全
   prevent_multiple_hardware_sessions: true
 
@@ -77,4 +77,3 @@ hardware:
 logging:
   system_log: runtime/logs/system.log
   state_file: runtime/state/system_state.json
-

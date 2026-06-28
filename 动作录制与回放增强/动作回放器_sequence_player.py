@@ -107,7 +107,11 @@ class SequencePlayer:
 
         poses = list(sequence["poses"])
         cinematic_cfg = sequence.get("cinematic") if isinstance(sequence.get("cinematic"), Mapping) else {}
+        playback_cfg = self.config.get("playback", {})
         pass_through = bool(cinematic_cfg.get("pass_through", False))
+        continuous_default = bool(playback_cfg.get("continuous_interpolation_default", True))
+        synchronized_timing = bool(playback_cfg.get("synchronized_segment_timing", True))
+        continuous_playback = pass_through or (continuous_default and synchronized_timing)
         start_index = 0
         if self.config.get("playback", {}).get("return_to_first_pose_before_replay", True):
             first_pose = poses[0]
@@ -121,16 +125,21 @@ class SequencePlayer:
             )
             if not self.play_pose(first_pose, first_duration, wait_until_reached=True):
                 return False
-            if not pass_through:
+            if not continuous_playback:
                 self._sleep_with_controls(self._hold_duration(first_pose, sequence, speed))
             start_index = 1
 
-        if pass_through and not loop:
-            completed = self._play_cinematic_pass_through(poses, start_index, speed)
-            if completed:
-                self.logger.log("play_complete", action_name=self.current_sequence_name)
-                print(f"动作“{self.current_sequence_name}”回放完成。")
-            return completed
+        if continuous_playback:
+            while True:
+                completed = self._play_synchronized_pass_through(poses, start_index, speed, source="continuous_interpolation")
+                if not completed:
+                    return False
+                if not loop or self.stopped:
+                    break
+                start_index = 0
+            self.logger.log("play_complete", action_name=self.current_sequence_name)
+            print(f"动作“{self.current_sequence_name}”回放完成。")
+            return True
 
         first_pass = True
         while True:
@@ -232,6 +241,127 @@ class SequencePlayer:
                 print(f"夹爪回放警告：{message}")
         if wait_until_reached and not self._wait_until_pose_reached(targets, pose):
             return False
+        return True
+
+    def _play_synchronized_pass_through(
+        self,
+        poses: list[Mapping[str, Any]],
+        start_index: int,
+        speed: float,
+        source: str = "continuous_interpolation",
+    ) -> bool:
+        """Play poses as linear synchronized segments without stopping at interior keyframes."""
+
+        if self.stopped:
+            return False
+        playback_cfg = self.config.get("playback", {})
+        update_hz = float(playback_cfg.get("update_hz", 10.0))
+        max_step = float(self.config.get("safety", {}).get("max_single_step_deg", 15.0))
+        if is_real_mode_controller(self.controller):
+            max_step = float(self.config.get("safety", {}).get("real_mode_max_single_step_deg", 5.0))
+
+        if start_index <= 0:
+            current_targets = state_joint_targets(extract_state(self.controller), self.joint_order)
+            waypoints: list[dict[str, Any]] = [
+                {"index": 0, "name": "current", "replay_joint_targets_deg": current_targets, "duration_sec": 0.0}
+            ]
+            waypoints.extend(dict(pose) for pose in poses)
+        else:
+            previous = max(0, start_index - 1)
+            waypoints = [dict(pose) for pose in poses[previous:]]
+
+        if len(waypoints) < 2:
+            return True
+
+        targets_by_waypoint = [
+            normalize_joint_targets(pose.get("replay_joint_targets_deg") or pose.get("joint_targets_deg"), self.joint_order)
+            for pose in waypoints
+        ]
+        segment_plan: list[tuple[int, float]] = []
+        for index in range(len(waypoints) - 1):
+            start_targets = targets_by_waypoint[index]
+            end_targets = targets_by_waypoint[index + 1]
+            duration = self._duration(waypoints[index + 1], speed, current=start_targets, targets=end_targets)
+            max_delta = max(
+                abs(float(end_targets[joint]) - float(start_targets.get(joint, end_targets[joint])))
+                for joint in end_targets
+            )
+            steps = max(1, int(duration * update_hz + 0.999), int(max_delta / max(0.001, max_step) + 0.999))
+            duration = max(duration, steps / max(0.001, update_hz))
+            segment_plan.append((steps, duration))
+
+        frame_total = sum(steps for steps, _duration in segment_plan)
+        frame_index = 0
+        last_frame: dict[str, float] | None = None
+        for segment_index, (steps, duration) in enumerate(segment_plan):
+            start_targets = targets_by_waypoint[segment_index]
+            end_targets = targets_by_waypoint[segment_index + 1]
+            per_frame_sleep = max(0.0, duration / max(1, steps))
+            for step in range(1, steps + 1):
+                self._wait_if_paused()
+                if self.stopped:
+                    return False
+                frame_index += 1
+                ratio = step / max(1, steps)
+                frame = {
+                    joint: float(start_targets.get(joint, end_targets[joint]))
+                    + (float(end_targets[joint]) - float(start_targets.get(joint, end_targets[joint]))) * ratio
+                    for joint in end_targets
+                }
+                use_multi = None
+                if segment_index == len(segment_plan) - 1 and step == steps:
+                    final_pose = waypoints[-1]
+                    multi_raw = final_pose.get("replay_multi_turn_continuous_raw")
+                    if isinstance(multi_raw, Mapping) and self._controller_accepts_multi_turn():
+                        use_multi = {
+                            joint: float(multi_raw[joint])
+                            for joint in self.multi_turn_joints
+                            if joint in multi_raw and multi_raw[joint] is not None
+                        }
+                ok, message = call_move_joints(self.controller, frame, use_multi)
+                self.logger.log(
+                    "play_continuous",
+                    mode=self._mode_name(),
+                    action_name=self.current_sequence_name,
+                    segment_index=segment_index,
+                    frame_index=frame_index,
+                    frame_count=frame_total,
+                    ratio=ratio,
+                    targets_deg=frame,
+                    ok=ok,
+                    message=message,
+                )
+                print(f"continuous frame {frame_index}/{frame_total} segment {segment_index + 1} ratio={ratio:.3f} -> {frame}")
+                if not ok:
+                    self.logger.log("limit_or_move_error", pose_index=waypoints[segment_index + 1].get("index"), error=message)
+                    print(f"动作停止：{message}")
+                    return False
+                last_frame = frame
+                self._emit_progress(
+                    frame,
+                    source,
+                    pose=waypoints[segment_index + 1],
+                    frame_index=frame_index,
+                    frame_count=frame_total,
+                    segment_index=segment_index,
+                    segment_frame_index=step,
+                    segment_frame_count=steps,
+                    ratio=ratio,
+                )
+                if frame_index < frame_total and per_frame_sleep > 0:
+                    self._sleep_with_controls(per_frame_sleep)
+
+        final_pose = waypoints[-1]
+        final_targets = targets_by_waypoint[-1]
+        if last_frame is not None and is_real_mode_controller(self.controller):
+            if not self._wait_until_pose_reached(final_targets, final_pose):
+                return False
+        gripper = final_pose.get("gripper")
+        if isinstance(gripper, Mapping) and gripper.get("available") is True:
+            ok, message = call_set_gripper(self.controller, gripper)
+            self.logger.log("gripper", pose_index=final_pose.get("index"), gripper_target=dict(gripper), ok=ok, message=message)
+            if not ok:
+                print(f"夹爪回放警告：{message}")
         return True
 
     def _play_cinematic_pass_through(self, poses: list[Mapping[str, Any]], start_index: int, speed: float) -> bool:

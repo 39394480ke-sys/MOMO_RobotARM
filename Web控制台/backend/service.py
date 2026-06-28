@@ -323,7 +323,7 @@ class WebControlService:
             return None
         self._agent_demo_delay(demo)
         try:
-            poster = self.generate_poster_from_current_frame(demo)
+            poster = self._fixed_poster_demo_result(demo) or self.generate_poster_from_current_frame(demo)
         except Exception as exc:
             message = "当前没有可用画面，请先打开视觉预览/启动视觉服务。"
             self.logger.log("warning", "poster_demo_failed", f"{message} 原因：{exc}")
@@ -344,6 +344,26 @@ class WebControlService:
             "reply": reply,
             "session_id": "poster-demo",
             "raw_payload": {"poster_demo": True, **poster},
+        }
+
+    def _fixed_poster_demo_result(self, demo: dict[str, Any]) -> dict[str, Any] | None:
+        poster_url = str(demo.get("fixed_poster_url", "")).strip()
+        if not poster_url:
+            return None
+        width = int(demo.get("width", 1122) or 1122)
+        height = int(demo.get("height", 1402) or 1402)
+        output = str(demo.get("fixed_output", "momo_ai_poster_demo.png"))
+        params = {
+            "style": str(demo.get("style_name", "Cinematic robot poster")),
+            "source": "current vision frame",
+            "size": {"width": width, "height": height},
+            "title": str(demo.get("title", "MOMO AI POSTER")),
+            "output": output,
+        }
+        return {
+            "poster_url": poster_url,
+            "poster_path": "",
+            "params": params,
         }
 
     def generate_poster_from_current_frame(self, demo: dict[str, Any] | None = None) -> dict[str, Any]:

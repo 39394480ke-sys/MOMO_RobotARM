@@ -54,7 +54,9 @@ agent_demo:
 
 poster_demo:
   enabled: true
-  response_delay_sec: 3.0
+  response_delay_sec: 5.0
+  fixed_poster_url: /static/assets/momo_ai_poster_demo.png
+  fixed_output: momo_ai_poster_demo.png
   trigger_keywords:
     - 海报
   intent_keywords:
@@ -63,12 +65,12 @@ poster_demo:
     - 制作
     - 出一张
   output_dir: runtime/posters
-  width: 1080
-  height: 1440
+  width: 1122
+  height: 1402
   title: MOMO AI POSTER
   subtitle: LIVE ROBOT CAMERA CAPTURE
   footer: Generated from current vision frame
-  style_name: cinematic_robot_poster
+  style_name: Cinematic robot poster
   accent_color: "#38bdf8"
   border_px: 34
   response_text: 已抓取当前画面，并生成一张 AI 海报。

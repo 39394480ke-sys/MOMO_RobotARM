@@ -337,7 +337,10 @@
                   </div>
                   <div id="visionTargetToolState" class="inline-status">手动目标未操作</div>
                 </div>
-                <pre id="visionLatestJson" class="result-box"></pre>
+                <details class="debug-output-panel">
+                  <summary>调试输出</summary>
+                  <pre id="visionLatestJson" class="result-box"></pre>
+                </details>
               </section>
             </div>
           </section>
@@ -432,14 +435,20 @@
                   <input id="cinematicActionName" placeholder="例如：AI运镜_产品展示_01" />
                 </label>
                 <button id="playCinematicActionBtn">播放生成动作</button>
-                <pre id="cinematicConfigJson" class="result-box"></pre>
+                <details class="debug-output-panel">
+                  <summary>调试输出</summary>
+                  <pre id="cinematicConfigJson" class="result-box"></pre>
+                </details>
               </section>
               <section class="panel cinematic-result-panel">
                 <div class="panel-head">
                   <h3>处理结果</h3>
                   <span id="cinematicProjectStage" class="inline-status">未加载项目</span>
                 </div>
-                <pre id="cinematicResultJson" class="result-box"></pre>
+                <details class="debug-output-panel">
+                  <summary>调试输出</summary>
+                  <pre id="cinematicResultJson" class="result-box"></pre>
+                </details>
               </section>
               <section class="panel cinematic-detail-panel">
                 <div class="panel-head"><h3>分析</h3></div>
@@ -485,7 +494,11 @@
                   <dt>links / joints</dt><dd id="kinCounts">--</dd>
                   <dt>PyBullet</dt><dd id="kinModelState">--</dd>
                 </dl>
-                <pre id="kinStatusResult" class="result-box"></pre>
+                <div id="kinStatusSummary" class="kin-summary-grid"></div>
+                <details class="debug-output-panel">
+                  <summary>调试输出</summary>
+                  <pre id="kinStatusResult" class="result-box"></pre>
+                </details>
               </section>
               <section class="panel kin-render-panel">
                 <div class="panel-head">
@@ -496,13 +509,17 @@
                   <img id="kinRenderImage" alt="PyBullet 仿真快照" />
                 </div>
               </section>
-              <section class="panel">
+              <section class="panel kin-compute-panel">
                 <div class="panel-head"><h3>FK</h3></div>
                 <div class="input-grid five" id="fkInputs"></div>
                 <button id="fkBtn">计算 FK</button>
-                <pre id="fkResult" class="result-box"></pre>
+                <div id="fkSummary" class="kin-result-summary muted-box">等待计算。</div>
+                <details class="debug-output-panel">
+                  <summary>调试输出</summary>
+                  <pre id="fkResult" class="result-box"></pre>
+                </details>
               </section>
-              <section class="panel">
+              <section class="panel kin-compute-panel">
                 <div class="panel-head"><h3>IK</h3></div>
                 <div class="input-grid six">
                   <input id="ikX" type="number" step="0.001" placeholder="x m" />
@@ -516,7 +533,11 @@
                   <button id="ikBtn">计算 IK</button>
                   <button id="executeIkBtn">执行 IK 结果</button>
                 </div>
-                <pre id="ikResult" class="result-box"></pre>
+                <div id="ikSummary" class="kin-result-summary muted-box">等待计算。</div>
+                <details class="debug-output-panel">
+                  <summary>调试输出</summary>
+                  <pre id="ikResult" class="result-box"></pre>
+                </details>
               </section>
               <section class="panel jog-panel">
                 <div class="panel-head">
@@ -645,7 +666,7 @@
                   <a href="/api/v1/vision/latest" target="_blank" rel="noreferrer">视觉 latest</a>
                   <a href="http://127.0.0.1:8000/debug" target="_blank" rel="noreferrer">视觉调试</a>
                   <a href="/docs" target="_blank" rel="noreferrer">Web API</a>
-                  <a href="/api/v1/robot/calibration-status" target="_blank" rel="noreferrer">标定 JSON</a>
+                  <a href="/api/v1/robot/calibration-status" target="_blank" rel="noreferrer">标定状态</a>
                 </div>
               </section>
               <section class="panel hardware-panel">

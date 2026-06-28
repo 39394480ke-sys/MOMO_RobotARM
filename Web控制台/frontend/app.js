@@ -809,8 +809,11 @@ async function computeFk() {
   try {
     const data = await postJson("/api/v1/kinematics/fk", { joints_deg: joints });
     $("#fkResult").textContent = JSON.stringify(data, null, 2);
+    renderFkSummary(data);
     log("info", "FK 计算完成");
   } catch (error) {
+    $("#fkSummary").textContent = error.message || String(error);
+    $("#fkSummary").className = "kin-result-summary muted-box bad-text";
     showError(error);
   }
 }
@@ -824,8 +827,11 @@ async function computeIk() {
     const data = await postJson("/api/v1/kinematics/ik", { xyz, rpy });
     state.lastIkTargets = data.target_joints_deg || null;
     $("#ikResult").textContent = JSON.stringify(data, null, 2);
+    renderIkSummary(data);
     log("info", "IK 计算完成");
   } catch (error) {
+    $("#ikSummary").textContent = error.message || String(error);
+    $("#ikSummary").className = "kin-result-summary muted-box bad-text";
     showError(error);
   }
 }
@@ -988,7 +994,7 @@ async function saveFollowConfig() {
     const data = await postJson("/api/v1/follow/config", readFollowConfigForm());
     state.followConfig = data.follow || {};
     renderFollowConfig();
-    $("#followConfigState").textContent = "视觉参数已保存到 视觉配置.yaml";
+    $("#followConfigState").textContent = "视觉参数已保存";
     $("#followConfigState").className = "inline-status ok-text";
     log("info", "视觉跟随参数已保存");
     await refreshFollow();
@@ -2180,6 +2186,7 @@ function renderKinematicsStatus() {
   $("#kinCounts").textContent = `${(urdf.links || []).length} links / ${(urdf.joints || []).length} joints`;
   $("#kinModelState").textContent = model.available ? `${model.backend || "model"} ee=${model.ee_link_index ?? "--"}` : model.error || "不可用";
   $("#kinModelState").className = model.available ? "ok-text" : "bad-text";
+  renderKinematicsSummary(urdf, model);
   const jointLimits = model.joint_limits || {};
   const limitSummary = Object.entries(jointLimits).map(([joint, item]) => ({
     joint,
@@ -2200,6 +2207,63 @@ function renderKinematicsStatus() {
     null,
     2
   );
+}
+
+function renderKinematicsSummary(urdf, model) {
+  const errors = urdf.errors || [];
+  const warnings = urdf.warnings || [];
+  const missingMeshes = urdf.missing_meshes || [];
+  const joints = model.ordered_joint_urdf_names || [];
+  const cards = [
+    ["检查结果", errors.length ? `${errors.length} 个错误` : warnings.length ? `${warnings.length} 个提醒` : "通过", errors.length ? "bad-text" : "ok-text"],
+    ["模型状态", model.available ? "PyBullet 可用" : model.error || "不可用", model.available ? "ok-text" : "bad-text"],
+    ["关节链", joints.length ? joints.join(" / ") : "--", ""],
+    ["资源", missingMeshes.length ? `${missingMeshes.length} 个缺失资源` : "资源完整", missingMeshes.length ? "bad-text" : "ok-text"],
+  ];
+  $("#kinStatusSummary").innerHTML = cards
+    .map(
+      ([label, value, klass]) => `<div class="kin-summary-card">
+        <strong>${escapeHtml(label)}</strong>
+        <span class="${escapeAttr(klass)}">${escapeHtml(value)}</span>
+      </div>`
+    )
+    .join("");
+}
+
+function renderFkSummary(data) {
+  const pose = data.tcp_pose || {};
+  const xyz = pose.xyz || pose.xyz_m || data.xyz || [];
+  const rpy = pose.rpy || pose.rpy_rad || data.rpy || [];
+  $("#fkSummary").className = "kin-result-summary muted-box";
+  $("#fkSummary").innerHTML = [
+    `<div><strong>末端位置</strong></div>${formatVectorGrid(["x", "y", "z"], xyz, 4, "m")}`,
+    `<div><strong>末端姿态</strong></div>${formatVectorGrid(["roll", "pitch", "yaw"], rpy, 4, "rad")}`,
+  ].join("");
+}
+
+function renderIkSummary(data) {
+  const targets = data.target_joints_deg || data.solution_joints_deg || {};
+  const ik = data.ik || {};
+  const predicted = data.predicted_xyz_m || data.predicted_xyz || ik.xyz || data.tcp_pose?.xyz || [];
+  const error = data.position_error_m ?? data.pos_error_m ?? data.error_m ?? ik.position_error_m;
+  $("#ikSummary").className = "kin-result-summary muted-box";
+  const jointItems = JOINTS.map(([key], index) => `<span>${key.toUpperCase()} ${formatNum(jointValue(targets, key, index), 2)}</span>`).join("");
+  $("#ikSummary").innerHTML = [
+    `<div><strong>目标关节</strong></div><div class="kin-result-grid">${jointItems}</div>`,
+    `<div><strong>预测位置</strong></div>${formatVectorGrid(["x", "y", "z"], predicted, 4, "m")}`,
+    `<div>位置误差：${formatNum(error, 5)} m</div>`,
+  ].join("");
+}
+
+function jointValue(targets, key, index) {
+  if (Array.isArray(targets)) return targets[index];
+  return targets ? targets[key] : undefined;
+}
+
+function formatVectorGrid(labels, values, digits = 3, unit = "") {
+  return `<div class="kin-result-grid">${labels
+    .map((label, index) => `<span>${escapeHtml(label)} ${formatNum(values[index], digits)}${unit ? ` ${escapeHtml(unit)}` : ""}</span>`)
+    .join("")}</div>`;
 }
 
 function renderMotionTuning() {

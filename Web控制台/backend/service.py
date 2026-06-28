@@ -277,6 +277,7 @@ class WebControlService:
 
     def connect(self, request: ConnectRequest) -> dict[str, Any]:
         with self._lock:
+            self._stop_follow_controller("mode_change")
             mode = self._normalize_mode(request.mode)
             self._require_real_confirm_if_needed(mode, request.confirm_text, action="连接真实模式")
             result = self.bridge.connect(mode)
@@ -293,6 +294,7 @@ class WebControlService:
 
     def disconnect(self) -> dict[str, Any]:
         with self._lock:
+            self._stop_follow_controller("disconnect")
             result = self.bridge.disconnect()
             data = self._unwrap_bridge(result, code="DISCONNECT_FAILED")
             session = self.state_manager.mark_disconnected()
@@ -301,6 +303,7 @@ class WebControlService:
 
     def set_mode(self, mode: str, confirm_text: str = "") -> dict[str, Any]:
         with self._lock:
+            self._stop_follow_controller("mode_change")
             normalized = self._normalize_mode(mode)
             self._require_real_confirm_if_needed(normalized, confirm_text, action="切换真实模式")
             result = self.bridge.set_mode(normalized)
@@ -540,14 +543,7 @@ class WebControlService:
 
     def stop(self) -> dict[str, Any]:
         with self._lock:
-            follow_status: dict[str, Any] | None = None
-            if self._follow_controller is not None:
-                try:
-                    follow_status = self._follow_controller.stop()
-                    self.logger.log("warning", "follow_stopped_by_emergency_stop", "急停已停止视觉跟随。")
-                except Exception as exc:
-                    follow_status = {"ok": False, "message": f"停止视觉跟随失败：{exc}"}
-                    self._remember_error("FOLLOW_STOP_FAILED", str(exc))
+            follow_status = self._stop_follow_controller("emergency_stop")
             self.stop_continuous_jog(join_timeout=0.2)
             result = self.bridge.stop()
             data = self._unwrap_bridge(result, code="STOP_FAILED")
@@ -563,13 +559,18 @@ class WebControlService:
     # 视觉跟随
     # ------------------------------------------------------------------
     def follow_status(self) -> dict[str, Any]:
+        if self._follow_controller is not None:
+            status = self._follow_controller.get_status()
+            if status.get("running"):
+                return status
+            self._follow_controller = None
         if self._follow_controller is None:
             follow_cfg = self._load_vision_follow_config(self.base_dir.parent / "视觉识别与跟随")
             rail_cfg = follow_cfg.get("rail_cinematic", {}) if isinstance(follow_cfg.get("rail_cinematic"), dict) else {}
             return {
                 "running": False,
                 "thread_alive": False,
-                "dry_run": True,
+                "dry_run": self.bridge.mode != "real",
                 "latest_url": str(self.config.get("follow", {}).get("latest_url", "http://127.0.0.1:8000/latest")),
                 "robot_api_base": str(self.config.get("follow", {}).get("robot_api_base", self._local_api_base())),
                 "effective_config": {
@@ -599,7 +600,6 @@ class WebControlService:
                 "last_error": "",
                 "message": "视觉跟随未启动。",
             }
-        return self._follow_controller.get_status()
 
     def follow_config(self) -> dict[str, Any]:
         vision_root = self.base_dir.parent / "视觉识别与跟随"
@@ -660,8 +660,7 @@ class WebControlService:
         with self._lock:
             if self._follow_controller is None:
                 return {"message": "视觉跟随未启动。", "follow": self.follow_status()}
-            status = self._follow_controller.stop()
-            self.logger.log("info", "follow_stopped", "视觉跟随已停止。")
+            status = self._stop_follow_controller("manual_stop") or self.follow_status()
             return {"message": "视觉跟随已停止。", "follow": status}
 
     # ------------------------------------------------------------------
@@ -854,6 +853,30 @@ class WebControlService:
     # ------------------------------------------------------------------
     # 内部工具
     # ------------------------------------------------------------------
+    def _stop_follow_controller(self, reason: str) -> dict[str, Any] | None:
+        if self._follow_controller is None:
+            return None
+        try:
+            status = self._follow_controller.stop()
+            self._follow_controller = None
+            event = "follow_stopped"
+            message = "视觉跟随已停止。"
+            if reason == "emergency_stop":
+                event = "follow_stopped_by_emergency_stop"
+                message = "急停已停止视觉跟随。"
+            elif reason == "mode_change":
+                event = "follow_stopped_by_mode_change"
+                message = "模式切换已停止视觉跟随。"
+            elif reason == "disconnect":
+                event = "follow_stopped_by_disconnect"
+                message = "断开连接已停止视觉跟随。"
+            self.logger.log("warning" if reason != "manual_stop" else "info", event, message)
+            return status
+        except Exception as exc:
+            self._follow_controller = None
+            self._remember_error("FOLLOW_STOP_FAILED", str(exc))
+            return {"ok": False, "message": f"停止视觉跟随失败：{exc}"}
+
     def _before_manual_motion(self, confirm_text: str = "") -> None:
         self._require_real_confirm(confirm_text, action="真实模式手动运动")
         if self._action_thread and self._action_thread.is_alive():

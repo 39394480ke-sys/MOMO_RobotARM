@@ -9,6 +9,10 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 
+def _index_response(index_path: Path) -> FileResponse:
+    return FileResponse(index_path, headers={"Cache-Control": "no-store"})
+
+
 def install_static_routes(app: FastAPI, base_dir: str | Path) -> None:
     """挂载 /static，并让 / 和 /web/ 都返回控制台首页。"""
 
@@ -20,12 +24,12 @@ def install_static_routes(app: FastAPI, base_dir: str | Path) -> None:
 
     @app.get("/", include_in_schema=False)
     async def index_root() -> FileResponse:
-        return FileResponse(index_path)
+        return _index_response(index_path)
 
     @app.get("/web", include_in_schema=False)
     async def index_web_no_slash() -> FileResponse:
-        return FileResponse(index_path)
+        return _index_response(index_path)
 
     @app.get("/web/", include_in_schema=False)
     async def index_web() -> FileResponse:
-        return FileResponse(index_path)
+        return _index_response(index_path)

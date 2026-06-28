@@ -205,7 +205,7 @@
               <section class="panel">
                 <div class="panel-head"><h3>跟随启动</h3></div>
                 <label class="field">
-                  <span>视觉 latest URL</span>
+                  <span>内部视觉服务 URL</span>
                   <input id="followLatestUrl" value="http://127.0.0.1:8000/latest" />
                 </label>
                 <div class="input-grid two">
@@ -222,14 +222,6 @@
                     <input id="followMoveDuration" type="number" min="0.02" step="0.01" value="0.25" />
                   </label>
                 </div>
-                <label class="check-inline">
-                  <input id="followDryRun" type="checkbox" checked />
-                  <span>dry-run</span>
-                </label>
-                <label class="field">
-                  <span>real 确认文本</span>
-                  <input id="followRealConfirm" placeholder="关闭 dry-run 时输入安全确认文本" disabled />
-                </label>
               </section>
 
               <section class="panel">
@@ -286,7 +278,7 @@
                 <div class="panel-head"><h3>运行状态</h3></div>
                 <dl class="kv wide">
                   <dt>跟随</dt><dd id="followRunning">--</dd>
-                  <dt>模式</dt><dd id="followDryRunState">--</dd>
+                  <dt>模式</dt><dd id="followModeState">--</dd>
                   <dt>步数</dt><dd id="followStepCount">--</dd>
                   <dt>关节</dt><dd id="followJointState">--</dd>
                   <dt>死区</dt><dd id="followDeadZoneState">--</dd>
@@ -369,13 +361,11 @@
                 <div class="agent-quick-row">
                   <button class="agent-quick-btn" data-agent-prompt="请查询机械臂当前状态">查状态</button>
                   <button class="agent-quick-btn" data-agent-prompt="请说明当前 Web 控制台可以安全做哪些操作">安全说明</button>
-                  <button class="agent-quick-btn" data-agent-prompt="如果我要修正 J12 标定，下一步应该怎么做？">J12 标定</button>
                 </div>
                 <div class="agent-input-row">
                   <input id="agentInput" placeholder="输入要问机械臂助手的话" />
                   <button id="sendAgentBtn" class="primary">发送</button>
                 </div>
-                <pre id="agentReplyDetail" class="result-box agent-reply-detail">等待 AI 回复。</pre>
               </section>
               <section class="panel agent-config-panel">
                 <div class="panel-head"><h3>Agent 配置</h3></div>
@@ -390,7 +380,6 @@
                   <dt>真实工具</dt><dd id="agentRealTools">--</dd>
                   <dt>工具自检</dt><dd id="agentToolCheck">--</dd>
                 </dl>
-                <pre id="agentToolsResult" class="result-box agent-tools-result"></pre>
               </section>
             </div>
           </section>

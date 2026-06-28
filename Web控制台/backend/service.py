@@ -540,10 +540,18 @@ class WebControlService:
 
     def stop(self) -> dict[str, Any]:
         with self._lock:
+            follow_status: dict[str, Any] | None = None
+            if self._follow_controller is not None:
+                try:
+                    follow_status = self._follow_controller.stop()
+                    self.logger.log("warning", "follow_stopped_by_emergency_stop", "急停已停止视觉跟随。")
+                except Exception as exc:
+                    follow_status = {"ok": False, "message": f"停止视觉跟随失败：{exc}"}
+                    self._remember_error("FOLLOW_STOP_FAILED", str(exc))
             self.stop_continuous_jog(join_timeout=0.2)
             result = self.bridge.stop()
             data = self._unwrap_bridge(result, code="STOP_FAILED")
-            return {"message": result.get("message", "已急停。"), "bridge": data}
+            return {"message": result.get("message", "已急停。"), "bridge": data, "follow": follow_status}
 
     def set_gripper(self, request: GripperRequest) -> dict[str, Any]:
         with self._lock:
@@ -627,23 +635,23 @@ class WebControlService:
 
     def start_follow(self, request: FollowStartRequest) -> dict[str, Any]:
         with self._lock:
-            if not request.dry_run and (self.bridge.mode != "real" or not self.bridge.is_connected()):
+            dry_run = self.bridge.mode != "real"
+            if not dry_run and not self.bridge.is_connected():
                 raise WebAPIError("REAL_SESSION_REQUIRED", "启动真实视觉跟随前，请先连接 real 模式。")
-            if self.bridge.mode == "real" and not request.dry_run:
-                self._require_real_confirm(request.confirm_text, action="启动真实视觉跟随")
             if self._follow_controller is not None:
                 try:
                     self._follow_controller.stop()
                 except Exception:
                     pass
-            controller = self._create_follow_controller(request)
+            controller = self._create_follow_controller(request, dry_run=dry_run)
             self._follow_controller = controller
             controller.start()
             self.logger.log(
                 "info",
                 "follow_started",
                 "视觉跟随已启动。",
-                dry_run=request.dry_run,
+                mode=self.bridge.mode,
+                dry_run=dry_run,
                 latest_url=request.latest_url,
             )
             return {"message": "视觉跟随已启动。", "follow": controller.get_status()}
@@ -977,7 +985,7 @@ class WebControlService:
             return path
         return self.base_dir / path
 
-    def _create_follow_controller(self, request: FollowStartRequest) -> Any:
+    def _create_follow_controller(self, request: FollowStartRequest, *, dry_run: bool) -> Any:
         vision_root = self.base_dir.parent / "视觉识别与跟随"
         from 控制桥接_common import ensure_import_paths
 
@@ -988,8 +996,8 @@ class WebControlService:
         follow_cfg.update(self._load_vision_follow_config(vision_root))
         follow_cfg["latest_url"] = request.latest_url
         follow_cfg["robot_api_base"] = request.robot_api_base or follow_cfg.get("robot_api_base") or self._local_api_base()
-        follow_cfg["confirm_text"] = request.confirm_text
-        if not request.dry_run and self.bridge.mode == "real":
+        follow_cfg["confirm_text"] = self.confirm_text if not dry_run else ""
+        if not dry_run and self.bridge.mode == "real":
             real_step_limit = self._manual_step_limit()
             follow_cfg["max_pan_step_deg"] = min(float(follow_cfg.get("max_pan_step_deg", real_step_limit)), real_step_limit)
             follow_cfg["max_tilt_step_deg"] = min(float(follow_cfg.get("max_tilt_step_deg", real_step_limit)), real_step_limit)
@@ -1007,6 +1015,19 @@ class WebControlService:
             follow_cfg["pan_sign"] = float(request.pan_sign)
         if request.tilt_sign is not None:
             follow_cfg["tilt_sign"] = float(request.tilt_sign)
+        for request_key, config_key in (
+            ("pan_dead_zone_norm", "pan_dead_zone_norm"),
+            ("tilt_dead_zone_norm", "tilt_dead_zone_norm"),
+            ("pan_resume_zone_norm", "pan_resume_zone_norm"),
+            ("tilt_resume_zone_norm", "tilt_resume_zone_norm"),
+            ("min_pan_step_deg", "min_pan_step_deg"),
+            ("min_tilt_step_deg", "min_tilt_step_deg"),
+            ("pan_min_step_zone_norm", "pan_min_step_zone_norm"),
+            ("tilt_min_step_zone_norm", "tilt_min_step_zone_norm"),
+        ):
+            value = getattr(request, request_key)
+            if value is not None:
+                follow_cfg[config_key] = float(value)
         if request.max_pan_step_deg is not None:
             follow_cfg["max_pan_step_deg"] = float(request.max_pan_step_deg)
         if request.max_tilt_step_deg is not None:
@@ -1034,7 +1055,7 @@ class WebControlService:
             rail_cfg.setdefault("joint", "j10")
             rail_cfg.setdefault("bounce", False)
             follow_cfg["rail_cinematic"] = rail_cfg
-        return VisionFollowController({"follow": follow_cfg}, latest_url=request.latest_url, dry_run=request.dry_run)
+        return VisionFollowController({"follow": follow_cfg}, latest_url=request.latest_url, dry_run=dry_run)
 
     def _load_vision_follow_config(self, vision_root: Path) -> dict[str, Any]:
         config_path = vision_root / "视觉配置.yaml"

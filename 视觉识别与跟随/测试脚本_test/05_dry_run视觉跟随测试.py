@@ -25,6 +25,27 @@ def main() -> None:
     joints = {item["joint_key"] for item in result["commands"]}
     assert "j10" not in joints, "普通视觉跟随不应该控制 J10 导轨"
     assert {"j11", "j13"}.issubset(joints), f"普通视觉跟随应控制 J11/J13，实际：{joints}"
+    face_pan_steps = [abs(float(item["delta_deg"])) for item in result["commands"] if item["joint_key"] == "j11"]
+    assert face_pan_steps and face_pan_steps[0] > 0.25, f"人脸跟随不应套用框选主体保守上限，实际：{face_pan_steps}"
+
+    manual_payload = {
+        "detected": True,
+        "has_target": True,
+        "target_source": "manual_tracker",
+        "tracking_state": "tracking",
+        "target": {"source": "manual_tracker", "bbox": [100, 100, 80, 120]},
+        "smoothed_offset": {"valid": True, "ndx": 0.2, "ndy": -0.2},
+        "offset": {"in_dead_zone": False},
+    }
+    manual_controller = VisionFollowController(config, latest_provider=lambda: manual_payload, dry_run=True)
+    manual_first = manual_controller.step_once()
+    print(json.dumps(manual_first, ensure_ascii=False, indent=2))
+    manual_commands = manual_first["commands"]
+    assert manual_commands, "框选主体第一帧应该生成保守跟随命令"
+    assert all(abs(float(item["delta_deg"])) <= 0.25 for item in manual_commands), f"框选主体单步应限制在 0.25 deg 内，实际：{manual_commands}"
+    manual_second = manual_controller.step_once()
+    print(json.dumps(manual_second, ensure_ascii=False, indent=2))
+    assert not manual_second["commands"], f"框选主体连续两帧应被节流，实际：{manual_second['commands']}"
 
     rail_config = json.loads(json.dumps(config, ensure_ascii=False))
     rail_config.setdefault("follow", {})["rail_cinematic"] = {

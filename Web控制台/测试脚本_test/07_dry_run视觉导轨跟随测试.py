@@ -42,11 +42,19 @@ def main() -> None:
             "/api/v1/follow/start",
             {
                 "latest_url": latest_url,
-                "dry_run": True,
+                "dry_run": False,
                 "poll_interval": 0.02,
                 "speed_percent": 60,
                 "pan_joint": "j11",
                 "tilt_joint": "j13",
+                "pan_dead_zone_norm": 0.07,
+                "tilt_dead_zone_norm": 0.08,
+                "pan_resume_zone_norm": 0.11,
+                "tilt_resume_zone_norm": 0.12,
+                "min_pan_step_deg": 0.1,
+                "min_tilt_step_deg": 0.2,
+                "pan_min_step_zone_norm": 0.31,
+                "tilt_min_step_zone_norm": 0.32,
                 "rail_enabled": True,
                 "rail_start_mm": -140,
                 "rail_end_mm": 140,
@@ -58,6 +66,16 @@ def main() -> None:
         status = get_json("/api/v1/follow/status")
         assert status["ok"] is True, status
         follow = status["data"]
+        assert follow.get("dry_run") is True, "视觉跟随模式应跟随全局 dry_run 会话，而不是请求体 dry_run 字段"
+        effective = follow.get("effective_config") or {}
+        assert effective.get("pan_dead_zone_norm") == 0.07, effective
+        assert effective.get("tilt_dead_zone_norm") == 0.08, effective
+        assert effective.get("pan_resume_zone_norm") == 0.11, effective
+        assert effective.get("tilt_resume_zone_norm") == 0.12, effective
+        assert effective.get("min_pan_step_deg") == 0.1, effective
+        assert effective.get("min_tilt_step_deg") == 0.2, effective
+        assert effective.get("pan_min_step_zone_norm") == 0.31, effective
+        assert effective.get("tilt_min_step_zone_norm") == 0.32, effective
         commands = (follow.get("last_command") or {}).get("commands") or []
         joints = {item["joint_key"] for item in commands}
         assert "j10" in joints, f"导轨运镜应包含 J10 命令，实际：{commands}"

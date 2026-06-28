@@ -89,7 +89,6 @@ function bindEvents() {
     $("#followLatestUrl").dataset.userEdited = "1";
     renderVisionPreviewUrl();
   });
-  $("#followDryRun").addEventListener("change", renderFollowRealControls);
   $("#refreshVisionPreviewBtn").addEventListener("click", refreshVisionPreview);
   $("#toggleVisionLiveBtn").addEventListener("click", toggleVisionLivePreview);
   $("#loadVisionMockBtn").addEventListener("click", loadVisionMock);
@@ -878,14 +877,12 @@ async function switchMode() {
 }
 
 async function startFollow() {
-  const dryRun = $("#followDryRun").checked;
   const followConfig = readFollowConfigForm();
   const body = {
     latest_url: $("#followLatestUrl").value.trim() || "http://127.0.0.1:8000/latest",
     poll_interval: Number($("#followPollInterval").value || 0.05),
     move_duration: followConfig.move_duration_sec,
     speed_percent: Number($("#followSpeedPercent").value || 60),
-    dry_run: dryRun,
     pan_joint: "j11",
     tilt_joint: "j13",
     enabled_follow_joints: followConfig.enabled_follow_joints,
@@ -893,6 +890,14 @@ async function startFollow() {
     tilt_gain: followConfig.tilt_gain_deg_per_norm,
     pan_sign: followConfig.pan_sign,
     tilt_sign: followConfig.tilt_sign,
+    pan_dead_zone_norm: followConfig.pan_dead_zone_norm,
+    tilt_dead_zone_norm: followConfig.tilt_dead_zone_norm,
+    pan_resume_zone_norm: followConfig.pan_resume_zone_norm,
+    tilt_resume_zone_norm: followConfig.tilt_resume_zone_norm,
+    min_pan_step_deg: followConfig.min_pan_step_deg,
+    min_tilt_step_deg: followConfig.min_tilt_step_deg,
+    pan_min_step_zone_norm: followConfig.pan_min_step_zone_norm,
+    tilt_min_step_zone_norm: followConfig.tilt_min_step_zone_norm,
     max_pan_step_deg: followConfig.max_pan_step_deg,
     max_tilt_step_deg: followConfig.max_tilt_step_deg,
     rail_enabled: $("#railEnabled").checked,
@@ -900,14 +905,6 @@ async function startFollow() {
     rail_end_mm: Number($("#railEndMm").value || 140),
     rail_speed_mm_s: Number($("#railSpeedMmS").value || 5),
   };
-  if (!dryRun) {
-    const confirmText = $("#followRealConfirm").value.trim();
-    if (confirmText !== SAFE_TEXT) {
-      showError(new ApiError("SAFETY_CONFIRM_REQUIRED", `真实视觉跟随需要输入：${SAFE_TEXT}`));
-      return;
-    }
-    body.confirm_text = confirmText;
-  }
   try {
     const data = await postJsonLogged("/api/v1/follow/start", body);
     state.follow = data.follow || null;
@@ -1008,17 +1005,14 @@ async function sendAgentMessage() {
   if (!text) return;
   input.value = "";
   appendAgentMessage("我", text, "user");
-  $("#agentReplyDetail").textContent = "AI 正在处理...";
   $("#sendAgentBtn").disabled = true;
   try {
     const data = await postJson("/api/v1/agent/ask", { text, speak: false }, { timeout: 70000 });
     state.lastAgentReply = data;
     appendAgentMessage("AI", data.reply || data.message || "已完成。", "ai");
-    renderAgentReplyDetail(data);
     log("info", "AI 对话完成");
   } catch (error) {
     appendAgentMessage("ERROR", error.message || String(error), "error");
-    $("#agentReplyDetail").textContent = error.message || String(error);
     showError(error);
   } finally {
     $("#sendAgentBtn").disabled = false;
@@ -1031,7 +1025,6 @@ async function resetAgentSession() {
     state.agentMessages = [];
     state.lastAgentReply = null;
     renderAgentMessages();
-    $("#agentReplyDetail").textContent = "等待 AI 回复。";
     appendAgentMessage("SYSTEM", "AI 会话已重置。", "system");
   } catch (error) {
     showError(error);
@@ -1042,7 +1035,6 @@ function clearAgentChat() {
   state.agentMessages = [];
   state.lastAgentReply = null;
   renderAgentMessages();
-  $("#agentReplyDetail").textContent = "聊天记录已清空；后端会话未重置。";
 }
 
 function useAgentPrompt(text) {
@@ -1052,12 +1044,21 @@ function useAgentPrompt(text) {
 }
 
 async function stopNow() {
+  const errors = [];
+  try {
+    await postJson("/api/v1/follow/stop", {});
+  } catch (error) {
+    errors.push(error);
+  }
   try {
     await postJson("/api/v1/motion/stop", {});
-    log("info", "急停请求已发送");
-    await refreshState();
   } catch (error) {
-    showError(error);
+    errors.push(error);
+  }
+  log("info", "急停请求已发送");
+  await Promise.allSettled([refreshState(), refreshFollow()]);
+  if (errors.length) {
+    showError(errors[errors.length - 1]);
   }
 }
 
@@ -1080,15 +1081,6 @@ function renderConfig() {
     $("#followLatestUrl").value = latestUrl;
   }
   renderVisionPreviewUrl();
-  renderFollowRealControls();
-}
-
-function renderFollowRealControls() {
-  const dryRun = $("#followDryRun")?.checked !== false;
-  const input = $("#followRealConfirm");
-  if (!input) return;
-  input.disabled = dryRun;
-  if (dryRun) input.value = "";
 }
 
 function renderSession() {
@@ -1118,7 +1110,7 @@ function renderFollow() {
   const last = follow.last_command || {};
   const commands = Array.isArray(last.commands) ? last.commands : [];
   $("#followRunning").textContent = follow.running ? "运行" : "停止";
-  $("#followDryRunState").textContent = follow.dry_run === false ? "真实" : "dry-run";
+  $("#followModeState").textContent = follow.dry_run === false ? "real" : "dry-run";
   $("#followStepCount").textContent = String(follow.step_count ?? 0);
   const enabledJoints = Array.isArray(cfg.enabled_follow_joints) && cfg.enabled_follow_joints.length ? cfg.enabled_follow_joints : [cfg.pan_joint || "j11", cfg.tilt_joint || "j13"];
   $("#followJointState").textContent = enabledJoints.map((joint) => String(joint).toUpperCase()).join(", ");
@@ -1155,19 +1147,6 @@ function renderAgentStatus() {
   const toolCheck = agent.tool_check || {};
   $("#agentToolCheck").textContent = toolCheck.ok ? "通过" : toolCheck.message || "--";
   $("#agentToolCheck").className = toolCheck.ok ? "ok-text" : "bad-text";
-  $("#agentToolsResult").textContent = JSON.stringify(
-    {
-      available: agent.available,
-      backend: agent.backend,
-      model: agent.model,
-      allowed_tools: agent.allowed_tools || [],
-      allow_real_robot_tools: Boolean(agent.allow_real_robot_tools),
-      tool_check: agent.tool_check || {},
-      message: agent.message || "",
-    },
-    null,
-    2
-  );
 }
 
 function appendAgentMessage(role, text, kind) {
@@ -1186,19 +1165,6 @@ function renderAgentMessages() {
     )
     .join("");
   $("#agentChatLog").scrollTop = $("#agentChatLog").scrollHeight;
-}
-
-function renderAgentReplyDetail(data) {
-  $("#agentReplyDetail").textContent = JSON.stringify(
-    {
-      message: data.message || "",
-      session_id: data.session_id || "",
-      reply_chars: String(data.reply || "").length,
-      raw_payload: data.raw_payload || {},
-    },
-    null,
-    2
-  );
 }
 
 function renderCinematicStatus() {

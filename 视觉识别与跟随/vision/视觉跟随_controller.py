@@ -26,6 +26,16 @@ from 控制桥接_common import (  # noqa: E402
 from .WebAPI客户端_robot_api_client import RobotAPIClient, fetch_json_url
 
 
+MANUAL_TRACKER_PROFILE = {
+    "gain_scale": 0.35,
+    "max_step_deg": 0.25,
+    "min_step_deg": 0.0,
+    "dead_zone_norm": 0.06,
+    "resume_zone_norm": 0.10,
+    "min_step_zone_norm": 1.0,
+}
+
+
 class VisionFollowController:
     def __init__(
         self,
@@ -63,6 +73,7 @@ class VisionFollowController:
         self._step_count = 0
         self._last_ndx: float | None = None
         self._last_ndy: float | None = None
+        self._manual_axis_command_at: dict[str, float] = {}
         self.rail_cfg = self._load_rail_config()
         self._rail = RailSweepPlanner(
             self.rail_cfg,
@@ -116,7 +127,7 @@ class VisionFollowController:
         self._last_ndy = ndy
         commands: list[dict[str, Any]] = []
 
-        commands.extend(self._selected_follow_joint_commands(ndx, ndy))
+        commands.extend(self._selected_follow_joint_commands(ndx, ndy, latest))
 
         commands.extend(self._rail_commands())
 
@@ -192,8 +203,13 @@ class VisionFollowController:
                 "tilt_dead_zone_norm": self.follow_cfg.get("tilt_dead_zone_norm", 0.025),
                 "pan_resume_zone_norm": self.follow_cfg.get("pan_resume_zone_norm", self.follow_cfg.get("pan_dead_zone_norm", 0.02)),
                 "tilt_resume_zone_norm": self.follow_cfg.get("tilt_resume_zone_norm", self.follow_cfg.get("tilt_dead_zone_norm", 0.025)),
+                "min_pan_step_deg": self.follow_cfg.get("min_pan_step_deg", 0.0),
+                "min_tilt_step_deg": self.follow_cfg.get("min_tilt_step_deg", 0.0),
+                "pan_min_step_zone_norm": self.follow_cfg.get("pan_min_step_zone_norm", 1.0),
+                "tilt_min_step_zone_norm": self.follow_cfg.get("tilt_min_step_zone_norm", 1.0),
                 "max_pan_step_deg": self.follow_cfg.get("max_pan_step_deg", 1.0),
                 "max_tilt_step_deg": self.follow_cfg.get("max_tilt_step_deg", 1.0),
+                "manual_tracker_profile": self._manual_tracker_profile(),
                 "rail_cinematic": dict(self.rail_cfg),
             },
             "rail": self._rail_status(),
@@ -252,9 +268,10 @@ class VisionFollowController:
                 result.append(joint)
         return result or ["j11", "j13"]
 
-    def _selected_follow_joint_commands(self, ndx: float, ndy: float) -> list[dict[str, Any]]:
+    def _selected_follow_joint_commands(self, ndx: float, ndy: float, latest: dict[str, Any] | None = None) -> list[dict[str, Any]]:
         commands: list[dict[str, Any]] = []
         selected = set(self._enabled_follow_joints())
+        manual_tracker = self._is_manual_tracker(latest or {})
         for joint in FOLLOW_JOINT_AXES:
             if joint not in selected:
                 self._joint_active[joint] = False
@@ -272,6 +289,8 @@ class VisionFollowController:
                     min_key="min_pan_step_deg",
                     min_zone_key="pan_min_step_zone_norm",
                     max_key="max_pan_step_deg",
+                    manual_tracker=manual_tracker,
+                    axis=axis,
                 )
             else:
                 step = self._axis_step_for_joint(
@@ -285,6 +304,8 @@ class VisionFollowController:
                     min_key="min_tilt_step_deg",
                     min_zone_key="tilt_min_step_zone_norm",
                     max_key="max_tilt_step_deg",
+                    manual_tracker=manual_tracker,
+                    axis=axis,
                 )
             if step is not None:
                 commands.append({"joint_key": joint, "delta_deg": step, "kind": "vision_follow", "axis": axis})
@@ -332,21 +353,39 @@ class VisionFollowController:
         min_key: str,
         min_zone_key: str,
         max_key: str,
+        manual_tracker: bool = False,
+        axis: str = "",
     ) -> float | None:
         dead_zone = float(self.follow_cfg.get(dead_key, 0.02))
         resume_zone = float(self.follow_cfg.get(resume_key, dead_zone))
+        gain = float(self.follow_cfg.get(gain_key, self.follow_cfg.get(gain_alias, 1.0)))
+        min_step = float(self.follow_cfg.get(min_key, 0.0))
+        min_zone = float(self.follow_cfg.get(min_zone_key, 1.0))
+        max_step = float(self.follow_cfg.get(max_key, 1.0))
+        if manual_tracker:
+            profile = self._manual_tracker_profile()
+            dead_zone = float(profile["dead_zone_norm"])
+            resume_zone = float(profile["resume_zone_norm"])
+            gain *= float(profile["gain_scale"])
+            min_step = float(profile["min_step_deg"])
+            min_zone = float(profile["min_step_zone_norm"])
+            max_step = min(max_step, float(profile["max_step_deg"]))
         step, next_active = compute_axis_step(
             norm_value,
             active=bool(self._joint_active.get(joint, False)),
-            gain=float(self.follow_cfg.get(gain_key, self.follow_cfg.get(gain_alias, 1.0))),
+            gain=gain,
             sign=float(self.follow_cfg.get(sign_key, 1.0)),
             dead=dead_zone,
             resume=resume_zone,
-            min_step=float(self.follow_cfg.get(min_key, 0.0)),
-            min_zone=float(self.follow_cfg.get(min_zone_key, 1.0)),
-            max_step=float(self.follow_cfg.get(max_key, 1.0)),
+            min_step=min_step,
+            min_zone=min_zone,
+            max_step=max_step,
         )
         self._joint_active[joint] = next_active
+        if step is not None and manual_tracker and self._manual_axis_throttled(axis or FOLLOW_JOINT_AXES.get(joint, "")):
+            return None
+        if step is not None and manual_tracker:
+            self._manual_axis_command_at[axis or FOLLOW_JOINT_AXES.get(joint, "")] = time.monotonic()
         return step
 
     def _reset_joint_activity(self) -> None:
@@ -354,6 +393,31 @@ class VisionFollowController:
         self._tilt_active = False
         for joint in self._joint_active:
             self._joint_active[joint] = False
+        self._manual_axis_command_at.clear()
+
+    def _manual_tracker_profile(self) -> dict[str, float]:
+        raw = self.follow_cfg.get("manual_tracker_profile", {})
+        raw_profile = raw if isinstance(raw, dict) else {}
+
+        def read_float(key: str) -> float:
+            try:
+                return float(raw_profile.get(key, MANUAL_TRACKER_PROFILE[key]))
+            except (TypeError, ValueError):
+                return float(MANUAL_TRACKER_PROFILE[key])
+
+        return {key: read_float(key) for key in MANUAL_TRACKER_PROFILE}
+
+    def _manual_axis_throttled(self, axis: str) -> bool:
+        if not axis:
+            return False
+        min_interval = max(0.15, float(self.move_duration_sec))
+        last_at = float(self._manual_axis_command_at.get(axis, 0.0))
+        return last_at > 0 and time.monotonic() - last_at < min_interval
+
+    @staticmethod
+    def _is_manual_tracker(latest: dict[str, Any]) -> bool:
+        target = latest.get("target") if isinstance(latest.get("target"), dict) else {}
+        return str(latest.get("target_source") or target.get("source") or "").strip().lower() == "manual_tracker"
 
     def _load_rail_config(self) -> dict[str, Any]:
         raw = self.follow_cfg.get("rail_cinematic", {})

@@ -181,6 +181,14 @@ class FollowStartRequest(BaseModel):
     tilt_gain: float | None = None
     pan_sign: float | None = None
     tilt_sign: float | None = None
+    pan_dead_zone_norm: float | None = Field(None, ge=0.0, le=1.0)
+    tilt_dead_zone_norm: float | None = Field(None, ge=0.0, le=1.0)
+    pan_resume_zone_norm: float | None = Field(None, ge=0.0, le=1.0)
+    tilt_resume_zone_norm: float | None = Field(None, ge=0.0, le=1.0)
+    min_pan_step_deg: float | None = Field(None, ge=0.0)
+    min_tilt_step_deg: float | None = Field(None, ge=0.0)
+    pan_min_step_zone_norm: float | None = Field(None, ge=0.0, le=1.0)
+    tilt_min_step_zone_norm: float | None = Field(None, ge=0.0, le=1.0)
     max_pan_step_deg: float | None = Field(None, ge=0.0)
     max_tilt_step_deg: float | None = Field(None, ge=0.0)
     dry_run: bool = True

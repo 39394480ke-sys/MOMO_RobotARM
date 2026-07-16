@@ -76,12 +76,14 @@ def main() -> None:
         assert effective.get("min_tilt_step_deg") == 0.2, effective
         assert effective.get("pan_min_step_zone_norm") == 0.31, effective
         assert effective.get("tilt_min_step_zone_norm") == 0.32, effective
-        commands = (follow.get("last_command") or {}).get("commands") or []
-        joints = {item["joint_key"] for item in commands}
-        assert "j10" in joints, f"导轨运镜应包含 J10 命令，实际：{commands}"
-        assert {"j11", "j13"}.issubset(joints), f"人脸跟随应保留 J11/J13，实际：{commands}"
+        targets = (follow.get("last_command") or {}).get("targets_deg") or follow.get("targets_deg") or {}
+        joints = set(targets)
+        assert follow.get("control_mode") == "continuous_position_stream", follow
+        assert "j10" in joints, f"导轨运镜应包含 J10 目标，实际：{targets}"
+        assert float(targets["j10"]) < 0.0, f"J10 应先从当前位置向负向起点运动，实际：{targets}"
+        assert {"j11", "j13"}.issubset(joints), f"人脸跟随应保留 J11/J13，实际：{targets}"
         print("Web dry-run 视觉导轨跟随测试通过")
-        print(json.dumps({"commands": commands, "rail": follow.get("rail")}, ensure_ascii=False, indent=2))
+        print(json.dumps({"targets": targets, "rail": follow.get("rail")}, ensure_ascii=False, indent=2))
     finally:
         try:
             post_json("/api/v1/follow/stop")

@@ -207,12 +207,12 @@
                     <input id="followPollInterval" type="number" min="0.02" step="0.01" value="0.05" />
                   </label>
                   <label class="field">
-                    <span>速度 %</span>
-                    <input id="followSpeedPercent" type="number" min="1" max="100" step="1" value="60" />
+                    <span>控制频率 Hz</span>
+                    <input id="followControlHz" type="number" min="2" max="60" step="1" value="40" />
                   </label>
                   <label class="field">
-                    <span>跟随间隔 s</span>
-                    <input id="followMoveDuration" type="number" min="0.02" step="0.01" value="0.25" />
+                    <span>视觉过期 s</span>
+                    <input id="followStaleTimeout" type="number" min="0.05" max="2" step="0.05" value="0.25" />
                   </label>
                 </div>
               </section>
@@ -223,18 +223,14 @@
                   <button id="saveFollowConfigBtn">保存视觉参数</button>
                 </div>
                 <div class="input-grid two">
-                  <label class="field"><span>水平增益</span><input id="followPanGain" type="number" min="0" max="30" step="0.1" /></label>
-                  <label class="field"><span>垂直增益</span><input id="followTiltGain" type="number" min="0" max="30" step="0.1" /></label>
-                  <label class="field"><span>水平最大步进</span><input id="followMaxPanStep" type="number" min="0" max="30" step="0.1" /></label>
-                  <label class="field"><span>垂直最大步进</span><input id="followMaxTiltStep" type="number" min="0" max="30" step="0.1" /></label>
+                  <label class="field"><span>水平最大速度 °/s</span><input id="followMaxPanSpeed" type="number" min="0.1" max="60" step="0.5" /></label>
+                  <label class="field"><span>垂直最大速度 °/s</span><input id="followMaxTiltSpeed" type="number" min="0.1" max="60" step="0.5" /></label>
+                  <label class="field"><span>水平加速度 °/s²</span><input id="followPanAccel" type="number" min="0.1" max="180" step="1" /></label>
+                  <label class="field"><span>垂直加速度 °/s²</span><input id="followTiltAccel" type="number" min="0.1" max="180" step="1" /></label>
                   <label class="field"><span>水平死区</span><input id="followPanDead" type="number" min="0" max="1" step="0.005" /></label>
                   <label class="field"><span>垂直死区</span><input id="followTiltDead" type="number" min="0" max="1" step="0.005" /></label>
                   <label class="field"><span>水平恢复区</span><input id="followPanResume" type="number" min="0" max="1" step="0.005" /></label>
                   <label class="field"><span>垂直恢复区</span><input id="followTiltResume" type="number" min="0" max="1" step="0.005" /></label>
-                  <label class="field"><span>水平最小步进</span><input id="followMinPanStep" type="number" min="0" max="30" step="0.1" /></label>
-                  <label class="field"><span>垂直最小步进</span><input id="followMinTiltStep" type="number" min="0" max="30" step="0.1" /></label>
-                  <label class="field"><span>水平最小区</span><input id="followPanMinZone" type="number" min="0" max="1" step="0.005" /></label>
-                  <label class="field"><span>垂直最小区</span><input id="followTiltMinZone" type="number" min="0" max="1" step="0.005" /></label>
                   <label class="field"><span>水平方向</span><select id="followPanSign"><option value="1">正常</option><option value="-1">反向</option></select></label>
                   <label class="field"><span>垂直方向</span><select id="followTiltSign"><option value="1">正常</option><option value="-1">反向</option></select></label>
                 </div>
@@ -272,7 +268,7 @@
                 <dl class="kv wide">
                   <dt>跟随</dt><dd id="followRunning">--</dd>
                   <dt>模式</dt><dd id="followModeState">--</dd>
-                  <dt>步数</dt><dd id="followStepCount">--</dd>
+                  <dt>控制周期</dt><dd id="followStepCount">--</dd>
                   <dt>关节</dt><dd id="followJointState">--</dd>
                   <dt>死区</dt><dd id="followDeadZoneState">--</dd>
                   <dt>导轨</dt><dd id="followRailState">--</dd>
@@ -693,6 +689,6 @@
       </div>
     </div>
 
-    <script src="/static/app.js?v=20260716-remove-teach-recording"></script>
+    <script src="/static/app.js?v=20260716-continuous-follow"></script>
   </body>
 </html>

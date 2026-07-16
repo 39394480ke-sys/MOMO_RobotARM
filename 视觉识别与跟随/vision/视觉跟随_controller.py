@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import threading
 import time
+from collections import deque
 from typing import Any, Callable
 
 from .路径工具_path_utils import ensure_project_root_on_path
@@ -24,6 +25,7 @@ from 控制桥接_common import (  # noqa: E402
 )
 
 from .WebAPI客户端_robot_api_client import RobotAPIClient, fetch_json_url
+from .连续跟随_control import ContinuousFollowPlanner
 
 
 MANUAL_TRACKER_PROFILE = {
@@ -48,12 +50,18 @@ class VisionFollowController:
         latest_url: str | None = None,
         latest_provider: Callable[[], dict[str, Any]] | None = None,
         dry_run: bool | None = None,
+        initial_state_provider: Callable[[], dict[str, float]] | None = None,
+        stream_writer: Callable[[dict[str, float]], dict[str, Any]] | None = None,
+        stream_sync: Callable[[], dict[str, Any]] | None = None,
     ):
         self.config = dict(config or {})
         self.follow_cfg = dict(self.config.get("follow", self.config))
         self.engine = engine
         self.latest_url = latest_url or str(self.follow_cfg.get("latest_url", "http://127.0.0.1:8000/latest"))
         self.latest_provider = latest_provider
+        self.initial_state_provider = initial_state_provider
+        self.stream_writer = stream_writer
+        self.stream_sync = stream_sync
         self.poll_interval_sec = float(self.follow_cfg.get("poll_interval_sec", self.follow_cfg.get("poll_interval", 0.08)))
         self.http_timeout_sec = float(self.follow_cfg.get("http_timeout_sec", 1.0))
         self.move_duration_sec = float(self.follow_cfg.get("move_duration_sec", self.follow_cfg.get("move_duration", 0.20)))
@@ -68,6 +76,9 @@ class VisionFollowController:
         )
         self._running = False
         self._thread: threading.Thread | None = None
+        self._sample_thread: threading.Thread | None = None
+        self._control_thread: threading.Thread | None = None
+        self._stop_event = threading.Event()
         self._lock = threading.RLock()
         self._pan_active = False
         self._tilt_active = False
@@ -79,6 +90,19 @@ class VisionFollowController:
         self._last_ndx: float | None = None
         self._last_ndy: float | None = None
         self._manual_axis_command_at: dict[str, float] = {}
+        self.control_update_hz = max(2.0, min(60.0, float(self.follow_cfg.get("control_update_hz", 40.0))))
+        self.vision_stale_timeout_sec = max(0.05, float(self.follow_cfg.get("vision_stale_timeout_sec", 0.25)))
+        self._stream_latest: dict[str, Any] = {}
+        self._stream_latest_at = 0.0
+        self._stream_latest_key: Any = None
+        self._stream_targets: dict[str, float] = {}
+        self._stream_velocities: dict[str, float] = {}
+        self._hold_reason = "starting"
+        self._tick_count = 0
+        self._write_count = 0
+        self._skipped_tick_count = 0
+        self._intervals: deque[float] = deque(maxlen=256)
+        self._stream_sync_done = False
         self.rail_cfg = self._load_rail_config()
         self._rail = RailSweepPlanner(
             self.rail_cfg,
@@ -92,18 +116,45 @@ class VisionFollowController:
             if self._running:
                 return self.get_status()
             self._running = True
+            self._stop_event.clear()
+            if self._uses_continuous_stream():
+                self._stream_sync_done = False
+                self._sample_thread = threading.Thread(target=self._sample_loop, name="vision-follow-sample", daemon=True)
+                self._control_thread = threading.Thread(target=self._control_loop, name="vision-follow-control", daemon=True)
+                self._sample_thread.start()
+                self._control_thread.start()
+                return self.get_status()
             self._thread = threading.Thread(target=self._loop, name="vision-follow", daemon=True)
             self._thread.start()
             return self.get_status()
 
     def stop(self) -> dict[str, Any]:
-        with self._lock:
-            self._running = False
+        self.request_stop()
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=1.0)
+        for thread in (self._sample_thread, self._control_thread):
+            if thread and thread.is_alive():
+                thread.join(timeout=1.0)
+        self._sync_stream_once()
         self._reset_joint_activity()
         self._rail.stop("idle")
         return self.get_status()
+
+    def request_stop(self) -> None:
+        """非阻塞请求停止，供持有 Web 运动锁的互斥路径使用。"""
+
+        with self._lock:
+            self._running = False
+            self._stop_event.set()
+
+    def _sync_stream_once(self) -> None:
+        if not self._uses_continuous_stream() or self.stream_sync is None:
+            return
+        with self._lock:
+            if self._stream_sync_done:
+                return
+            self._stream_sync_done = True
+        self.stream_sync()
 
     def step_once(self) -> dict[str, Any]:
         latest = self._read_latest()
@@ -187,14 +238,41 @@ class VisionFollowController:
         latest = self._last_result or {}
         offset = latest.get("offset") or {}
         smoothed = latest.get("smoothed_offset") or {}
+        intervals = list(self._intervals)
+        sorted_intervals = sorted(intervals)
+        p95 = sorted_intervals[min(len(sorted_intervals) - 1, int(len(sorted_intervals) * 0.95))] if intervals else 0.0
+        mean_interval = sum(intervals) / len(intervals) if intervals else 0.0
         return {
             "running": bool(self._running),
-            "thread_alive": bool(self._thread and self._thread.is_alive()),
+            "thread_alive": bool(
+                (self._thread and self._thread.is_alive())
+                or (self._sample_thread and self._sample_thread.is_alive())
+                or (self._control_thread and self._control_thread.is_alive())
+            ),
+            "control_mode": "continuous_position_stream" if self._uses_continuous_stream() else "joint_step",
+            "control_update_hz": self.control_update_hz,
+            "actual_update_hz": round(1.0 / mean_interval, 3) if mean_interval > 0 else 0.0,
+            "mean_interval_ms": round(mean_interval * 1000.0, 3),
+            "p95_interval_ms": round(p95 * 1000.0, 3),
+            "max_interval_ms": round(max(intervals) * 1000.0, 3) if intervals else 0.0,
+            "tick_count": self._tick_count,
+            "write_count": self._write_count,
+            "skipped_tick_count": self._skipped_tick_count,
+            "latest_vision_age_ms": round(max(0.0, time.monotonic() - self._stream_latest_at) * 1000.0, 3) if self._stream_latest_at else None,
+            "hold_reason": self._hold_reason,
+            "targets_deg": dict(self._stream_targets),
+            "velocities_deg_s": dict(self._stream_velocities),
             "dry_run": self.dry_run,
             "latest_url": self.latest_url,
             "robot_api_base": self.robot_client.base_url,
             "effective_config": {
                 "poll_interval_sec": self.poll_interval_sec,
+                "control_update_hz": self.control_update_hz,
+                "vision_stale_timeout_sec": self.vision_stale_timeout_sec,
+                "max_pan_speed_deg_s": float(self.follow_cfg.get("max_pan_speed_deg_s", 12.0)),
+                "max_tilt_speed_deg_s": float(self.follow_cfg.get("max_tilt_speed_deg_s", 10.0)),
+                "pan_accel_deg_s2": float(self.follow_cfg.get("pan_accel_deg_s2", 30.0)),
+                "tilt_accel_deg_s2": float(self.follow_cfg.get("tilt_accel_deg_s2", 25.0)),
                 "move_duration_sec": self.move_duration_sec,
                 "speed_percent": self.speed_percent,
                 "speed_step_scale": self._speed_step_scale,
@@ -222,7 +300,7 @@ class VisionFollowController:
             "pan_active": self._pan_active,
             "tilt_active": self._tilt_active,
             "joint_active": dict(self._joint_active),
-            "step_count": self._step_count,
+            "step_count": self._tick_count if self._uses_continuous_stream() else self._step_count,
             "last_command": self._last_command,
             "last_vision": {
                 "detected": latest.get("detected", False),
@@ -252,6 +330,102 @@ class VisionFollowController:
                 self._last_error = str(exc)
                 self._remember_command(self._command_result("error", f"视觉跟随异常：{exc}", ok=False))
             time.sleep(max(0.02, self.poll_interval_sec))
+
+    def _uses_continuous_stream(self) -> bool:
+        return self.command_mode.strip().lower() in {"stream", "continuous", "continuous_position_stream"} and (
+            self.dry_run or (self.initial_state_provider is not None and self.stream_writer is not None)
+        )
+
+    def _sample_loop(self) -> None:
+        while not self._stop_event.is_set():
+            try:
+                latest = self._read_latest()
+                now = time.monotonic()
+                key = latest.get("frame_id", latest.get("timestamp"))
+                with self._lock:
+                    self._stream_latest = latest
+                    if key is None or key != self._stream_latest_key:
+                        self._stream_latest_at = now
+                        self._stream_latest_key = key
+                    self._last_result = latest
+            except Exception as exc:
+                self._last_error = str(exc)
+            self._stop_event.wait(max(0.01, self.poll_interval_sec))
+
+    def _control_loop(self) -> None:
+        initial = self.initial_state_provider() if self.initial_state_provider is not None else {}
+        planner = ContinuousFollowPlanner(self.follow_cfg, initial)
+        rail_target = float(initial.get("j10", self._rail.virtual_pos_mm))
+        self._rail.reset(rail_target, running=bool(self.rail_cfg.get("enabled", False)), phase="seek_start")
+        period = 1.0 / self.control_update_hz
+        last_tick = time.monotonic()
+        deadline = last_tick + period
+        previous_tick: float | None = None
+        while not self._stop_event.is_set():
+            if self._stop_event.wait(max(0.0, deadline - time.monotonic())):
+                break
+            now = time.monotonic()
+            if now - deadline >= period:
+                skipped = int((now - deadline) // period)
+                self._skipped_tick_count += skipped
+                deadline += skipped * period
+            dt = max(0.0, now - last_tick)
+            last_tick = now
+            deadline += period
+            if previous_tick is not None:
+                self._intervals.append(now - previous_tick)
+            previous_tick = now
+            with self._lock:
+                latest = dict(self._stream_latest)
+                latest_at = self._stream_latest_at
+            hold = ""
+            guard = self._target_safety_check(latest) if latest else self._command_result("no_target", "没有视觉结果。")
+            offset = read_smoothed_offset(latest) if latest else None
+            if not latest_at or now - latest_at > self.vision_stale_timeout_sec:
+                hold = "vision_stale"
+            elif guard is not None:
+                hold = str(guard.get("action", "target_guard"))
+            elif offset is None:
+                hold = "invalid_offset"
+            ndx, ndy = offset or (0.0, 0.0)
+            frame = planner.step(
+                ndx,
+                ndy,
+                dt=dt,
+                hold_reason=hold,
+                manual_tracker=self._is_manual_tracker(latest),
+            )
+            targets = dict(frame.targets_deg)
+            rail_step = self._rail.step(default_dt_sec=dt, live_pos_mm=rail_target) if self._rail.running else None
+            if rail_step is not None:
+                rail_target += rail_step
+                targets["j10"] = rail_target
+            response = {"ok": True, "dry_run": True, "data": {"written_joints": list(targets)}}
+            if self._stop_event.is_set():
+                break
+            if not hold and not self.dry_run and self.stream_writer is not None:
+                response = self.stream_writer(targets)
+            if not hold:
+                self._write_count += len(response.get("data", {}).get("written_joints", targets)) if response.get("ok") else 0
+            self._tick_count += 1
+            self._stream_targets = targets
+            self._stream_velocities = dict(frame.velocities_deg_s)
+            self._hold_reason = hold
+            self._last_command = {
+                "ok": bool(response.get("ok", False)),
+                "action": "position_stream" if not hold else "hold",
+                "targets_deg": targets,
+                "velocities_deg_s": dict(frame.velocities_deg_s),
+                "hold_reason": hold,
+                "response": response,
+                "timestamp": time.time(),
+            }
+            if not response.get("ok", False) and not self._stop_event.is_set():
+                self._last_error = str(response.get("message") or response.get("error") or "连续视觉跟随写入失败。")
+                self._stop_event.set()
+                self._running = False
+        self._running = False
+        self._sync_stream_once()
 
     def _read_latest(self) -> dict[str, Any]:
         if self.latest_provider is not None:

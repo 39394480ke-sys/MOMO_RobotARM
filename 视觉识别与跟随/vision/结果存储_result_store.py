@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import threading
+import time
 from pathlib import Path
 from typing import Any
 
@@ -36,6 +37,10 @@ class ResultStore:
             self.base_dir,
         )
         self.save_latest_frame = bool(self.config.get("save_latest_frame", True))
+        persist_hz = max(0.1, float(self.config.get("persist_hz", 5.0)))
+        self.persist_interval_sec = 1.0 / persist_hz
+        self._last_result_persist_at = 0.0
+        self._last_frame_persist_at = 0.0
         self._lock = threading.RLock()
         self._latest_result: dict[str, Any] = {}
         self._latest_frame: Any | None = None
@@ -44,13 +49,23 @@ class ResultStore:
     def save_result(self, result: dict[str, Any]) -> None:
         with self._lock:
             self._latest_result = dict(result)
-            atomic_write_json(self.latest_result_path, result)
+            now = time.monotonic()
+            if now - self._last_result_persist_at >= self.persist_interval_sec:
+                atomic_write_json(self.latest_result_path, result)
+                self._last_result_persist_at = now
 
     def save_frame(self, frame: Any) -> None:
         with self._lock:
             self._latest_frame = frame.copy() if hasattr(frame, "copy") else frame
-            if self.save_latest_frame and cv2 is not None and frame is not None:
+            now = time.monotonic()
+            if (
+                self.save_latest_frame
+                and cv2 is not None
+                and frame is not None
+                and now - self._last_frame_persist_at >= self.persist_interval_sec
+            ):
                 cv2.imwrite(str(self.latest_frame_path), frame)
+                self._last_frame_persist_at = now
 
     def get_latest_result(self) -> dict[str, Any]:
         with self._lock:

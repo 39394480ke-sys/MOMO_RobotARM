@@ -165,13 +165,6 @@
                   <span>动作名称</span>
                   <input id="recordingNameInput" placeholder="例如：Web录制_抓取演示" />
                 </label>
-                <label class="field">
-                  <span>录制模式</span>
-                  <select id="recordingSourceSelect">
-                    <option value="web_record" selected>普通录制</option>
-                    <option value="web_teach_mode">示教录制</option>
-                  </select>
-                </label>
                 <div class="button-row">
                   <button id="startRecordingBtn" class="primary">开始录制</button>
                   <button id="captureRecordingBtn">采集当前帧</button>
@@ -647,14 +640,12 @@
                   <button id="resetMotionTuningBtn">恢复推荐值</button>
                 </div>
                 <div class="input-grid two">
-                  <label class="field"><span>速度 %</span><input id="motionSpeedPercent" type="number" min="10" max="100" step="1" /></label>
-                  <label class="field"><span>单击用时 s</span><input id="quickStepDuration" type="number" min="0.05" max="10" step="0.05" /></label>
-                  <label class="field"><span>单击帧数</span><input id="quickStepFrames" type="number" min="1" max="240" step="1" /></label>
+                  <label class="field"><span>AI 运镜速度 %</span><input id="motionSpeedPercent" type="number" min="10" max="100" step="1" /></label>
                   <label class="field"><span>长按刷新率 Hz</span><input id="continuousUpdateHz" type="number" min="2" max="60" step="1" /></label>
-                  <label class="field"><span>播放刷新率 Hz</span><input id="playbackUpdateHz" type="number" min="2" max="60" step="1" /></label>
+                  <label class="field"><span>AI 运镜刷新率 Hz</span><input id="playbackUpdateHz" type="number" min="2" max="60" step="1" /></label>
                 </div>
                 <div class="motion-direction-block">
-                  <div class="subhead">连续/快速方向修正</div>
+                  <div class="subhead">长按方向修正</div>
                   <div id="jogDirectionOverrides" class="direction-grid"></div>
                 </div>
                 <button id="saveMotionTuningBtn" class="primary">保存调参</button>
@@ -702,6 +693,6 @@
       </div>
     </div>
 
-    <script src="/static/app.js?v=20260628-kinematics-ui"></script>
+    <script src="/static/app.js?v=20260716-remove-teach-recording"></script>
   </body>
 </html>

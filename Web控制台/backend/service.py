@@ -1041,9 +1041,7 @@ class WebControlService:
 
     def start_action_recording(self, request: ActionRecordingStartRequest) -> dict[str, Any]:
         with self._lock:
-            if request.source == "web_teach_mode":
-                self._require_real_confirm(request.confirm_text, action="真实示教录制")
-            result = self.bridge.start_action_recording(request.name, request.source)
+            result = self.bridge.start_action_recording(request.name)
             return self._unwrap_bridge(result, code="ACTION_RECORDING_START_FAILED")
 
     def capture_action_recording_pose(self, request: ActionRecordingCaptureRequest) -> dict[str, Any]:

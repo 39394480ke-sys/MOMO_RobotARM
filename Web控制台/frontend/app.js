@@ -767,8 +767,7 @@ async function playAction(name) {
 async function startActionRecording() {
   const fallback = `Web录制_${new Date().toTimeString().slice(0, 8).replaceAll(":", "")}`;
   const name = $("#recordingNameInput").value.trim() || fallback;
-  const source = $("#recordingSourceSelect").value || "web_record";
-  const body = await withSafety({ name, source }, source === "web_teach_mode");
+  const body = await withSafety({ name });
   if (!body) return;
   try {
     const data = await postJsonLogged("/api/v1/actions/recording/start", body);
@@ -1961,7 +1960,6 @@ function renderRecordingStatus(latestPose = null) {
   $("#recordingStatus").textContent = active ? `录制中 ${count} 帧` : "未开始";
   $("#recordingStatus").className = `status-pill ${active ? "good" : "warn"}`;
   $("#recordingNameInput").disabled = active;
-  $("#recordingSourceSelect").disabled = active;
   $("#startRecordingBtn").disabled = active;
   $("#captureRecordingBtn").disabled = !active;
   $("#saveRecordingBtn").disabled = !active || count <= 0;
@@ -1994,8 +1992,8 @@ async function showActionDetail(name) {
 
 async function deleteAction(name) {
   try {
-    const typed = window.prompt(`输入动作名确认删除：${name}`);
-    if (typed !== name) return;
+    const confirmed = window.confirm(`是否确认删除动作：${name}？\n删除后无法恢复。`);
+    if (!confirmed) return;
     await deleteJson(`/api/v1/actions/${encodeURIComponent(name)}`, { timeout: 8000 });
     $("#actionDetailName").textContent = "未选择";
     $("#actionDetailSummary").textContent = "请选择一个动作。";
@@ -2284,8 +2282,6 @@ function renderMotionTuning() {
   const t = state.motionTuning || state.config?.motion || {};
   const overrides = t.jog_direction_overrides || {};
   $("#motionSpeedPercent").value = formatNum(t.default_speed_percent ?? 50, 0);
-  $("#quickStepDuration").value = formatNum(t.quick_step_duration_s ?? 0.8, 2);
-  $("#quickStepFrames").value = String(t.quick_step_frames ?? 12);
   $("#continuousUpdateHz").value = formatNum(t.continuous_update_hz ?? 50, 1);
   $("#playbackUpdateHz").value = formatNum(t.playback_update_hz ?? 20, 1);
   $$("[data-jog-direction]").forEach((select) => {
@@ -2311,8 +2307,6 @@ function readJogDirectionOverrides() {
 async function saveMotionTuning() {
   const body = {
     default_speed_percent: Number($("#motionSpeedPercent").value || 50),
-    quick_step_duration_s: Number($("#quickStepDuration").value || 0.8),
-    quick_step_frames: Number($("#quickStepFrames").value || 12),
     continuous_update_hz: Number($("#continuousUpdateHz").value || 50),
     playback_update_hz: Number($("#playbackUpdateHz").value || 20),
     jog_direction_overrides: readJogDirectionOverrides(),
@@ -2331,10 +2325,15 @@ async function saveMotionTuning() {
 
 async function resetMotionTuning() {
   try {
-    const data = await postJson("/api/v1/motion/tuning/reset", {});
+    const data = await postJson("/api/v1/motion/tuning", {
+      default_speed_percent: 50,
+      continuous_update_hz: 50,
+      playback_update_hz: 20,
+      jog_direction_overrides: Object.fromEntries(JOINTS.map(([key]) => [key, 1])),
+    });
     state.motionTuning = data.motion || data;
     renderMotionTuning();
-    $("#motionTuningState").textContent = `已恢复并同步 ${Array.isArray(data.saved_paths) ? data.saved_paths.length : 0} 个配置文件`;
+    $("#motionTuningState").textContent = `已恢复 Web 推荐值并同步 ${Array.isArray(data.saved_paths) ? data.saved_paths.length : 0} 个配置文件`;
     $("#motionTuningState").className = "inline-status ok-text";
     log("info", "运动调参已恢复推荐值");
   } catch (error) {

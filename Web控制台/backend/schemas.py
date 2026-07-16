@@ -139,7 +139,6 @@ class PlayActionRequest(BaseModel):
 
 class ActionRecordingStartRequest(BaseModel):
     name: str = Field(..., min_length=1)
-    source: Literal["web_record", "web_teach_mode"] = "web_record"
     confirm_text: str = ""
 
 

@@ -140,7 +140,22 @@ def connect_optional_gripper_bus(port: str, include_gripper: bool, backend: str 
 
     bus = create_feetech_bus(port, include_gripper=True, backend=backend, baudrate=baudrate)
     try:
-        bus.connect()
+        found = bus.connect()
+        if isinstance(found, dict):
+            found_ids = {int(motor_id) for motor_id in found}
+            expected_arm_ids = [ARM_MOTOR_IDS[joint_name] for joint_name in JOINTS]
+            missing_arm_ids = sorted(motor_id for motor_id in expected_arm_ids if motor_id not in found_ids)
+            if missing_arm_ids:
+                raise RuntimeError(
+                    f"Missing motor IDs: {missing_arm_ids}. Full found motor list: {found}. "
+                    f"Expected arm motor IDs: {expected_arm_ids}."
+                )
+            gripper_id = ARM_MOTOR_IDS["gripper"]
+            if gripper_id not in found_ids:
+                print("未识别到夹爪舵机 ID16，自动禁用夹爪并改用 6 轴模式继续标定。")
+                bus.disconnect()
+                bus = connect_feetech_bus(port, include_gripper=False, backend=backend, baudrate=baudrate)
+                return bus, False
         return bus, True
     except Exception as error:
         message = str(error)

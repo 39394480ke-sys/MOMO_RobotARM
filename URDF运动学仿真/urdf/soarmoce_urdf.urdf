@@ -101,42 +101,42 @@
   <joint name="J10" type="prismatic">
     <parent link="base_link"/>
     <child link="Link_1"/>
-    <origin xyz="0.13 0.0045 0" rpy="0 -1.57079633 0"/>
-    <axis xyz="0 0 -1"/>
+    <origin xyz="-0.00000505 -0.005287 0.0922507" rpy="3.14159265 0 3.14159265"/>
+    <axis xyz="0 0 1"/>
     <limit lower="-0.1" upper="0.1" effort="100" velocity="0.1"/>
   </joint>
   <joint name="J11" type="revolute">
     <parent link="Link_1"/>
     <child link="Link_2"/>
-    <origin xyz="0.0952507 -0.009787 0.13000505" rpy="0 1.57079633 0"/>
-    <axis xyz="0 0 -1"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <axis xyz="0 0 1"/>
     <limit lower="-3.14159" upper="3.14159" effort="10" velocity="1"/>
   </joint>
   <joint name="J12" type="revolute">
     <parent link="Link_2"/>
     <child link="Link_3"/>
-    <origin xyz="-0.030995 3e-8 0.10390639" rpy="1.57079633 0 1.57079633"/>
-    <axis xyz="0 0 -1"/>
+    <origin xyz="-0.031005 3e-8 -0.10690639" rpy="-1.57079633 0 -1.57079633"/>
+    <axis xyz="0 0 1"/>
     <limit lower="-3.14159" upper="3.14159" effort="10" velocity="1"/>
   </joint>
   <joint name="J13" type="revolute">
     <parent link="Link_3"/>
     <child link="Link_4"/>
-    <origin xyz="-0.12501147 0.043 -0.002" rpy="3.14159265 0 3.14159265"/>
-    <axis xyz="0 0 1"/>
+    <origin xyz="0.12501147 0.043 0.062" rpy="-3.14159265 0 3.14159265"/>
+    <axis xyz="0 0 -1"/>
     <limit lower="-3.14159" upper="3.14159" effort="10" velocity="1"/>
   </joint>
   <joint name="J14" type="revolute">
     <parent link="Link_4"/>
     <child link="Link_5"/>
-    <origin xyz="-0.00025571 0.1529998 -0.013775" rpy="0 0 0"/>
+    <origin xyz="0.153 0.000075 0.011775" rpy="-3.14159265 0 3.14159265"/>
     <axis xyz="0 0 -1"/>
     <limit lower="-3.14159" upper="3.14159" effort="10" velocity="1"/>
   </joint>
   <joint name="J15" type="revolute">
     <parent link="Link_5"/>
     <child link="Link_6"/>
-    <origin xyz="-0.00014171 0.07712488 -0.015925" rpy="-1.57079633 0 -3.13943131"/>
+    <origin xyz="-0.067125 0.00002501 -0.015925" rpy="-1.57079633 0 1.57079618"/>
     <axis xyz="0 0 1"/>
     <limit lower="-3.14159" upper="3.14159" effort="10" velocity="1"/>
   </joint>

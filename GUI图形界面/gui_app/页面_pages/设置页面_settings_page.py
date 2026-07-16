@@ -86,12 +86,10 @@ class SettingsPage(QWidget):
         self.quick_step_duration_input = make_double_spin(0.05, 10.0, DEFAULT_MOTION_TUNING["quick_step_duration_s"], 0.05, 2, " s")
         self.quick_step_frames_input = make_int_spin(1, 240, DEFAULT_MOTION_TUNING["quick_step_frames"], 1)
         self.continuous_update_hz_input = make_double_spin(2.0, 60.0, DEFAULT_MOTION_TUNING["continuous_update_hz"], 1.0, 1, " Hz")
-        self.continuous_target_horizon_input = make_double_spin(0.0, 2.0, DEFAULT_MOTION_TUNING["continuous_target_horizon_s"], 0.05, 2, " s")
         self.playback_update_hz_input = make_double_spin(2.0, 60.0, DEFAULT_MOTION_TUNING["playback_update_hz"], 1.0, 1, " Hz")
         motion_form.addRow("单击用时", self.quick_step_duration_input)
         motion_form.addRow("单击帧数", self.quick_step_frames_input)
         motion_form.addRow("长按刷新率", self.continuous_update_hz_input)
-        motion_form.addRow("长按前瞻", self.continuous_target_horizon_input)
         motion_form.addRow("动作/AI运镜刷新率", self.playback_update_hz_input)
         self.reset_motion_button = QPushButton("恢复推荐值")
         self.reset_motion_button.setObjectName("GhostButton")
@@ -121,7 +119,6 @@ class SettingsPage(QWidget):
             self.quick_step_duration_input,
             self.quick_step_frames_input,
             self.continuous_update_hz_input,
-            self.continuous_target_horizon_input,
             self.playback_update_hz_input,
         ):
             widget.valueChanged.connect(self._emit_motion_tuning_changed)
@@ -160,7 +157,6 @@ class SettingsPage(QWidget):
             self.quick_step_duration_input.setValue(float(tuning.get("quick_step_duration_s", DEFAULT_MOTION_TUNING["quick_step_duration_s"])))
             self.quick_step_frames_input.setValue(int(tuning.get("quick_step_frames", DEFAULT_MOTION_TUNING["quick_step_frames"])))
             self.continuous_update_hz_input.setValue(float(tuning.get("continuous_update_hz", DEFAULT_MOTION_TUNING["continuous_update_hz"])))
-            self.continuous_target_horizon_input.setValue(float(tuning.get("continuous_target_horizon_s", DEFAULT_MOTION_TUNING["continuous_target_horizon_s"])))
             self.playback_update_hz_input.setValue(float(tuning.get("playback_update_hz", DEFAULT_MOTION_TUNING["playback_update_hz"])))
             raw_overrides = tuning.get("jog_direction_overrides", {})
             self.motion_direction_overrides = dict(raw_overrides) if isinstance(raw_overrides, dict) else {}
@@ -172,7 +168,6 @@ class SettingsPage(QWidget):
             "quick_step_duration_s": float(self.quick_step_duration_input.value()),
             "quick_step_frames": int(self.quick_step_frames_input.value()),
             "continuous_update_hz": float(self.continuous_update_hz_input.value()),
-            "continuous_target_horizon_s": float(self.continuous_target_horizon_input.value()),
             "playback_update_hz": float(self.playback_update_hz_input.value()),
             "jog_direction_overrides": dict(self.motion_direction_overrides),
         }

@@ -209,7 +209,7 @@ def test_motion_tuning_normalization_helpers() -> None:
             "quick_step_duration_s": "99",
             "quick_step_frames": "500",
             "continuous_update_hz": "bad",
-            "continuous_target_horizon_s": -1,
+            "continuous_target_horizon_s": 1.5,
             "playback_update_hz": 100,
             "jog_direction_overrides": {"J10": "-1", "j11": "反", "j12": "reverse", "j13": 1},
         },
@@ -219,7 +219,7 @@ def test_motion_tuning_normalization_helpers() -> None:
     assert normalized["quick_step_duration_s"] == 10.0
     assert normalized["quick_step_frames"] == 8
     assert normalized["continuous_update_hz"] == DEFAULT_MOTION_TUNING["continuous_update_hz"]
-    assert normalized["continuous_target_horizon_s"] == 0.0
+    assert "continuous_target_horizon_s" not in normalized
     assert normalized["playback_update_hz"] == 60.0
     assert normalized["jog_direction_overrides"] == {
         "j10": -1,

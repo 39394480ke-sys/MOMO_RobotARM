@@ -66,6 +66,7 @@ from 控制桥接_common import (  # noqa: E402
     state_tcp_pose,
 )
 from 通用_io import atomic_write_json, latest_matching_file, log_json_line  # noqa: E402
+from 真实舵机控制.连续关节流_continuous_joint_stream import run_continuous_joint_stream  # noqa: E402
 from gui_app.结果格式化_result_format import result_data
 
 
@@ -119,8 +120,8 @@ class ControllerBridge:
     def set_motion_tuning(self, values: dict[str, Any]) -> dict[str, Any]:
         tuning = self._motion_tuning(values)
         motion = self.config.setdefault("motion", {})
-        for key, value in tuning.items():
-            motion[key] = value
+        motion.pop("continuous_target_horizon_s", None)
+        motion.update(tuning)
         self.motion_speed_percent = float(tuning["default_speed_percent"])
         if self.sequence_player is not None:
             try:
@@ -283,8 +284,6 @@ class ControllerBridge:
                 return fail("连续速度必须大于 0。")
             tuning = self._motion_tuning()
             update_hz = max(1.0, float(tuning["continuous_update_hz"]))
-            horizon_s = max(0.0, float(tuning["continuous_target_horizon_s"]))
-            sleep_s = 1.0 / update_hz
             stop_event = threading.Event()
             self._continuous_jog_stop = stop_event
             self._continuous_jog_joint = joint_key
@@ -299,74 +298,131 @@ class ControllerBridge:
                 current_deg = float(current.get(joint_key, 0.0))
                 start_deg = current_deg
 
-            frame_count = 0
-            started_at = time.monotonic()
-            last_target = start_deg
-            while not stop_event.is_set():
-                elapsed = time.monotonic() - started_at
-                # Continuous jog must not command a future point far ahead of the
-                # current time; otherwise releasing the button can make the servo
-                # stop short and the UI appears to jump backward.
-                delta = signed_direction * speed * elapsed
-                target_deg = start_deg + delta
-                precheck = self._precheck_single_joint_target(joint_key, target_deg, last_target, delta)
-                if precheck is not None:
-                    stop_event.set()
+            max_step = float(
+                self.config.get("safety", {}).get(
+                    "max_real_step_deg" if self.mode == "real" else "max_gui_step_deg",
+                    5.0,
+                )
+            )
+            failure_result: dict[str, Any] | None = None
+
+            def write_target(target_deg: float) -> bool:
+                nonlocal failure_result
+                if stop_event.is_set():
+                    return False
+                with self.io_lock:
+                    if stop_event.is_set():
+                        return False
+                    previous_target = float(self._joint_command_targets.get(joint_key, start_deg))
+                    precheck = self._precheck_single_joint_target(
+                        joint_key,
+                        target_deg,
+                        previous_target,
+                        target_deg - previous_target,
+                    )
+                    if precheck is not None:
+                        failure_result = precheck
+                        raise RuntimeError(str(precheck.get("message") or "连续控制安全检查失败。"))
+                    normalized = self._stream_joint_target_unlocked(joint_key, target_deg)
+                    if not normalized.get("ok"):
+                        failure_result = normalized
+                        raise RuntimeError(str(normalized.get("message") or normalized.get("error") or "连续控制失败。"))
+                    self._joint_command_targets[joint_key] = float(target_deg)
+                    self._joint_command_updated_at[joint_key] = time.monotonic()
+                    data = result_data(normalized)
+                    return bool(data.get("write_performed", True))
+
+            def update_progress(stats) -> None:
+                self._emit_motion_update(
+                    {joint_key: stats.last_target_deg},
+                    "continuous_jog",
+                    frame_index=stats.tick_count,
+                    speed_deg_s=speed,
+                    direction=signed_direction,
+                )
+
+            try:
+                stats = run_continuous_joint_stream(
+                    start_deg=start_deg,
+                    direction=signed_direction,
+                    speed_units_s=speed,
+                    update_hz=update_hz,
+                    max_step=max_step,
+                    stop_event=stop_event,
+                    write_target=write_target,
+                    on_progress=update_progress,
+                )
+            except Exception:
+                stats = None
+            finally:
+                with self.io_lock:
+                    sync_result = self._sync_after_joint_stream_unlocked()
                     self._joint_command_targets.pop(joint_key, None)
                     self._joint_command_updated_at.pop(joint_key, None)
                     if self._continuous_jog_joint == joint_key:
                         self._continuous_jog_joint = None
-                    return precheck
-                with self.io_lock:
-                    result = self.controller.move_joints({joint_key: target_deg})
-                    normalized = normalize_bridge_result(
-                        result,
-                        "连续移动帧完成。",
-                        {"joint_key": joint_key, "target_deg": target_deg, "speed_deg_s": speed, "direction": signed_direction},
-                    )
-                    if not normalized.get("ok"):
-                        stop_event.set()
-                        self._joint_command_targets.pop(joint_key, None)
-                        self._joint_command_updated_at.pop(joint_key, None)
-                        if self._continuous_jog_joint == joint_key:
-                            self._continuous_jog_joint = None
-                        return normalized
-                    self._joint_command_targets[joint_key] = float(target_deg)
-                    self._joint_command_updated_at[joint_key] = time.monotonic()
-                frame_count += 1
-                last_target = target_deg
-                self._emit_motion_update({joint_key: target_deg}, "continuous_jog", frame_index=frame_count, speed_deg_s=speed, direction=signed_direction)
-                if stop_event.wait(sleep_s):
-                    break
 
-            duration_s = time.monotonic() - started_at
-            with self.io_lock:
-                self._joint_command_targets.pop(joint_key, None)
-                self._joint_command_updated_at.pop(joint_key, None)
-                if self._continuous_jog_joint == joint_key:
-                    self._continuous_jog_joint = None
+            if failure_result is not None:
+                return failure_result
+            if not sync_result.get("ok"):
+                return sync_result
+            if stats is None:
+                return fail("连续移动失败。")
+
+            data = stats.as_dict()
+            data["update_hz"] = data.pop("configured_update_hz")
+            data["target_deg"] = data.pop("last_target_deg")
+            data["joint_key"] = joint_key
+            data["targets_deg"] = {joint_key: data["target_deg"]}
+            data["frames"] = data["tick_count"]
             return ok(
                 "连续移动已停止。",
-                {
-                    "joint_key": joint_key,
-                    "target_deg": last_target,
-                    "targets_deg": {joint_key: last_target},
-                    "duration_s": duration_s,
-                    "frames": frame_count,
-                    "update_hz": update_hz,
-                    "horizon_s": horizon_s,
-                },
+                data,
             )
         except Exception as exc:
             return self._exception("连续移动失败", exc)
 
     def stop_continuous_jog(self) -> dict[str, Any]:
         self._continuous_jog_stop.set()
-        joint_key = self._continuous_jog_joint
-        if joint_key:
-            self._joint_command_targets.pop(joint_key, None)
-            self._joint_command_updated_at.pop(joint_key, None)
         return ok("连续移动停止信号已发送。")
+
+    def _stream_joint_target_unlocked(self, joint_key: str, target_deg: float) -> dict[str, Any]:
+        if self.controller is None:
+            return fail("控制器未创建。")
+        if hasattr(self.controller, "stream_joint_target"):
+            result = self.controller.stream_joint_target(joint_key, target_deg)
+            return normalize_bridge_result(
+                result,
+                "连续目标已写入。",
+                {
+                    "joint_key": joint_key,
+                    "target_deg": float(target_deg),
+                    "targets_deg": {joint_key: float(target_deg)},
+                    "write_performed": bool(getattr(result, "已写入", True)),
+                    "goal_raw": getattr(result, "目标raw", None),
+                },
+            )
+        if hasattr(self.controller, "移动到关节角度"):
+            current = current_joints_for_controller(self.controller, prefer_detailed=False)
+            targets = {key: float(current.get(key, 0.0)) for key in JOINT_ORDER}
+            targets[joint_key] = float(target_deg)
+            result = self.controller.移动到关节角度([targets[key] for key in JOINT_ORDER])
+        elif hasattr(self.controller, "move_joints"):
+            result = self.controller.move_joints({joint_key: float(target_deg)})
+        else:
+            return fail("当前控制器不支持连续关节位置流。")
+        return normalize_bridge_result(
+            result,
+            "连续目标已写入。",
+            {"joint_key": joint_key, "target_deg": float(target_deg), "targets_deg": {joint_key: float(target_deg)}, "write_performed": True},
+        )
+
+    def _sync_after_joint_stream_unlocked(self) -> dict[str, Any]:
+        if self.controller is None:
+            return fail("控制器未创建。")
+        if hasattr(self.controller, "sync_after_joint_stream"):
+            return normalize_bridge_result(self.controller.sync_after_joint_stream(), "连续控制结束状态已同步。")
+        return self._get_state_unlocked()
 
     def move_follow_steps(self, commands: list[dict[str, Any]]) -> dict[str, Any]:
         with self.io_lock:

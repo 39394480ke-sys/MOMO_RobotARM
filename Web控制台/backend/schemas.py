@@ -32,7 +32,6 @@ class MotionTuningRequest(BaseModel):
     quick_step_duration_s: float | None = Field(None, ge=0.05, le=10.0)
     quick_step_frames: int | None = Field(None, ge=1, le=240)
     continuous_update_hz: float | None = Field(None, ge=2.0, le=60.0)
-    continuous_target_horizon_s: float | None = Field(None, ge=0.0, le=2.0)
     playback_update_hz: float | None = Field(None, ge=2.0, le=60.0)
     jog_direction_overrides: dict[str, int] | None = None
 

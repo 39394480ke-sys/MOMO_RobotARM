@@ -2286,8 +2286,7 @@ function renderMotionTuning() {
   $("#motionSpeedPercent").value = formatNum(t.default_speed_percent ?? 50, 0);
   $("#quickStepDuration").value = formatNum(t.quick_step_duration_s ?? 0.8, 2);
   $("#quickStepFrames").value = String(t.quick_step_frames ?? 12);
-  $("#continuousUpdateHz").value = formatNum(t.continuous_update_hz ?? 20, 1);
-  $("#continuousHorizon").value = formatNum(t.continuous_target_horizon_s ?? 0.25, 2);
+  $("#continuousUpdateHz").value = formatNum(t.continuous_update_hz ?? 50, 1);
   $("#playbackUpdateHz").value = formatNum(t.playback_update_hz ?? 20, 1);
   $$("[data-jog-direction]").forEach((select) => {
     const joint = select.dataset.jogDirection;
@@ -2314,8 +2313,7 @@ async function saveMotionTuning() {
     default_speed_percent: Number($("#motionSpeedPercent").value || 50),
     quick_step_duration_s: Number($("#quickStepDuration").value || 0.8),
     quick_step_frames: Number($("#quickStepFrames").value || 12),
-    continuous_update_hz: Number($("#continuousUpdateHz").value || 20),
-    continuous_target_horizon_s: Number($("#continuousHorizon").value || 0.25),
+    continuous_update_hz: Number($("#continuousUpdateHz").value || 50),
     playback_update_hz: Number($("#playbackUpdateHz").value || 20),
     jog_direction_overrides: readJogDirectionOverrides(),
   };
@@ -2356,7 +2354,12 @@ function renderContinuousJog(jog) {
     direction: jog.direction ?? null,
     speed_deg_s: jog.speed_deg_s ?? null,
     update_hz: jog.update_hz ?? state.motionTuning?.continuous_update_hz ?? null,
-    target_horizon_s: jog.target_horizon_s ?? state.motionTuning?.continuous_target_horizon_s ?? null,
+    actual_update_hz: jog.actual_update_hz ?? null,
+    mean_interval_ms: jog.mean_interval_ms ?? null,
+    p95_interval_ms: jog.p95_interval_ms ?? null,
+    max_interval_ms: jog.max_interval_ms ?? null,
+    skipped_tick_count: jog.skipped_tick_count ?? null,
+    write_count: jog.write_count ?? null,
     started_at: jog.started_at || null,
     last_tick_at: jog.last_tick_at || null,
     tick_count: jog.tick_count ?? null,

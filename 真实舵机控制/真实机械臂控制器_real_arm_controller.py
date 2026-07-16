@@ -39,6 +39,16 @@ class 操作结果:
     消息: str
 
 
+@dataclass(frozen=True)
+class 流写入结果:
+    """连续位置流单帧结果。"""
+
+    成功: bool
+    消息: str
+    已写入: bool
+    目标raw: int | None = None
+
+
 class RealArmController:
     """真实机械臂控制器。"""
 
@@ -160,6 +170,14 @@ class RealArmController:
             except Exception as 错误:
                 return {"错误": f"读取状态失败：{错误}"}
 
+        return self._state_payload()
+
+    def get_cached_state(self) -> dict[str, Any]:
+        """返回内存中的命令目标状态，不访问舵机总线。"""
+
+        return self._state_payload()
+
+    def _state_payload(self) -> dict[str, Any]:
         return {
             "模式": "dry-run" if self.is_dry_run() else "真实模式",
             "已连接": self.connected,
@@ -174,6 +192,71 @@ class RealArmController:
                 else {"available": False, "open_value": self.current_gripper}
             ),
         }
+
+    def stream_joint_target(self, joint_key: str, target_deg: float) -> 流写入结果:
+        """连续位置流单帧：仅安全检查、映射并写入当前关节。"""
+
+        if joint_key not in self.joint_config_by_key:
+            return 流写入结果(False, f"未知关节：{joint_key}", False)
+        if not self.connected:
+            return 流写入结果(False, "尚未连接。请先输入：连接", False)
+
+        try:
+            target = float(target_deg)
+            targets = {joint_key: target}
+            angle_check = self.safety_checker.check_all_joint_angles(targets, self.joint_config_by_key)
+            if not angle_check.成功:
+                return 流写入结果(False, angle_check.消息, False)
+
+            calibration_check = self.safety_checker.check_calibration_for_move([joint_key])
+            if not calibration_check.成功:
+                return 流写入结果(False, calibration_check.消息, False)
+
+            entry = self._calibration_entry_for_move(joint_key)
+            detail = joint_deg_to_goal_detail(
+                joint_key,
+                target,
+                self.joint_config_by_key[joint_key],
+                entry,
+                self.runtime_state,
+            )
+            goal_raw = int(detail["goal_raw"])
+            raw_check = self.safety_checker.check_goal_raws({joint_key: goal_raw}, {joint_key: entry})
+            if not raw_check.成功:
+                return 流写入结果(False, raw_check.消息, False, goal_raw)
+
+            previous_goal = self.runtime_state.get("goal_raw_by_joint", {}).get(joint_key)
+            wrote = previous_goal is None or int(previous_goal) != goal_raw
+            if wrote:
+                if joint_key not in self._torque_enabled_joints:
+                    self.driver.enable_torque(joint_key)
+                    self._torque_enabled_joints.add(joint_key)
+                self.driver.write_stream_goal_position(joint_key, goal_raw)
+                if self.is_dry_run():
+                    self.current_raw[joint_key] = goal_raw
+
+            self.current_joint_deg[joint_key] = target
+            goal_targets = self.runtime_state.setdefault("goal_joint_targets_deg", {})
+            raw_targets = self.runtime_state.setdefault("goal_raw_by_joint", {})
+            goal_targets[joint_key] = target
+            raw_targets[joint_key] = goal_raw
+            message = "连续目标已写入。" if wrote else "连续目标 raw 未变，已跳过重复写入。"
+            return 流写入结果(True, message, wrote, goal_raw)
+        except Exception as 错误:
+            return 流写入结果(False, f"连续目标写入失败：{错误}", False)
+
+    def sync_after_joint_stream(self) -> 操作结果:
+        """连续位置流结束后只同步一次真实位置和运行状态。"""
+
+        if not self.connected:
+            return 操作结果(False, "尚未连接，无法同步连续控制结束状态。")
+        try:
+            self.current_raw = self.driver.read_all_present_positions()
+            self._refresh_state_from_raw(self.current_raw)
+            self._save_runtime_state()
+            return 操作结果(True, "连续控制结束状态已同步。")
+        except Exception as 错误:
+            return 操作结果(False, f"连续控制结束状态同步失败：{错误}")
 
     def move_joints(self, target_deg_by_joint: dict[str, float]) -> 操作结果:
         """移动一组关节。输入为 joint_key -> 逻辑角度。"""

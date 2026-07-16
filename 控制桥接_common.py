@@ -94,8 +94,7 @@ DEFAULT_MOTION_TUNING = {
     "default_speed_percent": 50.0,
     "quick_step_duration_s": 0.8,
     "quick_step_frames": 12,
-    "continuous_update_hz": 20.0,
-    "continuous_target_horizon_s": 0.25,
+    "continuous_update_hz": 50.0,
     "playback_update_hz": 20.0,
     "jog_direction_overrides": {joint: 1 for joint in JOINT_ORDER},
 }
@@ -173,7 +172,6 @@ def normalize_motion_tuning(
         "quick_step_duration_s": read_float("quick_step_duration_s", float(DEFAULT_MOTION_TUNING["quick_step_duration_s"]), 0.05, 10.0),
         "quick_step_frames": read_int("quick_step_frames", int(DEFAULT_MOTION_TUNING["quick_step_frames"]), 1, 240),
         "continuous_update_hz": read_float("continuous_update_hz", float(DEFAULT_MOTION_TUNING["continuous_update_hz"]), 2.0, 60.0),
-        "continuous_target_horizon_s": read_float("continuous_target_horizon_s", float(DEFAULT_MOTION_TUNING["continuous_target_horizon_s"]), 0.0, 2.0),
         "playback_update_hz": read_float("playback_update_hz", float(DEFAULT_MOTION_TUNING["playback_update_hz"]), 2.0, 60.0),
         "jog_direction_overrides": direction_overrides,
     }

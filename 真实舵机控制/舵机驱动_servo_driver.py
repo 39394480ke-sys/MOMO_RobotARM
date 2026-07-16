@@ -48,6 +48,11 @@ class BaseServoDriver(ABC):
     def write_goal_position(self, joint_key: str, goal_raw: int) -> None:
         """写入单个关节 Goal_Position raw。"""
 
+    def write_stream_goal_position(self, joint_key: str, goal_raw: int) -> None:
+        """连续位置流写入；真实驱动沿用普通单关节写入。"""
+
+        self.write_goal_position(joint_key, goal_raw)
+
     @abstractmethod
     def write_many_goal_positions(self, goal_raw_by_joint: dict[str, int]) -> None:
         """批量写入 Goal_Position raw。"""
@@ -108,6 +113,11 @@ class 仿真_MockServoDriver(BaseServoDriver):
     def write_goal_position(self, joint_key: str, goal_raw: int) -> None:
         self._ensure_known_joint(joint_key)
         print(f"[DRY-RUN] 写入 Goal_Position: joint={joint_key} ({joint_label(joint_key)}) raw={int(goal_raw)}")
+        self.present_raw[joint_key] = int(goal_raw)
+        self.registers.setdefault(joint_key, {})["Goal_Position"] = int(goal_raw)
+
+    def write_stream_goal_position(self, joint_key: str, goal_raw: int) -> None:
+        self._ensure_known_joint(joint_key)
         self.present_raw[joint_key] = int(goal_raw)
         self.registers.setdefault(joint_key, {})["Goal_Position"] = int(goal_raw)
 

@@ -185,6 +185,26 @@ class ControllerBridge:
         except Exception as exc:
             return self._exception("读取状态失败", exc)
 
+    def get_cached_state(self) -> dict[str, Any]:
+        """读取连续控制目标缓存；真实控制器不会访问舵机总线。"""
+
+        try:
+            self._ensure_controller()
+            if self.controller is None:
+                return bridge_fail("控制器未创建。")
+            if hasattr(self.controller, "get_cached_state"):
+                state = self.controller.get_cached_state()
+            else:
+                state = read_controller_state(self.controller, prefer_detailed=False)
+            normalized = self._normalize_state(state)
+            normalized["tcp_pose"] = state_tcp_pose(self.kinematics_model, normalized.get("joints_deg", {}))
+            normalized["mode"] = self.mode
+            normalized["connected"] = self.is_connected()
+            normalized["action"] = dict(self.action_status)
+            return bridge_ok("已返回连续控制缓存目标。", normalized)
+        except Exception as exc:
+            return self._exception("读取连续控制缓存失败", exc)
+
     def get_tcp_pose(self) -> dict[str, Any]:
         try:
             model = self._get_kinematics_model()
@@ -686,6 +706,61 @@ class ControllerBridge:
             return normalized
         except Exception as exc:
             return self._exception("单关节移动失败", exc)
+
+    def stream_single_joint_target(self, joint_key: str, target_deg: float) -> dict[str, Any]:
+        """连续位置流单帧，不读取全关节、不落盘、不写逐帧日志。"""
+
+        try:
+            self._ensure_connected_for_motion()
+            joint = normalize_joint_key(joint_key)
+            target = float(target_deg)
+            self._ensure_controller()
+            if self.controller is None:
+                return bridge_fail("控制器未创建。")
+            if hasattr(self.controller, "stream_joint_target"):
+                result = self.controller.stream_joint_target(joint, target)
+                data = {
+                    "joint_key": joint,
+                    "target_deg": target,
+                    "targets_deg": {joint: target},
+                    "write_performed": bool(getattr(result, "已写入", True)),
+                    "goal_raw": getattr(result, "目标raw", None),
+                }
+                return normalize_bridge_result(result, "连续目标已写入。", data)
+
+            state_result = self.get_cached_state()
+            if not state_result.get("ok"):
+                return state_result
+            current = state_result.get("data", {}).get("joints_deg", {})
+            targets = {key: float(current.get(key, 0.0)) for key in JOINT_ORDER}
+            targets[joint] = target
+            if hasattr(self.controller, "移动到关节角度"):
+                result = self.controller.移动到关节角度([targets[key] for key in JOINT_ORDER])
+            elif hasattr(self.controller, "move_joints"):
+                result = self.controller.move_joints({joint: target})
+            else:
+                return bridge_fail("当前控制器不支持连续关节位置流。")
+            return normalize_bridge_result(
+                result,
+                "连续目标已写入。",
+                {"joint_key": joint, "target_deg": target, "targets_deg": {joint: target}, "write_performed": True},
+            )
+        except Exception as exc:
+            return self._exception("连续目标写入失败", exc)
+
+    def sync_after_joint_stream(self) -> dict[str, Any]:
+        """连续控制结束后读取并保存一次真实状态。"""
+
+        try:
+            self._ensure_controller()
+            if self.controller is None:
+                return bridge_fail("控制器未创建。")
+            if hasattr(self.controller, "sync_after_joint_stream"):
+                result = self.controller.sync_after_joint_stream()
+                return normalize_bridge_result(result, "连续控制结束状态已同步。")
+            return self.get_state()
+        except Exception as exc:
+            return self._exception("连续控制结束状态同步失败", exc)
 
     def move_joints(self, targets_deg: Mapping[str, float]) -> dict[str, Any]:
         try:

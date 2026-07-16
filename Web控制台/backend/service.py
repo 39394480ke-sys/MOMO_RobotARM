@@ -40,6 +40,7 @@ from 控制桥接_common import (  # noqa: E402
     tool_result_ok,
 )
 from 通用_io import read_json_object, read_structured_section, update_structured_section  # noqa: E402
+from 真实舵机控制.连续关节流_continuous_joint_stream import run_continuous_joint_stream  # noqa: E402
 
 from .controller_bridge import ControllerBridge
 from .errors import WebAPIError
@@ -123,7 +124,11 @@ class WebControlService:
                 "max_manual_step_deg": self.config.get("safety", {}).get("max_manual_step_deg", 5.0),
                 "max_real_step_deg": self.config.get("safety", {}).get("max_real_step_deg", 2.0),
             },
-            "motion": self.config.get("motion", {}),
+            "motion": {
+                key: value
+                for key, value in self.config.get("motion", {}).items()
+                if key != "continuous_target_horizon_s"
+            },
             "follow": self.config.get("follow", {}),
             "agent_demo": self._agent_demo_public_config(),
             "poster_demo": self._poster_demo_public_config(),
@@ -599,7 +604,12 @@ class WebControlService:
     # ------------------------------------------------------------------
     def get_robot_state(self) -> dict[str, Any]:
         with self._lock:
-            result = self.bridge.get_state()
+            jog_running = bool(
+                self._continuous_jog_status.get("running")
+                and self._continuous_jog_thread
+                and self._continuous_jog_thread.is_alive()
+            )
+            result = self.bridge.get_cached_state() if jog_running else self.bridge.get_state()
             return self._unwrap_bridge(result, code="STATE_FAILED")
 
     def get_calibration_status(self) -> dict[str, Any]:
@@ -656,13 +666,17 @@ class WebControlService:
     def set_motion_tuning(self, request: MotionTuningRequest) -> dict[str, Any]:
         payload = {key: value for key, value in request.dict(exclude_none=True).items()}
         tuning = normalize_motion_tuning(self.config.get("motion", {}), payload, joint_order=JOINT_ORDER)
-        self.config.setdefault("motion", {}).update(tuning)
+        motion = self.config.setdefault("motion", {})
+        motion.pop("continuous_target_horizon_s", None)
+        motion.update(tuning)
         saved_paths = self._persist_motion_tuning(tuning)
         return {"message": "运动调参已更新并同步到 GUI/Web 配置。", "motion": tuning, "saved_paths": saved_paths}
 
     def reset_motion_tuning(self) -> dict[str, Any]:
         tuning = normalize_motion_tuning(DEFAULT_MOTION_TUNING, {}, joint_order=JOINT_ORDER)
-        self.config.setdefault("motion", {}).update(tuning)
+        motion = self.config.setdefault("motion", {})
+        motion.pop("continuous_target_horizon_s", None)
+        motion.update(tuning)
         saved_paths = self._persist_motion_tuning(tuning)
         return {"message": "运动调参已恢复推荐值并同步到 GUI/Web 配置。", "motion": tuning, "saved_paths": saved_paths}
 
@@ -682,73 +696,105 @@ class WebControlService:
             tuning = self.motion_tuning()
             direction = 1 if int(request.direction) > 0 else -1
             direction *= int(tuning.get("jog_direction_overrides", {}).get(joint, 1))
-            update_hz = max(2.0, float(tuning.get("continuous_update_hz", 20.0)))
-            horizon_s = max(0.0, float(tuning.get("continuous_target_horizon_s", 0.25)))
-            sleep_s = 1.0 / update_hz
+            update_hz = max(2.0, float(tuning.get("continuous_update_hz", 50.0)))
             max_step = self._manual_step_limit()
             speed = min(abs(float(request.speed_deg_s)), max_step * update_hz)
-            delta_per_tick = max(0.02, min(max_step, speed / update_hz)) * direction
             state_result = self.bridge.get_state()
             state_data = self._unwrap_bridge(state_result, code="CONTINUOUS_JOG_STATE_FAILED")
             current_joints = state_data.get("joints_deg", {})
             start_deg = float(current_joints.get(joint, 0.0))
             stop_event = threading.Event()
             self._continuous_jog_stop = stop_event
-            self._continuous_jog_status = {
+            jog_status = {
                 "running": True,
                 "joint_key": joint,
                 "direction": direction,
                 "speed_deg_s": speed,
                 "update_hz": update_hz,
-                "horizon_s": horizon_s,
                 "start_deg": start_deg,
                 "target_deg": start_deg,
-                "delta_per_tick": delta_per_tick,
+                "delta_per_tick": direction * min(max_step, speed / update_hz),
                 "started_at": time.time(),
                 "tick_count": 0,
+                "write_count": 0,
+                "skipped_tick_count": 0,
+                "actual_update_hz": 0.0,
+                "mean_interval_ms": 0.0,
+                "p95_interval_ms": 0.0,
+                "max_interval_ms": 0.0,
                 "message": "连续控制运行中。",
             }
-            started_monotonic = time.monotonic()
+            self._continuous_jog_status = jog_status
 
             def worker() -> None:
-                last_target = start_deg
+                failure: tuple[str, str] | None = None
+                stats = None
+
+                def write_target(target_deg: float) -> bool:
+                    if stop_event.is_set():
+                        return False
+                    with self._lock:
+                        if stop_event.is_set():
+                            return False
+                        result = self.bridge.stream_single_joint_target(joint, target_deg)
+                    if not result.get("ok"):
+                        message = str(result.get("message") or result.get("error") or "连续控制失败。")
+                        raise RuntimeError(message)
+                    data = result.get("data", {})
+                    return bool(data.get("write_performed", True)) if isinstance(data, dict) else True
+
+                def update_progress(current_stats) -> None:
+                    payload = current_stats.as_dict()
+                    jog_status.update(
+                        target_deg=payload.pop("last_target_deg"),
+                        tick_count=payload["tick_count"],
+                        write_count=payload["write_count"],
+                        skipped_tick_count=payload["skipped_tick_count"],
+                        actual_update_hz=payload["actual_update_hz"],
+                        mean_interval_ms=payload["mean_interval_ms"],
+                        p95_interval_ms=payload["p95_interval_ms"],
+                        max_interval_ms=payload["max_interval_ms"],
+                        duration_s=payload["duration_s"],
+                        last_tick_at=time.time(),
+                    )
+
                 try:
-                    while not stop_event.is_set():
-                        elapsed = time.monotonic() - started_monotonic
-                        ideal_target = start_deg + direction * speed * elapsed
-                        step_delta = max(-max_step, min(max_step, ideal_target - last_target))
-                        if abs(step_delta) < 1e-6:
-                            if stop_event.wait(sleep_s):
-                                break
-                            continue
-                        target_deg = last_target + step_delta
-                        with self._lock:
-                            result = self.bridge.move_single_joint_target(joint, target_deg)
-                            if not result.get("ok"):
-                                code, message = self._classify_motion_error(
-                                    str(result.get("message") or result.get("error") or "连续控制失败。"),
-                                    fallback_code="CONTINUOUS_JOG_FAILED",
-                                    action="连续控制",
-                                )
-                                self._continuous_jog_status.update(
-                                    running=False,
-                                    code=code,
-                                    message=message,
-                                    stopped_at=time.time(),
-                                )
-                                self._remember_error(code, message)
-                                return
-                            last_target = target_deg
-                            self._continuous_jog_status["target_deg"] = target_deg
-                            self._continuous_jog_status["tick_count"] = int(self._continuous_jog_status.get("tick_count", 0)) + 1
-                        if stop_event.wait(sleep_s):
-                            break
+                    stats = run_continuous_joint_stream(
+                        start_deg=start_deg,
+                        direction=direction,
+                        speed_units_s=speed,
+                        update_hz=update_hz,
+                        max_step=max_step,
+                        stop_event=stop_event,
+                        write_target=write_target,
+                        on_progress=update_progress,
+                    )
                 except Exception as exc:
                     code, message = self._classify_motion_error(str(exc), fallback_code="CONTINUOUS_JOG_FAILED", action="连续控制")
-                    self._continuous_jog_status.update(running=False, code=code, message=message, stopped_at=time.time())
+                    failure = (code, message)
                     self._remember_error(code, message)
                 finally:
-                    self._continuous_jog_status.update(running=False, stopped_at=time.time())
+                    with self._lock:
+                        sync_result = self.bridge.sync_after_joint_stream()
+                    if not sync_result.get("ok") and failure is None:
+                        sync_message = str(sync_result.get("message") or sync_result.get("error") or "连续控制结束状态同步失败。")
+                        failure = self._classify_motion_error(
+                            sync_message,
+                            fallback_code="CONTINUOUS_JOG_SYNC_FAILED",
+                            action="连续控制结束同步",
+                        )
+                        self._remember_error(*failure)
+                    if stats is not None:
+                        update_progress(stats)
+                    if failure is None:
+                        jog_status.update(running=False, stopped_at=time.time(), message="连续控制已停止。")
+                    else:
+                        jog_status.update(
+                            running=False,
+                            code=failure[0],
+                            message=failure[1],
+                            stopped_at=time.time(),
+                        )
 
             self._continuous_jog_thread = threading.Thread(target=worker, name=f"web-continuous-jog-{joint}", daemon=True)
             self._continuous_jog_thread.start()
@@ -759,7 +805,11 @@ class WebControlService:
         thread = self._continuous_jog_thread
         if thread and thread.is_alive():
             thread.join(timeout=join_timeout)
-        self._continuous_jog_status.update(running=False, stopped_at=time.time(), message="连续控制已停止。")
+        if not thread or not thread.is_alive():
+            self._continuous_jog_status["running"] = False
+            self._continuous_jog_status.setdefault("stopped_at", time.time())
+            if not self._continuous_jog_status.get("code"):
+                self._continuous_jog_status["message"] = "连续控制已停止。"
         return {"message": "连续控制已停止。", "jog": self.continuous_jog_status()}
 
     def move_joints(self, request: MoveJointsRequest) -> dict[str, Any]:
@@ -1374,7 +1424,13 @@ class WebControlService:
         saved: list[str] = []
         for path in paths:
             try:
-                update_structured_section(path, "motion", tuning)
+                try:
+                    persisted_motion = read_structured_section(path, "motion")
+                except Exception:
+                    persisted_motion = {}
+                persisted_motion.pop("continuous_target_horizon_s", None)
+                persisted_motion.update(tuning)
+                update_structured_section(path, "motion", persisted_motion)
                 saved.append(str(path))
             except Exception as exc:
                 self._remember_error("MOTION_TUNING_SAVE_FAILED", f"{path}: {exc}")

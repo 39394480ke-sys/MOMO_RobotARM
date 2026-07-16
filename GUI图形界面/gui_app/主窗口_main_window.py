@@ -11,7 +11,7 @@ ensure_project_root_on_path()
 from 控制桥接_common import normalize_motion_speed_percent, result_fail as fail, result_ok as ok
 from 通用_io import atomic_write_json, read_json_object_or_default
 
-from PyQt5.QtCore import Qt, QTimer, pyqtSignal
+from PyQt5.QtCore import QEvent, Qt, QTimer, pyqtSignal
 from PyQt5.QtWidgets import QApplication, QFrame, QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QMainWindow, QPushButton, QScrollArea, QSizePolicy, QSplitter, QStackedWidget, QVBoxLayout, QWidget
 
 from gui_app.后台任务_worker import ActionPlayWorker, AgentAskWorker, AgentVoiceWorker, BridgeWorker, CalibrationStatusWorker, ConnectWorker, MoveWorker, StatePollWorker
@@ -304,9 +304,15 @@ class MainWindow(QMainWindow):
         atomic_write_json(path, payload)
 
     def closeEvent(self, event) -> None:
+        self.bridge.stop_continuous_jog()
         self._save_ui_state()
         self.persistent_sim_view.stop_camera()
         super().closeEvent(event)
+
+    def changeEvent(self, event) -> None:
+        super().changeEvent(event)
+        if event.type() == QEvent.ActivationChange and not self.isActiveWindow() and self.continuous_move_busy:
+            self._stop_continuous_jog()
 
     def _connect_signals(self) -> None:
         self.nav.currentRowChanged.connect(self._set_current_page)
@@ -382,6 +388,8 @@ class MainWindow(QMainWindow):
         self._refresh_page_once(self.nav.currentRow(), delay_ms=240)
 
     def _set_current_page(self, index: int) -> None:
+        if self.continuous_move_busy:
+            self._stop_continuous_jog()
         self.stack.setCurrentIndex(index)
         if index == self.ai_chat_page_index:
             self._ensure_agent_config()
@@ -398,6 +406,8 @@ class MainWindow(QMainWindow):
         refresher()
 
     def _set_mode(self, mode: str) -> None:
+        if self.continuous_move_busy:
+            self._stop_continuous_jog()
         result = self.bridge.set_mode(mode)
         if not result.get("ok"):
             self.settings_page.set_mode(self.bridge.get_mode())
@@ -409,6 +419,8 @@ class MainWindow(QMainWindow):
         self._run_worker(ConnectWorker(self.bridge.connect), disable=[self.settings_page.connect_button])
 
     def _disconnect_controller(self) -> None:
+        if self.continuous_move_busy:
+            self._stop_continuous_jog()
         self._handle_result(self.bridge.disconnect())
         self.update_header()
 
@@ -450,8 +462,13 @@ class MainWindow(QMainWindow):
         self.continuous_move_busy = True
         self._run_worker(
             MoveWorker(lambda: self.bridge.start_continuous_jog(joint, direction, speed)),
-            on_finished=lambda: setattr(self, "continuous_move_busy", False),
+            on_finished=self._continuous_jog_finished,
+            keep_continuous=True,
         )
+
+    def _continuous_jog_finished(self) -> None:
+        self.continuous_move_busy = False
+        QTimer.singleShot(80, self._poll_state_once)
 
     def _stop_continuous_jog(self) -> None:
         if not self.continuous_move_busy:
@@ -617,7 +634,7 @@ class MainWindow(QMainWindow):
         self._run_worker(CalibrationStatusWorker(self.bridge.get_calibration_status))
 
     def _poll_state_once(self) -> None:
-        if self.polling or self.motion_busy:
+        if self.polling or self.motion_busy or self.continuous_move_busy:
             return
         self.polling = True
         worker = StatePollWorker(self.bridge.get_state)
@@ -717,9 +734,12 @@ class MainWindow(QMainWindow):
         disable: list[QPushButton] | None = None,
         on_result: Callable[[dict], None] | None = None,
         on_finished: Callable[[], None] | None = None,
+        keep_continuous: bool = False,
     ) -> None:
         disabled = disable or []
         is_move_worker = isinstance(worker, (MoveWorker, ActionPlayWorker))
+        if is_move_worker and self.continuous_move_busy and not keep_continuous:
+            self.bridge.stop_continuous_jog()
         if is_move_worker:
             self.motion_busy = True
         for button in disabled:

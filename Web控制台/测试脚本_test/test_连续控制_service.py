@@ -28,6 +28,15 @@ class FakeRealController:
         self.stream_count += 1
         return types.SimpleNamespace(成功=True, 消息="已写入", 已写入=True, 目标raw=1234)
 
+    def stream_joint_targets(self, targets_deg: dict[str, float]):
+        self.stream_count += 1
+        return types.SimpleNamespace(
+            成功=True,
+            消息="批量已写入",
+            已写入关节=tuple(targets_deg),
+            目标raw={joint: 1234 for joint in targets_deg},
+        )
+
     def get_cached_state(self) -> dict:
         return self._state()
 
@@ -64,6 +73,14 @@ class WebBridgeContinuousStreamTest(unittest.TestCase):
 
         self.assertTrue(result["ok"], result)
         self.assertTrue(result["data"]["write_performed"])
+        self.assertEqual(self.fake.stream_count, 1)
+        self.assertEqual(self.fake.read_count, 0)
+
+    def test_batch_stream_uses_lightweight_controller_without_state_read(self) -> None:
+        result = self.bridge.stream_joint_targets({"j11": 1.0, "j13": -1.0})
+
+        self.assertTrue(result["ok"], result)
+        self.assertEqual(set(result["data"]["written_joints"]), {"j11", "j13"})
         self.assertEqual(self.fake.stream_count, 1)
         self.assertEqual(self.fake.read_count, 0)
 

@@ -59,6 +59,10 @@ class VideoSource:
 
         cap = cv2.VideoCapture(source)
         if source_type in {"camera", "usb", "usb_camera"}:
+            try:
+                cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+            except Exception:
+                pass
             width = int(self.config.get("width", 640))
             height = int(self.config.get("height", 480))
             fps = int(self.config.get("fps", 30))

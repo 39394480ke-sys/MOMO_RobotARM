@@ -886,23 +886,15 @@ async function startFollow() {
   const body = {
     latest_url: $("#followLatestUrl").value.trim() || "http://127.0.0.1:8000/latest",
     poll_interval: Number($("#followPollInterval").value || 0.05),
-    move_duration: followConfig.move_duration_sec,
-    speed_percent: Number($("#followSpeedPercent").value || 60),
     pan_joint: "j11",
     tilt_joint: "j13",
     enabled_follow_joints: followConfig.enabled_follow_joints,
-    pan_gain: followConfig.pan_gain_deg_per_norm,
-    tilt_gain: followConfig.tilt_gain_deg_per_norm,
     pan_sign: followConfig.pan_sign,
     tilt_sign: followConfig.tilt_sign,
     pan_dead_zone_norm: followConfig.pan_dead_zone_norm,
     tilt_dead_zone_norm: followConfig.tilt_dead_zone_norm,
     pan_resume_zone_norm: followConfig.pan_resume_zone_norm,
     tilt_resume_zone_norm: followConfig.tilt_resume_zone_norm,
-    min_pan_step_deg: followConfig.min_pan_step_deg,
-    min_tilt_step_deg: followConfig.min_tilt_step_deg,
-    pan_min_step_zone_norm: followConfig.pan_min_step_zone_norm,
-    tilt_min_step_zone_norm: followConfig.tilt_min_step_zone_norm,
     max_pan_step_deg: followConfig.max_pan_step_deg,
     max_tilt_step_deg: followConfig.max_tilt_step_deg,
     rail_enabled: $("#railEnabled").checked,
@@ -928,22 +920,18 @@ async function stopFollow() {
 function renderFollowConfig() {
   const cfg = state.followConfig || state.follow?.effective_config || {};
   $("#followPollInterval").value = formatNum(cfg.poll_interval_sec ?? 0.05, 3);
-  $("#followSpeedPercent").value = formatNum(cfg.speed_percent ?? 60, 0);
-  $("#followPanGain").value = formatNum(cfg.pan_gain_deg_per_norm ?? 4.8, 2);
-  $("#followTiltGain").value = formatNum(cfg.tilt_gain_deg_per_norm ?? 4.8, 2);
-  $("#followMaxPanStep").value = formatNum(cfg.max_pan_step_deg ?? 3, 2);
-  $("#followMaxTiltStep").value = formatNum(cfg.max_tilt_step_deg ?? 3, 2);
+  $("#followControlHz").value = formatNum(cfg.control_update_hz ?? 40, 0);
+  $("#followStaleTimeout").value = formatNum(cfg.vision_stale_timeout_sec ?? 0.25, 2);
+  $("#followMaxPanSpeed").value = formatNum(cfg.max_pan_speed_deg_s ?? 12, 2);
+  $("#followMaxTiltSpeed").value = formatNum(cfg.max_tilt_speed_deg_s ?? 10, 2);
+  $("#followPanAccel").value = formatNum(cfg.pan_accel_deg_s2 ?? 30, 1);
+  $("#followTiltAccel").value = formatNum(cfg.tilt_accel_deg_s2 ?? 25, 1);
   $("#followPanDead").value = formatNum(cfg.pan_dead_zone_norm ?? 0.03, 4);
   $("#followTiltDead").value = formatNum(cfg.tilt_dead_zone_norm ?? 0.035, 4);
   $("#followPanResume").value = formatNum(cfg.pan_resume_zone_norm ?? 0.05, 4);
   $("#followTiltResume").value = formatNum(cfg.tilt_resume_zone_norm ?? 0.055, 4);
-  $("#followMinPanStep").value = formatNum(cfg.min_pan_step_deg ?? 0.5, 2);
-  $("#followMinTiltStep").value = formatNum(cfg.min_tilt_step_deg ?? 0.5, 2);
-  $("#followPanMinZone").value = formatNum(cfg.pan_min_step_zone_norm ?? 0.12, 4);
-  $("#followTiltMinZone").value = formatNum(cfg.tilt_min_step_zone_norm ?? 0.12, 4);
   $("#followPanSign").value = String(Number(cfg.pan_sign ?? 1) < 0 ? -1 : 1);
   $("#followTiltSign").value = String(Number(cfg.tilt_sign ?? 1) < 0 ? -1 : 1);
-  $("#followMoveDuration").value = formatNum(cfg.move_duration_sec ?? 0.25, 2);
   const enabled = new Set(Array.isArray(cfg.enabled_follow_joints) ? cfg.enabled_follow_joints : ["j11", "j13"]);
   $$("[data-follow-joint]").forEach((input) => {
     input.checked = enabled.has(input.dataset.followJoint);
@@ -958,25 +946,21 @@ function readFollowConfigForm() {
     .map((input) => input.dataset.followJoint);
   return {
     poll_interval_sec: Number($("#followPollInterval").value || 0.05),
-    move_duration_sec: Number($("#followMoveDuration").value || 0.25),
-    speed_percent: Number($("#followSpeedPercent").value || 60),
+    control_update_hz: Number($("#followControlHz").value || 40),
+    vision_stale_timeout_sec: Number($("#followStaleTimeout").value || 0.25),
+    max_pan_speed_deg_s: Number($("#followMaxPanSpeed").value || 12),
+    max_tilt_speed_deg_s: Number($("#followMaxTiltSpeed").value || 10),
+    pan_accel_deg_s2: Number($("#followPanAccel").value || 30),
+    tilt_accel_deg_s2: Number($("#followTiltAccel").value || 25),
     pan_joint: "j11",
     tilt_joint: "j13",
     enabled_follow_joints: enabled.length ? enabled : ["j11", "j13"],
     pan_sign: Number($("#followPanSign").value || 1),
     tilt_sign: Number($("#followTiltSign").value || 1),
-    pan_gain_deg_per_norm: Number($("#followPanGain").value || 4.8),
-    tilt_gain_deg_per_norm: Number($("#followTiltGain").value || 4.8),
     pan_dead_zone_norm: Number($("#followPanDead").value || 0.03),
     tilt_dead_zone_norm: Number($("#followTiltDead").value || 0.035),
     pan_resume_zone_norm: Number($("#followPanResume").value || 0.05),
     tilt_resume_zone_norm: Number($("#followTiltResume").value || 0.055),
-    min_pan_step_deg: Number($("#followMinPanStep").value || 0.5),
-    min_tilt_step_deg: Number($("#followMinTiltStep").value || 0.5),
-    pan_min_step_zone_norm: Number($("#followPanMinZone").value || 0.12),
-    tilt_min_step_zone_norm: Number($("#followTiltMinZone").value || 0.12),
-    max_pan_step_deg: Number($("#followMaxPanStep").value || 3),
-    max_tilt_step_deg: Number($("#followMaxTiltStep").value || 3),
     rail_cinematic: {
       enabled: $("#railEnabled").checked,
       joint: "j10",
@@ -1119,8 +1103,9 @@ function renderFollow() {
   const last = follow.last_command || {};
   const commands = Array.isArray(last.commands) ? last.commands : [];
   $("#followRunning").textContent = follow.running ? "运行" : "停止";
-  $("#followModeState").textContent = follow.dry_run === false ? "real" : "dry-run";
-  $("#followStepCount").textContent = String(follow.step_count ?? 0);
+  const sessionMode = follow.dry_run === false ? "real" : "dry-run";
+  $("#followModeState").textContent = `${sessionMode} / ${follow.control_mode || "joint_step"}`;
+  $("#followStepCount").textContent = `${follow.tick_count ?? follow.step_count ?? 0} / ${formatNum(follow.actual_update_hz, 1)}Hz`;
   const enabledJoints = Array.isArray(cfg.enabled_follow_joints) && cfg.enabled_follow_joints.length ? cfg.enabled_follow_joints : [cfg.pan_joint || "j11", cfg.tilt_joint || "j13"];
   $("#followJointState").textContent = enabledJoints.map((joint) => String(joint).toUpperCase()).join(", ");
   $("#followDeadZoneState").textContent = `pan ${formatNum(cfg.pan_dead_zone_norm, 4)} / tilt ${formatNum(cfg.tilt_dead_zone_norm, 4)}`;
@@ -1128,9 +1113,10 @@ function renderFollow() {
     ? `${rail.joint || "j10"} ${rail.running ? "运行" : rail.phase || "停止"} ${formatNum(rail.virtual_pos_mm, 2)}mm`
     : "关闭";
   $("#followDirectionState").textContent = `${vision.direction || "--"} | ndx=${formatNum(smoothed.ndx ?? offset.ndx, 4)}, ndy=${formatNum(smoothed.ndy ?? offset.ndy, 4)}`;
-  $("#followLastCommand").textContent = commands.length
-    ? commands.map(formatFollowCommand).join(", ")
-    : last.message || "--";
+  const targets = last.targets_deg || follow.targets_deg || {};
+  $("#followLastCommand").textContent = Object.keys(targets).length
+    ? `${Object.entries(targets).map(([joint, value]) => `${joint.toUpperCase()}:${formatNum(value, 2)}`).join(", ")} ${follow.hold_reason ? `(${follow.hold_reason})` : ""}`
+    : commands.length ? commands.map(formatFollowCommand).join(", ") : last.message || "--";
   $("#followLastError").textContent = follow.last_error || "--";
 }
 

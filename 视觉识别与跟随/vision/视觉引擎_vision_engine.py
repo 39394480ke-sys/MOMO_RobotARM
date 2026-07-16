@@ -8,6 +8,8 @@ import time
 from pathlib import Path
 from typing import Any
 
+import cv2
+
 from .人脸检测_face_detector import FaceDetector
 from .偏移计算_offset_calculator import OffsetCalculator
 from .可视化_visualizer import Visualizer, make_placeholder_frame
@@ -58,6 +60,8 @@ class VisionEngine:
         self._lock = threading.RLock()
         self._last_frame_time = 0.0
         self._fps = 0.0
+        self._gesture_every_n_frames = max(1, int(self.gesture_cfg.get("process_every_n_frames", 3)))
+        self._latest_gesture: dict[str, Any] = {}
         self.logger = self._make_logger()
 
     def start(self) -> dict[str, Any]:
@@ -150,6 +154,7 @@ class VisionEngine:
             self._save_result_and_placeholder(result, error)
             return result
 
+        frame = self._prepare_processing_frame(frame)
         self.frame_id += 1
         height, width = frame.shape[:2]
         with self._lock:
@@ -157,7 +162,10 @@ class VisionEngine:
         now = time.time()
         self._update_fps(now)
 
-        face_result = self.face_detector.detect(frame)
+        if self.target_mode == "manual" and self.object_tracker.active:
+            face_result = {"available": self.face_detector.available, "error": "", "faces": []}
+        else:
+            face_result = self.face_detector.detect(frame)
         faces = list(face_result.get("faces", []))
         target_info = self._select_target(frame, faces)
         target_face = target_info.get("target_face")
@@ -169,7 +177,9 @@ class VisionEngine:
         else:
             offset = self.offset_calculator.empty(width, height)
         smoothed = self.smoother.update(offset if detected else None)
-        gesture = self.gesture_detector.detect(frame)
+        if not self._latest_gesture or self.frame_id % self._gesture_every_n_frames == 0:
+            self._latest_gesture = self.gesture_detector.detect(frame)
+        gesture = dict(self._latest_gesture)
 
         direction = {
             "horizontal": offset.get("horizontal", "center"),
@@ -228,6 +238,14 @@ class VisionEngine:
         self.store.save_result(result)
         self.store.save_frame(visualized)
         return result
+
+    def _prepare_processing_frame(self, frame: Any) -> Any:
+        max_width = max(1, int(self.camera_cfg.get("processing_max_width", 640)))
+        height, width = frame.shape[:2]
+        if width <= max_width:
+            return frame
+        scale = max_width / float(width)
+        return cv2.resize(frame, (max_width, max(1, int(round(height * scale)))), interpolation=cv2.INTER_AREA)
 
     def get_latest_result(self) -> dict[str, Any]:
         result = self.store.get_latest_result()

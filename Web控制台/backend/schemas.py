@@ -38,6 +38,12 @@ class MotionTuningRequest(BaseModel):
 
 class FollowConfigRequest(BaseModel):
     poll_interval_sec: float | None = Field(None, gt=0.0)
+    control_update_hz: float | None = Field(None, ge=2.0, le=60.0)
+    vision_stale_timeout_sec: float | None = Field(None, ge=0.05, le=2.0)
+    max_pan_speed_deg_s: float | None = Field(None, ge=0.1, le=60.0)
+    max_tilt_speed_deg_s: float | None = Field(None, ge=0.1, le=60.0)
+    pan_accel_deg_s2: float | None = Field(None, ge=0.1, le=180.0)
+    tilt_accel_deg_s2: float | None = Field(None, ge=0.1, le=180.0)
     move_duration_sec: float | None = Field(None, gt=0.0)
     speed_percent: int | None = Field(None, ge=1, le=100)
     pan_joint: str | None = None

@@ -891,7 +891,7 @@ class WebControlService:
     # 视觉跟随
     # ------------------------------------------------------------------
     def follow_status(self) -> dict[str, Any]:
-        if self._follow_controller is not None:
+        if getattr(self, "_follow_controller", None) is not None:
             status = self._follow_controller.get_status()
             if status.get("running"):
                 return status
@@ -966,15 +966,21 @@ class WebControlService:
         return {"message": "视觉跟随参数已保存。", "follow": follow, "config_path": str(config_path)}
 
     def start_follow(self, request: FollowStartRequest) -> dict[str, Any]:
+        if self._action_thread and self._action_thread.is_alive():
+            self.bridge.stop_action()
+            self._action_thread.join(timeout=0.5)
+        if self._continuous_jog_thread and self._continuous_jog_thread.is_alive():
+            self.stop_continuous_jog(join_timeout=0.8)
         with self._lock:
             dry_run = self.bridge.mode != "real"
             if not dry_run and not self.bridge.is_connected():
                 raise WebAPIError("REAL_SESSION_REQUIRED", "启动真实视觉跟随前，请先连接 real 模式。")
             if self._follow_controller is not None:
                 try:
-                    self._follow_controller.stop()
+                    self._follow_controller.request_stop()
                 except Exception:
                     pass
+                self._follow_controller = None
             controller = self._create_follow_controller(request, dry_run=dry_run)
             self._follow_controller = controller
             controller.start()
@@ -1186,9 +1192,11 @@ class WebControlService:
     def _stop_follow_controller(self, reason: str) -> dict[str, Any] | None:
         if self._follow_controller is None:
             return None
+        controller = self._follow_controller
+        self._follow_controller = None
         try:
-            status = self._follow_controller.stop()
-            self._follow_controller = None
+            controller.request_stop()
+            status = controller.get_status()
             event = "follow_stopped"
             message = "视觉跟随已停止。"
             if reason == "emergency_stop":
@@ -1203,7 +1211,6 @@ class WebControlService:
             self.logger.log("warning" if reason != "manual_stop" else "info", event, message)
             return status
         except Exception as exc:
-            self._follow_controller = None
             self._remember_error("FOLLOW_STOP_FAILED", str(exc))
             return {"ok": False, "message": f"停止视觉跟随失败：{exc}"}
 
@@ -1214,6 +1221,10 @@ class WebControlService:
             self._action_thread.join(timeout=0.5)
         if self._continuous_jog_thread and self._continuous_jog_thread.is_alive():
             self.stop_continuous_jog(join_timeout=0.2)
+        if getattr(self, "_follow_controller", None) is not None:
+            controller = self._follow_controller
+            self._follow_controller = None
+            controller.request_stop()
 
     def _require_real_confirm(self, confirm_text: str, action: str) -> None:
         if self.bridge.mode != "real":
@@ -1408,7 +1419,33 @@ class WebControlService:
             rail_cfg.setdefault("joint", "j10")
             rail_cfg.setdefault("bounce", False)
             follow_cfg["rail_cinematic"] = rail_cfg
-        return VisionFollowController({"follow": follow_cfg}, latest_url=request.latest_url, dry_run=dry_run)
+        owner: dict[str, Any] = {}
+        controller = VisionFollowController(
+            {"follow": follow_cfg},
+            latest_url=request.latest_url,
+            dry_run=dry_run,
+            initial_state_provider=self._follow_initial_state,
+            stream_writer=lambda targets: self._follow_stream_targets(owner["controller"], targets),
+            stream_sync=self._follow_stream_sync,
+        )
+        owner["controller"] = controller
+        return controller
+
+    def _follow_initial_state(self) -> dict[str, float]:
+        with self._lock:
+            result = self.bridge.get_state()
+        data = self._unwrap_bridge(result, code="FOLLOW_INITIAL_STATE_FAILED")
+        return {str(joint): float(value) for joint, value in data.get("joints_deg", {}).items()}
+
+    def _follow_stream_targets(self, owner: Any, targets_deg: dict[str, float]) -> dict[str, Any]:
+        with self._lock:
+            if getattr(self, "_follow_controller", None) is not owner:
+                return {"ok": False, "message": "视觉跟随会话已停止。", "data": {"written_joints": []}}
+            return self.bridge.stream_joint_targets(targets_deg)
+
+    def _follow_stream_sync(self) -> dict[str, Any]:
+        with self._lock:
+            return self.bridge.sync_after_joint_stream()
 
     def _load_vision_follow_config(self, vision_root: Path) -> dict[str, Any]:
         config_path = vision_root / "视觉配置.yaml"

@@ -49,6 +49,14 @@ class 流写入结果:
     目标raw: int | None = None
 
 
+@dataclass(frozen=True)
+class 批量流写入结果:
+    成功: bool
+    消息: str
+    已写入关节: tuple[str, ...]
+    目标raw: dict[str, int]
+
+
 class RealArmController:
     """真实机械臂控制器。"""
 
@@ -244,6 +252,56 @@ class RealArmController:
             return 流写入结果(True, message, wrote, goal_raw)
         except Exception as 错误:
             return 流写入结果(False, f"连续目标写入失败：{错误}", False)
+
+    def stream_joint_targets(self, target_deg_by_joint: dict[str, float]) -> 批量流写入结果:
+        """连续位置流单帧：批量校验并写入发生变化的关节。"""
+
+        if not self.connected:
+            return 批量流写入结果(False, "尚未连接。请先输入：连接", (), {})
+        unknown = [joint for joint in target_deg_by_joint if joint not in self.joint_config_by_key]
+        if unknown:
+            return 批量流写入结果(False, f"未知关节：{unknown[0]}", (), {})
+        try:
+            targets = {joint: float(value) for joint, value in target_deg_by_joint.items()}
+            angle_check = self.safety_checker.check_all_joint_angles(targets, self.joint_config_by_key)
+            if not angle_check.成功:
+                return 批量流写入结果(False, angle_check.消息, (), {})
+            calibration_check = self.safety_checker.check_calibration_for_move(list(targets))
+            if not calibration_check.成功:
+                return 批量流写入结果(False, calibration_check.消息, (), {})
+
+            entries: dict[str, dict[str, Any]] = {}
+            goals: dict[str, int] = {}
+            for joint, target in targets.items():
+                entries[joint] = self._calibration_entry_for_move(joint)
+                detail = joint_deg_to_goal_detail(
+                    joint, target, self.joint_config_by_key[joint], entries[joint], self.runtime_state
+                )
+                goals[joint] = int(detail["goal_raw"])
+            raw_check = self.safety_checker.check_goal_raws(goals, entries)
+            if not raw_check.成功:
+                return 批量流写入结果(False, raw_check.消息, (), goals)
+
+            previous = self.runtime_state.get("goal_raw_by_joint", {})
+            changed = {joint: raw for joint, raw in goals.items() if previous.get(joint) is None or int(previous[joint]) != raw}
+            for joint in changed:
+                if joint not in self._torque_enabled_joints:
+                    self.driver.enable_torque(joint)
+                    self._torque_enabled_joints.add(joint)
+            if changed:
+                self.driver.write_many_goal_positions(changed)
+                if self.is_dry_run():
+                    self.current_raw.update(changed)
+            goal_targets = self.runtime_state.setdefault("goal_joint_targets_deg", {})
+            raw_targets = self.runtime_state.setdefault("goal_raw_by_joint", {})
+            for joint, target in targets.items():
+                self.current_joint_deg[joint] = target
+                goal_targets[joint] = target
+                raw_targets[joint] = goals[joint]
+            message = "连续批量目标已写入。" if changed else "连续目标 raw 未变化，已跳过重复写入。"
+            return 批量流写入结果(True, message, tuple(changed), goals)
+        except Exception as 错误:
+            return 批量流写入结果(False, f"连续批量目标写入失败：{错误}", (), {})
 
     def sync_after_joint_stream(self) -> 操作结果:
         """连续位置流结束后只同步一次真实位置和运行状态。"""

@@ -135,6 +135,10 @@ class SpyDriver:
             raise OSError("模拟通信失败")
         self.delegate.write_stream_goal_position(joint_key, goal_raw)
 
+    def write_many_goal_positions(self, goal_raw_by_joint: dict[str, int]) -> None:
+        self.write_count += len(goal_raw_by_joint)
+        self.delegate.write_many_goal_positions(goal_raw_by_joint)
+
     def enable_torque(self, joint_key: str | None = None) -> None:
         self.enable_count += 1
         self.delegate.enable_torque(joint_key)
@@ -167,6 +171,18 @@ class RealControllerStreamTest(unittest.TestCase):
         self.assertEqual(self.spy.read_all_count, 0)
         self.assertEqual(self.save_count, 0)
         self.assertEqual(self.spy.enable_count, 1)
+
+    def test_batch_stream_writes_changed_targets_without_read_or_save(self) -> None:
+        first = self.controller.stream_joint_targets({"j11": 1.0, "j13": -1.0})
+        second = self.controller.stream_joint_targets({"j11": 1.0, "j13": -1.0})
+
+        self.assertTrue(first.成功, first.消息)
+        self.assertTrue(second.成功, second.消息)
+        self.assertEqual(set(first.已写入关节), {"j11", "j13"})
+        self.assertEqual(second.已写入关节, ())
+        self.assertEqual(self.spy.write_count, 2)
+        self.assertEqual(self.spy.read_all_count, 0)
+        self.assertEqual(self.save_count, 0)
 
     def test_cached_state_uses_commanded_target_without_hardware_read(self) -> None:
         self.assertTrue(self.controller.stream_joint_target("j14", 1.5).成功)

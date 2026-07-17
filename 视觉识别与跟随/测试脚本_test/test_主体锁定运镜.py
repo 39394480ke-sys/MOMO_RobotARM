@@ -105,6 +105,48 @@ class SubjectLockCurveTest(unittest.TestCase):
         self.assertEqual(result["safe_max_speed_mm_s"], 0.0)
         self.assertIn("限位", result["message"])
 
+    def test_linear_lock_curve_has_continuous_start_stop_acceleration(self) -> None:
+        curve = ShapePreservingHermiteCurve.from_points(
+            [{"j10_mm": -20.0, "j11_deg": 5.0}, {"j10_mm": 20.0, "j11_deg": -5.0}]
+        )
+
+        result = validate_playback_speed(
+            curve,
+            start_mm=-20.0,
+            end_mm=20.0,
+            speed_mm_s=2.0,
+            update_hz=60.0,
+            max_j11_speed_deg_s=12.0,
+            max_j11_accel_deg_s2=30.0,
+        )
+
+        self.assertTrue(result["valid"], result)
+        self.assertLessEqual(result["metrics"]["max_j10_accel_mm_s2"], 4.0)
+        self.assertLessEqual(result["metrics"]["max_j11_accel_deg_s2"], 2.0)
+
+    def test_validation_names_acceleration_only_failure(self) -> None:
+        curve = ShapePreservingHermiteCurve.from_points(
+            [
+                {"j10_mm": 0.0, "j11_deg": 0.0},
+                {"j10_mm": 4.0, "j11_deg": 0.0},
+                {"j10_mm": 6.0, "j11_deg": 8.0},
+                {"j10_mm": 10.0, "j11_deg": 8.0},
+            ]
+        )
+
+        result = validate_playback_speed(
+            curve,
+            start_mm=0.0,
+            end_mm=10.0,
+            speed_mm_s=2.0,
+            max_j11_speed_deg_s=12.0,
+            max_j11_accel_deg_s2=30.0,
+        )
+
+        self.assertFalse(result["valid"])
+        self.assertLessEqual(result["metrics"]["max_j11_speed_deg_s"], 12.0)
+        self.assertIn("加速度不平滑", result["message"])
+
 
 class SubjectLockPlaybackTest(unittest.TestCase):
     def test_plan_contains_synchronized_j10_j11_targets(self) -> None:
@@ -143,6 +185,62 @@ class SubjectLockPlaybackTest(unittest.TestCase):
         self.assertEqual(len(writes), 1)
         self.assertEqual(stats["write_count"], 1)
         self.assertTrue(stats["stopped"])
+
+    def test_late_scheduler_drops_frames_instead_of_bursting_old_targets(self) -> None:
+        clock = FakeClock()
+        stop_event = threading.Event()
+        writes: list[float] = []
+        plan = [
+            {"time_sec": index * 0.025, "targets_deg": {"j10": float(index), "j11": 0.0}}
+            for index in range(5)
+        ]
+
+        def writer(targets: dict[str, float]) -> dict:
+            writes.append(targets["j10"])
+            if len(writes) == 1:
+                clock.now += 0.040
+            return {"ok": True}
+
+        stats = run_target_plan(
+            plan,
+            stop_event=stop_event,
+            write_target=writer,
+            monotonic=clock.monotonic,
+            wait=clock.wait,
+        )
+
+        self.assertEqual(writes, [0.0, 3.0, 4.0])
+        self.assertEqual(stats["skipped_tick_count"], 2)
+
+    def test_wait_overshoot_never_sends_a_future_target_early(self) -> None:
+        clock = FakeClock()
+        stop_event = threading.Event()
+        writes: list[tuple[float, float]] = []
+        overshot = False
+
+        def wait(seconds: float) -> bool:
+            nonlocal overshot
+            clock.now += max(0.0, seconds)
+            if seconds > 0.0 and not overshot:
+                clock.now += 0.015
+                overshot = True
+            return False
+
+        plan = [
+            {"time_sec": index * 0.025, "targets_deg": {"j10": float(index), "j11": 0.0}}
+            for index in range(5)
+        ]
+        run_target_plan(
+            plan,
+            stop_event=stop_event,
+            write_target=lambda targets: writes.append((targets["j10"], clock.now)) or {"ok": True},
+            monotonic=clock.monotonic,
+            wait=wait,
+        )
+
+        self.assertNotIn(1.0, [target for target, _ in writes])
+        target_two_time = next(at for target, at in writes if target == 2.0)
+        self.assertGreaterEqual(target_two_time, 0.050)
 
 
 class FineCenterPlannerTest(unittest.TestCase):

@@ -1260,9 +1260,13 @@ class WebControlService:
         existing = getattr(self, "_subject_lock_controller", None)
         if existing is not None:
             return existing
+        vision_root = self.base_dir.parent / "视觉识别与跟随"
+        from 控制桥接_common import ensure_import_paths
+
+        ensure_import_paths([vision_root])
         from vision.主体锁定控制器_subject_lock_controller import SubjectLockController
 
-        follow_cfg = self._load_vision_follow_config(self.base_dir.parent / "视觉识别与跟随")
+        follow_cfg = self._load_vision_follow_config(vision_root)
         owner: dict[str, Any] = {}
         controller = SubjectLockController(
             self.base_dir.parent / "视觉识别与跟随" / "runtime" / "subject_lock_profiles",
@@ -1273,7 +1277,7 @@ class WebControlService:
             dry_run=self.bridge.mode != "real",
             target_validator=self.bridge.validate_stream_joint_targets,
             config={
-                "control_update_hz": float(follow_cfg.get("control_update_hz", 40.0)),
+                "control_update_hz": 40.0,
                 "vision_stale_timeout_sec": float(follow_cfg.get("vision_stale_timeout_sec", 0.25)),
                 "pan_sign": float(follow_cfg.get("pan_sign", 1.0)),
                 "max_j11_speed_deg_s": float(follow_cfg.get("max_pan_speed_deg_s", 12.0)),

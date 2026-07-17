@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import threading
+import tempfile
 import unittest
+from pathlib import Path
 
 from Web测试路径_test_paths import WEB_ROOT
+from 控制桥接_common import ensure_import_paths
 from backend.schemas import (
     SubjectLockCalibrationStartRequest,
     SubjectLockProfileActionRequest,
@@ -50,6 +53,9 @@ class FakeBridge:
     def get_state(self) -> dict:
         self.full_reads += 1
         return {"ok": True, "data": {"joints_deg": {"j10": 1.0, "j11": 2.0}}}
+
+    def validate_stream_joint_targets(self, targets: dict) -> dict:
+        return {"ok": True, "data": {"targets_deg": targets}}
 
 
 class SubjectLockWebTest(unittest.TestCase):
@@ -111,6 +117,22 @@ class SubjectLockWebTest(unittest.TestCase):
             "/api/v1/subject-lock/playback/stop",
         ):
             self.assertIn(route, source)
+
+    def test_subject_lock_uses_independent_40hz_not_follow_frequency(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            ensure_import_paths([WEB_ROOT.parent / "视觉识别与跟随"])
+            service = WebControlService.__new__(WebControlService)
+            service._subject_lock_controller = None
+            service.base_dir = Path(directory) / "Web控制台"
+            service.base_dir.mkdir()
+            service.bridge = FakeBridge()
+            service.vision_latest = lambda: {}
+            service._follow_initial_state = lambda: {"j10": 0.0, "j11": 0.0}
+            service._load_vision_follow_config = lambda _root: {"control_update_hz": 60.0}
+
+            controller = service._get_subject_lock_controller()
+
+            self.assertEqual(controller.config["control_update_hz"], 40.0)
 
 
 if __name__ == "__main__":

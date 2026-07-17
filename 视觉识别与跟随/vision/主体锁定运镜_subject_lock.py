@@ -13,9 +13,6 @@ from .路径工具_path_utils import ensure_project_root_on_path
 
 ensure_project_root_on_path()
 
-from 控制桥接_common import eased_end_progress  # noqa: E402
-
-
 def calibration_positions(start_mm: float, end_mm: float, count: int = 11) -> list[float]:
     count = max(2, int(count))
     start = float(start_mm)
@@ -164,8 +161,8 @@ def build_playback_plan(
     interval = duration / (steps - 1)
     result: list[dict[str, Any]] = []
     for index in range(steps):
-        u = index / (steps - 1)
-        progress = eased_end_progress(u, duration, easing)
+        elapsed = index * interval
+        progress = _cosine_ramp_progress(elapsed, distance=distance, speed=speed, ease_sec=easing)
         j10 = start + (end - start) * progress
         if index == 0:
             j10 = start
@@ -179,6 +176,28 @@ def build_playback_plan(
             }
         )
     return result
+
+
+def _cosine_ramp_progress(elapsed_sec: float, *, distance: float, speed: float, ease_sec: float) -> float:
+    """半余弦速度坡道：加速段和匀速段的速度连续，不会在交界处跳变。"""
+    total_distance = max(1e-9, float(distance))
+    cruise_speed = max(1e-9, float(speed))
+    ease = max(0.0, float(ease_sec))
+    elapsed = max(0.0, float(elapsed_sec))
+    if ease <= 1e-9:
+        return min(1.0, elapsed * cruise_speed / total_distance)
+    duration = total_distance / cruise_speed + ease
+    elapsed = min(duration, elapsed)
+    ramp_distance = 0.5 * cruise_speed * ease
+    if elapsed < ease:
+        covered = 0.5 * cruise_speed * (elapsed - ease / math.pi * math.sin(math.pi * elapsed / ease))
+    elif elapsed <= duration - ease:
+        covered = ramp_distance + cruise_speed * (elapsed - ease)
+    else:
+        remaining = duration - elapsed
+        tail = 0.5 * cruise_speed * (remaining - ease / math.pi * math.sin(math.pi * remaining / ease))
+        covered = total_distance - tail
+    return min(1.0, max(0.0, covered / total_distance))
 
 
 def plan_metrics(plan: list[Mapping[str, Any]]) -> dict[str, float]:
@@ -232,6 +251,8 @@ def validate_playback_speed(
         return within_limits and dynamic_ok, within_limits, metrics
 
     valid, within_limits, metrics = evaluate(requested)
+    speed_exceeded = metrics["max_j11_speed_deg_s"] > float(max_j11_speed_deg_s) + 1e-6
+    accel_exceeded = metrics["max_j11_accel_deg_s2"] > float(max_j11_accel_deg_s2) + 1e-6
     safe = requested
     if not within_limits:
         safe = 0.0
@@ -255,14 +276,22 @@ def validate_playback_speed(
         "requested_speed_mm_s": requested,
         "safe_max_speed_mm_s": round(safe, 3),
         "metrics": {key: round(value, 6) for key, value in metrics.items()},
-        "message": (
-            "轨迹速度检查通过。"
-            if valid
-            else "轨迹目标超出 J10/J11 关节限位，已禁止播放。"
-            if not within_limits
-            else f"J11 速度或加速度超限；导轨最高安全速度约 {safe:.3f} mm/s。"
-        ),
+        "message": _validation_message(valid, within_limits, speed_exceeded, accel_exceeded, safe),
     }
+
+
+def _validation_message(valid: bool, within_limits: bool, speed_bad: bool, accel_bad: bool, safe_speed: float) -> str:
+    if valid:
+        return "轨迹速度检查通过。"
+    if not within_limits:
+        return "轨迹目标超出 J10/J11 关节限位，已禁止播放。"
+    if accel_bad and not speed_bad:
+        reason = "J11 加速度不平滑"
+    elif speed_bad and not accel_bad:
+        reason = "J11 速度超限"
+    else:
+        reason = "J11 速度和加速度超限"
+    return f"{reason}；导轨最高安全速度约 {safe_speed:.3f} mm/s。"
 
 
 def run_target_plan(
@@ -280,14 +309,31 @@ def run_target_plan(
     skipped = 0
     intervals: deque[float] = deque(maxlen=512)
     previous_write: float | None = None
+    positive_intervals = [
+        float(plan[position + 1].get("time_sec", 0.0)) - float(plan[position].get("time_sec", 0.0))
+        for position in range(len(plan) - 1)
+        if float(plan[position + 1].get("time_sec", 0.0)) > float(plan[position].get("time_sec", 0.0))
+    ]
+    nominal_interval = min(positive_intervals) if positive_intervals else 0.0
+    late_tolerance = nominal_interval * 0.25
+    min_write_spacing = nominal_interval * 0.5
     while index < len(plan) and not stop_event.is_set():
         deadline = started + float(plan[index].get("time_sec", 0.0))
+        now = monotonic()
+        if index + 1 < len(plan) and (
+            deadline < now - late_tolerance
+            or (previous_write is not None and deadline < previous_write + min_write_spacing)
+        ):
+            index += 1
+            skipped += 1
+            continue
         if wait_fn(max(0.0, deadline - monotonic())) or stop_event.is_set():
             break
         now = monotonic()
-        while index + 1 < len(plan) and started + float(plan[index + 1].get("time_sec", 0.0)) <= now:
+        if index + 1 < len(plan) and deadline < now - late_tolerance:
             index += 1
             skipped += 1
+            continue
         if stop_event.is_set():
             break
         targets = {str(joint): float(value) for joint, value in dict(plan[index].get("targets_deg", {})).items()}

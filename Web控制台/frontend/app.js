@@ -1206,7 +1206,7 @@ function renderSubjectLockStatus() {
     moving_to_point: "前往标定点",
     centering: "精细居中",
     ready: "可播放",
-    needs_speed: "速度超限",
+    needs_speed: "检查未通过",
     moving_to_start: "回到起点",
     at_start: "已到起点",
     playing: "播放中",
@@ -1275,7 +1275,7 @@ function renderSubjectLockProfile() {
     $("#subjectLockEndMm").value = rail.end_mm ?? 50;
     $("#subjectLockSpeedMmS").value = rail.requested_speed_mm_s ?? 2;
   }
-  $("#subjectLockValidation").textContent = validation.valid ? "检查通过" : validation.message ? "速度超限" : "未检查";
+  $("#subjectLockValidation").textContent = validation.valid ? "检查通过" : validation.message ? "检查未通过" : "未检查";
   $("#subjectLockValidation").className = `status-pill ${validation.valid ? "good" : validation.message ? "bad" : "warn"}`;
   $("#subjectLockRequestedSpeed").textContent = rail.requested_speed_mm_s == null ? "--" : `${formatNum(rail.requested_speed_mm_s, 3)} mm/s`;
   $("#subjectLockSafeSpeed").textContent = validation.safe_max_speed_mm_s == null ? "--" : `${formatNum(validation.safe_max_speed_mm_s, 3)} mm/s`;

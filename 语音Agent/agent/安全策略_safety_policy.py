@@ -96,9 +96,8 @@ class SafetyPolicy:
             delta = float(arguments["delta_deg"])
         except Exception as exc:
             raise ValueError("rotate_joint 需要 delta_deg 数字参数。") from exc
-        max_delta = float(self.safety.get("max_rotate_joint_delta_deg", 5.0))
-        if abs(delta) > max_delta:
-            raise ValueError(f"rotate_joint 单次步进不能超过 ±{max_delta} 度。")
+        if not math.isfinite(delta):
+            raise ValueError("关节运动数值必须是有限数字。")
         return {"joint_name": joint, "delta_deg": delta}
 
     def _check_move_joint_shape(self, arguments: dict[str, Any]) -> dict[str, Any]:

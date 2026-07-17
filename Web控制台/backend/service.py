@@ -43,6 +43,7 @@ from 通用_io import read_json_object, read_structured_section, update_structur
 from 真实舵机控制.连续关节流_continuous_joint_stream import run_continuous_joint_stream  # noqa: E402
 
 from .controller_bridge import ControllerBridge
+from .agent_pending_action import PendingActionError, PendingActionStore
 from .errors import WebAPIError
 from .logger import JsonLineLogger
 from .schemas import (
@@ -98,6 +99,7 @@ class WebControlService:
         self.recent_error: dict[str, Any] | None = None
         self._agent_app: Any | None = None
         self._agent_demo_pending_action: dict[str, Any] | None = None
+        self._agent_pending = PendingActionStore(ttl_sec=30.0)
 
     # ------------------------------------------------------------------
     # 基础信息
@@ -161,6 +163,7 @@ class WebControlService:
                 "allow_real_robot_tools": bool(safety.get("allow_real_robot_tools", False)),
                 "allowed_tools": list(safety.get("allowed_tools", [])) if isinstance(safety.get("allowed_tools", []), list) else [],
                 "tool_check": self.agent_tool_check(include_state=True),
+                "pending_action": self._agent_pending.current(),
             }
         except Exception as exc:
             return {"available": False, "message": str(exc)}
@@ -216,6 +219,7 @@ class WebControlService:
     def agent_reset_session(self) -> dict[str, Any]:
         try:
             self._agent_demo_pending_action = None
+            self._agent_pending.invalidate("agent_session_reset")
             app = self._get_agent_app(force_new_session=True)
             app.reset_session()
             return {"message": "AI 会话已重置。"}
@@ -581,6 +585,7 @@ class WebControlService:
 
     def disconnect(self) -> dict[str, Any]:
         with self._lock:
+            self._agent_pending.invalidate("disconnect")
             self._stop_follow_controller("disconnect")
             result = self.bridge.disconnect()
             data = self._unwrap_bridge(result, code="DISCONNECT_FAILED")
@@ -590,6 +595,7 @@ class WebControlService:
 
     def set_mode(self, mode: str, confirm_text: str = "") -> dict[str, Any]:
         with self._lock:
+            self._agent_pending.invalidate("mode_change")
             self._stop_follow_controller("mode_change")
             normalized = self._normalize_mode(mode)
             self._require_real_confirm_if_needed(normalized, confirm_text, action="切换真实模式")
@@ -875,6 +881,7 @@ class WebControlService:
 
     def stop(self) -> dict[str, Any]:
         with self._lock:
+            self._agent_pending.invalidate("emergency_stop")
             follow_status = self._stop_follow_controller("emergency_stop")
             self.stop_continuous_jog(join_timeout=0.2)
             result = self.bridge.stop()
@@ -996,6 +1003,7 @@ class WebControlService:
 
     def stop_follow(self) -> dict[str, Any]:
         with self._lock:
+            self._agent_pending.invalidate("follow_stop")
             if self._follow_controller is None:
                 return {"message": "视觉跟随未启动。", "follow": self.follow_status()}
             status = self._stop_follow_controller("manual_stop") or self.follow_status()
@@ -1312,11 +1320,229 @@ class WebControlService:
                         return tool_result_ok(tool_name, service.stop())
                     except Exception as exc:
                         return tool_result_fail(tool_name, f"停止命令失败：{exc}")
-                from agent.工具桥接_tool_bridge import RobotToolBridge
-
-                return RobotToolBridge(config).execute(tool_name, arguments or {})
+                if tool_name == "stop_face_follow":
+                    try:
+                        return tool_result_ok(tool_name, service.stop_follow())
+                    except Exception as exc:
+                        return tool_result_fail(tool_name, f"停止视觉跟随失败：{exc}")
+                try:
+                    return tool_result_ok(tool_name, service.agent_propose_tool(tool_name, arguments or {}))
+                except Exception as exc:
+                    return tool_result_fail(tool_name, str(exc))
 
         return WebServiceToolBridge()
+
+    def agent_propose_tool(self, tool_name: str, arguments: dict[str, Any] | None = None) -> dict[str, Any]:
+        """校验 Agent 工具并创建待确认动作，不触发运动。"""
+
+        with self._lock:
+            name = str(tool_name or "").strip()
+            args = dict(arguments or {})
+            config = self._load_agent_config()
+            agent_root = Path(__file__).resolve().parents[2] / "语音Agent"
+            if str(agent_root) not in sys.path:
+                sys.path.insert(0, str(agent_root))
+            from agent.安全策略_safety_policy import SafetyPolicy
+
+            policy = SafetyPolicy(config)
+            state = self.get_robot_state()
+            snapshot = self._agent_state_snapshot(state)
+            try:
+                safe_args = policy.check(name, args, robot_mode=snapshot["mode"])
+            except Exception as exc:
+                raise WebAPIError("AGENT_TOOL_REJECTED", str(exc)) from exc
+
+            if snapshot["mode"] == "real" and not snapshot["connected"]:
+                raise WebAPIError("REAL_SESSION_REQUIRED", "执行真实 AI 动作前，请先连接 real 模式。")
+            self._agent_require_idle()
+
+            if name in {"move_joint", "rotate_joint"}:
+                try:
+                    normalized = policy.validate_move_joint(args, snapshot["joints"], legacy=name == "rotate_joint")
+                except Exception as exc:
+                    raise WebAPIError("AGENT_MOTION_REJECTED", str(exc)) from exc
+                name = "move_joint"
+                safe_args = normalized
+                summary = self._agent_joint_summary(normalized)
+            elif name == "run_robot_behavior" and safe_args.get("name") in {"open_gripper", "close_gripper"}:
+                ratio = 1.0 if safe_args["name"] == "open_gripper" else 0.0
+                name = "set_gripper"
+                safe_args = {"open_ratio": ratio}
+                self._agent_require_gripper()
+                summary = self._agent_gripper_summary(ratio)
+            elif name == "set_gripper":
+                ratio = float(safe_args["open_ratio"])
+                self._agent_require_gripper()
+                summary = self._agent_gripper_summary(ratio)
+            elif name == "run_robot_behavior" and safe_args.get("name") == "home":
+                precheck = self.home_precheck()
+                summary = {
+                    "title": "回到 Home",
+                    "behavior": "home",
+                    "speed_percent": 50,
+                    "targets": precheck.get("targets_deg", {}),
+                    "confirmation_text": "将按预检结果回到 Home。请确认机械臂周围安全后执行。",
+                }
+            elif name == "play_action":
+                safe_args["loop"] = False
+                try:
+                    detail = self.get_action(str(safe_args["name"]))
+                except Exception as exc:
+                    raise WebAPIError("AGENT_ACTION_NOT_FOUND", f"动作库里不存在动作：{safe_args.get('name')}") from exc
+                frames = detail.get("frames", []) if isinstance(detail.get("frames"), list) else []
+                summary = {
+                    "title": f"播放动作：{safe_args['name']}",
+                    "name": safe_args["name"],
+                    "speed": float(safe_args.get("speed", 1.0)),
+                    "loop": False,
+                    "frame_count": len(frames),
+                    "duration_sec": detail.get("duration_sec"),
+                    "confirmation_text": f"将播放一次动作“{safe_args['name']}”。请确认机械臂周围安全后执行。",
+                }
+            elif name == "start_face_follow":
+                follow = self.follow_status()
+                effective = follow.get("effective_config", {}) if isinstance(follow.get("effective_config"), dict) else {}
+                safe_args = {}
+                summary = {
+                    "title": "启动视觉跟随",
+                    "mode": snapshot["mode"],
+                    "dry_run": snapshot["mode"] != "real",
+                    "joints": [value for value in (effective.get("pan_joint"), effective.get("tilt_joint")) if value],
+                    "effective_config": effective,
+                    "confirmation_text": "视觉跟随会持续产生运动，直到停止。请确认机械臂周围安全后执行。",
+                }
+            else:
+                raise WebAPIError("AGENT_TOOL_REJECTED", f"工具不支持待确认执行：{name}")
+
+            pending = self._agent_pending.create(name, safe_args, summary, snapshot)
+            return {"message": "动作已生成，等待二次确认。", "pending_action": pending}
+
+    def agent_confirm_pending(self, action_id: str) -> dict[str, Any]:
+        """消费待确认动作，并在最新状态复核后同进程执行。"""
+
+        with self._lock:
+            state = self.get_robot_state()
+            snapshot = self._agent_state_snapshot(state)
+            self._agent_require_idle()
+            try:
+                action = self._agent_pending.consume(action_id, snapshot)
+            except PendingActionError as exc:
+                raise WebAPIError(exc.code, str(exc)) from exc
+
+            config = self._load_agent_config()
+            agent_root = Path(__file__).resolve().parents[2] / "语音Agent"
+            if str(agent_root) not in sys.path:
+                sys.path.insert(0, str(agent_root))
+            from agent.安全策略_safety_policy import SafetyPolicy
+
+            policy = SafetyPolicy(config)
+            tool_name = str(action["tool_name"])
+            arguments = dict(action.get("arguments", {}))
+            if tool_name == "move_joint":
+                source = {
+                    "joint_name": arguments["joint_name"],
+                    "mode": arguments["mode"],
+                    "value": arguments["value"],
+                }
+                try:
+                    arguments = policy.validate_move_joint(source, snapshot["joints"])
+                except Exception as exc:
+                    raise WebAPIError("AGENT_MOTION_REJECTED", str(exc)) from exc
+                result = self.move_joints(
+                    MoveJointsRequest(
+                        targets_deg={arguments["joint_name"]: arguments["target"]},
+                        speed_percent=50,
+                        confirm_text=self.confirm_text,
+                    )
+                )
+            elif tool_name == "set_gripper":
+                self._agent_require_gripper()
+                result = self.set_gripper(
+                    GripperRequest(open_ratio=float(arguments["open_ratio"]), wait=True, confirm_text=self.confirm_text)
+                )
+            elif tool_name == "run_robot_behavior" and arguments.get("name") == "home":
+                self.home_precheck()
+                result = self.home(HomeRequest(speed_percent=50, confirm_text=self.confirm_text))
+            elif tool_name == "play_action":
+                result = self.play_action(
+                    PlayActionRequest(
+                        name=str(arguments["name"]),
+                        speed=float(arguments.get("speed", 1.0)),
+                        loop=False,
+                        confirm_text=self.confirm_text,
+                    )
+                )
+            elif tool_name == "start_face_follow":
+                result = self.start_follow(
+                    FollowStartRequest(dry_run=snapshot["mode"] != "real", confirm_text=self.confirm_text)
+                )
+            else:
+                raise WebAPIError("AGENT_TOOL_REJECTED", f"待确认工具无法执行：{tool_name}")
+            return {"message": "已确认并执行动作。", "executed_action": action, "result": result}
+
+    def agent_cancel_pending(self, action_id: str) -> dict[str, Any]:
+        try:
+            action = self._agent_pending.cancel(action_id)
+        except PendingActionError as exc:
+            raise WebAPIError(exc.code, str(exc)) from exc
+        return {"message": "待确认动作已取消。", "cancelled_action": action}
+
+    @staticmethod
+    def _agent_state_snapshot(state: dict[str, Any]) -> dict[str, Any]:
+        joints = state.get("joints_deg", {}) if isinstance(state.get("joints_deg"), dict) else {}
+        return {
+            "mode": str(state.get("mode") or "dry_run"),
+            "connected": bool(state.get("connected", False)),
+            "joints": {str(key): float(value) for key, value in joints.items()},
+        }
+
+    def _agent_require_idle(self) -> None:
+        action = self.current_action_status()
+        if str(action.get("state")) == "playing":
+            raise WebAPIError("AGENT_MOTION_BUSY", "动作库正在播放，请先停止当前动作。")
+        follow = self.follow_status()
+        if bool(follow.get("running")):
+            raise WebAPIError("AGENT_MOTION_BUSY", "视觉跟随正在运行，请先停止视觉跟随。")
+
+    def _agent_require_gripper(self) -> None:
+        calibration = self.get_calibration_status().get("calibration", {})
+        raw_items = calibration.get("raw_items", {}) if isinstance(calibration, dict) else {}
+        if not isinstance(raw_items, dict) or "gripper" not in raw_items:
+            raise WebAPIError("GRIPPER_UNAVAILABLE", "夹爪未安装或未标定，当前无法执行夹爪动作。")
+
+    @staticmethod
+    def _agent_joint_summary(arguments: dict[str, Any]) -> dict[str, Any]:
+        joint = str(arguments["joint_name"]).upper()
+        unit = str(arguments["unit"])
+        suffix = "mm" if unit == "mm" else "°"
+        return {
+            "title": f"移动 {joint}",
+            "joint": joint,
+            "mode": arguments["mode"],
+            "current": arguments["current_value"],
+            "delta": arguments["delta"],
+            "target": arguments["target"],
+            "unit": unit,
+            "speed_percent": 50,
+            "confirmation_text": (
+                f"{joint} 将从 {arguments['current_value']:g}{suffix} 移动到 "
+                f"{arguments['target']:g}{suffix}。请确认机械臂周围安全后执行。"
+            ),
+        }
+
+    @staticmethod
+    def _agent_gripper_summary(open_ratio: float) -> dict[str, Any]:
+        if open_ratio == 1.0:
+            title = "打开夹爪"
+        elif open_ratio == 0.0:
+            title = "关闭夹爪"
+        else:
+            title = "调整夹爪"
+        return {
+            "title": title,
+            "open_ratio": open_ratio,
+            "confirmation_text": f"夹爪将调整到 {open_ratio * 100:g}% 开度。请确认周围安全后执行。",
+        }
 
     @staticmethod
     def _latest_files(directory: Path, pattern: str, limit: int = 8) -> list[dict[str, Any]]:

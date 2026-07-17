@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -81,6 +81,15 @@ class AgentAskRequest(BaseModel):
     text: str = Field(..., min_length=1)
     speak: bool = False
     force_new_session: bool = False
+
+
+class AgentToolProposalRequest(BaseModel):
+    tool_name: str = Field(..., min_length=1)
+    arguments: dict[str, Any] = Field(default_factory=dict)
+
+
+class AgentPendingActionRequest(BaseModel):
+    action_id: str = Field(..., min_length=16)
 
 
 class CinematicAnalyzeRequest(BaseModel):

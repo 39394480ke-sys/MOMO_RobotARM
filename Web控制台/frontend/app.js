@@ -29,10 +29,14 @@ const state = {
   agent: null,
   agentMessages: [],
   lastAgentReply: null,
-  cinematic: null,
-  cinematicProject: null,
-  cinematicProjectPath: "",
-  cinematicGeneratedAction: "",
+  subjectLock: null,
+  subjectLockProfiles: [],
+  subjectLockProfile: null,
+  subjectLockProfileId: "",
+  subjectLockVision: null,
+  subjectLockDrag: null,
+  subjectLockTimer: null,
+  subjectLockPreviewTick: 0,
   visionLiveTimer: null,
   latestVision: null,
   visionMockActive: false,
@@ -98,19 +102,25 @@ function bindEvents() {
   $("#refreshVisionTargetBtn").addEventListener("click", refreshVisionTargetState);
   $("#visionPreviewFrame").addEventListener("load", () => renderVisionOverlay(state.latestVision));
   bindVisionDragSelect();
-  window.addEventListener("resize", () => renderVisionOverlay(state.latestVision));
+  window.addEventListener("resize", () => {
+    renderVisionOverlay(state.latestVision);
+    renderSubjectLockOverlay();
+  });
   $("#refreshAgentBtn").addEventListener("click", loadAgentStatus);
   $("#sendAgentBtn").addEventListener("click", sendAgentMessage);
   $("#resetAgentBtn").addEventListener("click", resetAgentSession);
   $("#clearAgentChatBtn").addEventListener("click", clearAgentChat);
   $$(".agent-quick-btn").forEach((btn) => btn.addEventListener("click", () => useAgentPrompt(btn.dataset.agentPrompt || "")));
-  $("#refreshCinematicBtn").addEventListener("click", loadCinematicStatus);
-  $("#analyzeCinematicBtn").addEventListener("click", analyzeCinematicLatest);
-  $("#keyframesCinematicBtn").addEventListener("click", generateCinematicKeyframes);
-  $("#generateCinematicActionBtn").addEventListener("click", generateCinematicAction);
-  $("#playCinematicActionBtn").addEventListener("click", playGeneratedCinematicAction);
-  $("#cinematicRecordsList").addEventListener("click", handleCinematicRecordClick);
-  $("#cinematicProjectsList").addEventListener("click", handleCinematicProjectClick);
+  $("#refreshSubjectLockBtn").addEventListener("click", loadSubjectLockStatus);
+  $("#refreshSubjectLockPreviewBtn").addEventListener("click", refreshSubjectLockPreview);
+  $("#startSubjectLockCalibrationBtn").addEventListener("click", startSubjectLockCalibration);
+  $("#validateSubjectLockBtn").addEventListener("click", validateSubjectLockProfile);
+  $("#moveSubjectLockToStartBtn").addEventListener("click", moveSubjectLockToStart);
+  $("#playSubjectLockBtn").addEventListener("click", playSubjectLockProfile);
+  $("#stopSubjectLockBtn").addEventListener("click", stopSubjectLock);
+  $("#subjectLockProfilesList").addEventListener("click", handleSubjectLockProfileClick);
+  $("#subjectLockPreviewFrame").addEventListener("load", renderSubjectLockOverlay);
+  bindSubjectLockDragSelect();
   $("#agentInput").addEventListener("keydown", (event) => {
     if (event.key === "Enter") sendAgentMessage();
   });
@@ -348,142 +358,154 @@ async function loadAgentStatus() {
   }
 }
 
-async function loadCinematicStatus() {
+async function loadSubjectLockStatus(options = {}) {
   try {
-    state.cinematic = await getJson("/api/v1/cinematic/status", { timeout: 8000 });
-    renderCinematicStatus();
-    if (!$("#cinematicRecordPath").value && state.cinematic?.latest_record?.path) {
-      $("#cinematicRecordPath").value = state.cinematic.latest_record.path;
+    const statusPromise = getJson("/api/v1/subject-lock/status", { timeout: 8000 });
+    const profilePromise = options.loadProfiles === false
+      ? Promise.resolve(null)
+      : getJson("/api/v1/subject-lock/profiles", { timeout: 8000 });
+    const [status, profileData] = await Promise.all([statusPromise, profilePromise]);
+    state.subjectLock = status;
+    if (profileData) state.subjectLockProfiles = profileData.profiles || [];
+    if (status.profile_id) state.subjectLockProfileId = status.profile_id;
+    if (!state.subjectLockProfileId && state.subjectLockProfiles.length) {
+      state.subjectLockProfileId = state.subjectLockProfiles[0].profile_id || "";
     }
-    if (!$("#cinematicProjectPath").value && state.cinematic?.latest_project?.path) {
-      $("#cinematicProjectPath").value = state.cinematic.latest_project.path;
+    renderSubjectLockStatus();
+    renderSubjectLockProfiles();
+    if (state.subjectLockProfileId && options.loadProfile !== false) {
+      await loadSubjectLockProfile(state.subjectLockProfileId, false);
     }
-    await loadCinematicProject();
+  } catch (error) {
+    if (!options.quiet) showError(error);
+  }
+}
+
+async function loadSubjectLockProfile(profileId, refreshStatus = true) {
+  if (!profileId) return;
+  try {
+    state.subjectLockProfile = await getJson(`/api/v1/subject-lock/profiles/${encodeURIComponent(profileId)}`);
+    state.subjectLockProfileId = profileId;
+    renderSubjectLockProfile();
+    renderSubjectLockProfiles();
+    if (refreshStatus) await loadSubjectLockStatus({ loadProfile: false, quiet: true });
   } catch (error) {
     showError(error);
   }
 }
 
-async function loadCinematicProject(projectPath = "") {
-  const selectedPath = projectPath || $("#cinematicProjectPath").value.trim() || state.cinematic?.latest_project?.path || "";
-  if (!selectedPath) {
-    state.cinematicProject = null;
-    state.cinematicProjectPath = "";
-    renderCinematicProject(null);
-    return;
-  }
+async function startSubjectLockCalibration() {
   try {
-    const query = new URLSearchParams({ project_path: selectedPath });
-    const data = await getJson(`/api/v1/cinematic/project?${query.toString()}`, { timeout: 8000 });
-    state.cinematicProject = data.project || null;
-    state.cinematicProjectPath = data.project_path || selectedPath;
-    $("#cinematicProjectPath").value = state.cinematicProjectPath;
-    renderCinematicProject(state.cinematicProject);
-  } catch (error) {
-    state.cinematicProject = null;
-    state.cinematicProjectPath = "";
-    renderCinematicProject(null);
-    showError(error);
-  }
-}
-
-async function analyzeCinematicLatest() {
-  const recordPath = $("#cinematicRecordPath").value.trim() || state.cinematic?.latest_record?.path || "";
-  if (!recordPath) {
-    showError(new ApiError("NO_CINEMATIC_RECORD", "没有可分析的试拍记录。"));
-    return;
-  }
-  try {
-    const data = await postJson("/api/v1/cinematic/analyze", { record_path: recordPath }, { timeout: 30000 });
-    $("#cinematicResultJson").textContent = JSON.stringify(summarizeCinematicResult(data), null, 2);
-    state.cinematicProjectPath = data.project_path || "";
-    if (state.cinematicProjectPath) $("#cinematicProjectPath").value = state.cinematicProjectPath;
-    renderCinematicProject(data.project || null);
-    await loadCinematicStatus();
-    log("info", "AI 运镜试拍分析完成");
+    const latest = state.subjectLockVision || (await getJson("/api/v1/vision/latest", { timeout: 5000 }));
+    if (!latest.has_target && !latest.detected) throw new ApiError("SUBJECT_LOCK_TARGET_REQUIRED", "请先在画面中框选主体。");
+    const body = await withSafety({
+      name: $("#subjectLockName").value.trim(),
+      start_mm: Number($("#subjectLockStartMm").value),
+      end_mm: Number($("#subjectLockEndMm").value),
+      speed_mm_s: Number($("#subjectLockSpeedMmS").value),
+    });
+    state.subjectLock = await postJson("/api/v1/subject-lock/calibration/start", body, { timeout: 10000 });
+    state.subjectLockProfileId = state.subjectLock.profile_id || "";
+    state.subjectLockProfile = null;
+    renderSubjectLockStatus();
+    startSubjectLockPolling();
+    log("info", "主体锁定自动标定已启动");
   } catch (error) {
     showError(error);
   }
 }
 
-async function generateCinematicKeyframes() {
-  const projectPath = currentCinematicProjectPath();
-  if (!projectPath) {
-    showError(new ApiError("NO_CINEMATIC_PROJECT", "没有可生成关键帧的导演项目。"));
-    return;
-  }
-  const minCount = clampInt(Number($("#cinematicMinKeyframes").value || 3), 3, 8);
-  const maxCount = clampInt(Number($("#cinematicMaxKeyframes").value || 8), minCount, 8);
+async function validateSubjectLockProfile() {
+  const profileId = currentSubjectLockProfileId();
+  if (!profileId) return showError(new ApiError("SUBJECT_LOCK_PROFILE_REQUIRED", "请先选择一条轨迹。"));
   try {
-    const data = await postJson("/api/v1/cinematic/keyframes", { project_path: projectPath, min_count: minCount, max_count: maxCount }, { timeout: 30000 });
-    $("#cinematicResultJson").textContent = JSON.stringify(summarizeCinematicResult(data), null, 2);
-    state.cinematicProjectPath = data.project_path || projectPath;
-    renderCinematicProject(data.project || null);
-    await loadCinematicStatus();
-    log("info", "AI 运镜关键帧已生成");
-  } catch (error) {
-    showError(error);
-  }
-}
-
-async function generateCinematicAction() {
-  const projectPath = currentCinematicProjectPath();
-  if (!projectPath) {
-    showError(new ApiError("NO_CINEMATIC_PROJECT", "没有可生成动作的导演项目。"));
-    return;
-  }
-  try {
-    const data = await postJson(
-      "/api/v1/cinematic/generate-action",
-      { project_path: projectPath, action_name: $("#cinematicActionName").value.trim() },
-      { timeout: 30000 }
+    state.subjectLockProfile = await postJson(
+      `/api/v1/subject-lock/profiles/${encodeURIComponent(profileId)}/validate`,
+      { speed_mm_s: Number($("#subjectLockSpeedMmS").value) },
+      { timeout: 15000 }
     );
-    $("#cinematicResultJson").textContent = JSON.stringify(summarizeCinematicResult(data), null, 2);
-    state.cinematicProjectPath = data.project_path || projectPath;
-    state.cinematicGeneratedAction = data.action_name || data.project?.generated_action?.name || "";
-    renderCinematicProject(data.project || null);
-    await Promise.allSettled([loadCinematicStatus(), loadActions()]);
-    log("info", "AI 运镜动作已生成");
+    renderSubjectLockProfile();
+    await loadSubjectLockStatus({ loadProfile: false, quiet: true });
   } catch (error) {
     showError(error);
   }
 }
 
-async function playGeneratedCinematicAction() {
-  const name = state.cinematicGeneratedAction || state.cinematicProject?.generated_action?.name || "";
-  if (!name) {
-    showError(new ApiError("NO_CINEMATIC_ACTION", "当前导演项目还没有生成动作。"));
+async function moveSubjectLockToStart() {
+  await runSubjectLockProfileAction("move-to-start", "回到起点");
+}
+
+async function playSubjectLockProfile() {
+  await runSubjectLockProfileAction("play", "正式播放");
+}
+
+async function runSubjectLockProfileAction(action, label) {
+  const profileId = currentSubjectLockProfileId();
+  if (!profileId) return showError(new ApiError("SUBJECT_LOCK_PROFILE_REQUIRED", "请先选择一条轨迹。"));
+  try {
+    const body = await withSafety({});
+    state.subjectLock = await postJson(`/api/v1/subject-lock/profiles/${encodeURIComponent(profileId)}/${action}`, body, { timeout: 10000 });
+    renderSubjectLockStatus();
+    startSubjectLockPolling();
+    log("info", `主体锁定${label}已启动`);
+  } catch (error) {
+    showError(error);
+  }
+}
+
+async function stopSubjectLock() {
+  try {
+    const data = await postJson("/api/v1/subject-lock/playback/stop", {}, { timeout: 10000 });
+    state.subjectLock = data.subject_lock || state.subjectLock;
+    renderSubjectLockStatus();
+    await loadSubjectLockStatus({ quiet: true });
+  } catch (error) {
+    showError(error);
+  }
+}
+
+async function handleSubjectLockProfileClick(event) {
+  const deleteButton = event.target.closest("[data-subject-lock-delete]");
+  if (deleteButton) {
+    const profileId = deleteButton.dataset.subjectLockDelete || "";
+    if (!profileId || !window.confirm("删除这条主体锁定轨迹？")) return;
+    try {
+      await deleteJson(`/api/v1/subject-lock/profiles/${encodeURIComponent(profileId)}`);
+      if (state.subjectLockProfileId === profileId) {
+        state.subjectLockProfileId = "";
+        state.subjectLockProfile = null;
+      }
+      await loadSubjectLockStatus({ quiet: true });
+    } catch (error) {
+      showError(error);
+    }
     return;
   }
-  try {
-    await playAction(name);
-  } catch (error) {
-    showError(error);
-  }
+  const row = event.target.closest("[data-subject-lock-profile]");
+  if (row) loadSubjectLockProfile(row.dataset.subjectLockProfile || "");
 }
 
-function currentCinematicProjectPath() {
-  return $("#cinematicProjectPath").value.trim() || state.cinematicProjectPath || state.cinematic?.latest_project?.path || "";
+function currentSubjectLockProfileId() {
+  return state.subjectLockProfileId || state.subjectLock?.profile_id || "";
 }
 
-function clampInt(value, min, max) {
-  if (!Number.isFinite(value)) return min;
-  return Math.max(min, Math.min(max, Math.round(value)));
+function startSubjectLockPolling() {
+  if (state.subjectLockTimer) return;
+  state.subjectLockPreviewTick = 0;
+  state.subjectLockTimer = window.setInterval(async () => {
+    await loadSubjectLockStatus({ quiet: true, loadProfiles: false, loadProfile: false });
+    state.subjectLockPreviewTick += 1;
+    if (state.subjectLockPreviewTick % 4 === 0) await refreshSubjectLockPreview({ quiet: true });
+    if (!state.subjectLock?.running) {
+      stopSubjectLockPolling();
+      await loadSubjectLockStatus({ quiet: true });
+    }
+  }, 250);
 }
 
-function handleCinematicRecordClick(event) {
-  const row = event.target.closest("[data-cinematic-record-path]");
-  if (!row) return;
-  $("#cinematicRecordPath").value = row.dataset.cinematicRecordPath || "";
-  log("info", `已选择试拍记录：${row.dataset.cinematicRecordName || ""}`);
-}
-
-function handleCinematicProjectClick(event) {
-  const row = event.target.closest("[data-cinematic-project-path]");
-  if (!row) return;
-  const path = row.dataset.cinematicProjectPath || "";
-  $("#cinematicProjectPath").value = path;
-  loadCinematicProject(path);
+function stopSubjectLockPolling() {
+  if (state.subjectLockTimer) window.clearInterval(state.subjectLockTimer);
+  state.subjectLockTimer = null;
 }
 
 function connectWebSocket() {
@@ -501,6 +523,10 @@ function connectWebSocket() {
       state.session = msg.data.session || state.session;
       state.robot = msg.data.robot || state.robot;
       if (msg.data.continuous_jog) renderContinuousJog(msg.data.continuous_jog);
+      if (msg.data.subject_lock) {
+        state.subjectLock = msg.data.subject_lock;
+        renderSubjectLockStatus();
+      }
       if (msg.data.error) state.lastError = msg.data.error.message || "";
       renderSession();
       renderRobot();
@@ -530,7 +556,7 @@ function buildJointControls() {
     row.innerHTML = `
       <span class="joint-name">${label}</span>
       <button data-joint="${key}" data-dir="-1">-</button>
-      <span class="joint-value" id="joint-${key}">--°</span>
+      <span class="joint-value" id="joint-${key}">${formatJointReadout(key, undefined)}</span>
       <button data-joint="${key}" data-dir="1">+</button>
     `;
     wrap.appendChild(row);
@@ -1172,92 +1198,117 @@ function renderAgentAttachment(attachment) {
     </figure>`;
 }
 
-function renderCinematicStatus() {
-  const data = state.cinematic || {};
-  $("#cinematicStatusState").textContent = data.available ? "可用" : "不可用";
-  $("#cinematicStatusState").className = `status-pill ${data.available ? "good" : "bad"}`;
-  $("#cinematicLatestRecord").textContent = data.latest_record?.name || "--";
-  $("#cinematicLatestProject").textContent = data.latest_project?.name || "--";
-  $("#cinematicRecordDir").textContent = shortPath(data.record_dir || "");
-  $("#cinematicProjectDir").textContent = shortPath(data.project_dir || "");
-  $("#cinematicConfigJson").textContent = JSON.stringify({ rail: data.rail || {}, two_step: data.two_step || {} }, null, 2);
-  renderCinematicFileList("#cinematicRecordsList", data.records || [], "record");
-  renderCinematicFileList("#cinematicProjectsList", data.projects || [], "project");
-}
-
-function renderCinematicProject(project) {
-  const item = project || {};
-  const stage = item.workflow_stage || "--";
-  const generated = item.generated_action || {};
-  state.cinematicGeneratedAction = project ? generated.name || state.cinematicGeneratedAction || "" : "";
-  $("#cinematicProjectStage").textContent = project ? `阶段：${stage}${generated.name ? ` / 动作：${generated.name}` : ""}` : "未加载项目";
-  $("#cinematicAnalysisText").textContent = item.motion_analysis ? formatCinematicAnalysis(item) : "等待试拍分析。";
-  $("#cinematicKeyframesText").textContent = Array.isArray(item.director_keyframes) ? formatCinematicKeyframes(item.director_keyframes) : "等待关键帧生成。";
-  $("#cinematicTrajectoryText").textContent = item.trajectory_plan || item.generated_action ? formatCinematicTrajectory(item) : "等待轨迹生成。";
-}
-
-function formatCinematicAnalysis(project) {
-  const analysis = project.motion_analysis || {};
-  const lines = ["视频运动质量分析", "", JSON.stringify(analysis.summary || {}, null, 2), "", "抖动区间"];
-  for (const item of analysis.jitter_intervals || []) {
-    lines.push(`- ${item.start_time}s -> ${item.end_time}s | frame ${item.start_frame}..${item.end_frame}`);
-  }
-  lines.push("", "稳定区间");
-  for (const item of analysis.stable_intervals || []) {
-    lines.push(`- ${item.start_time}s -> ${item.end_time}s | frame ${item.start_frame}..${item.end_frame}`);
-  }
-  lines.push("", "候选关键帧");
-  for (const item of analysis.candidate_keyframes || []) {
-    lines.push(`- frame ${item.frame_index} / ${item.time}s | score ${item.score}: ${item.reason}`);
-  }
-  return lines.join("\n");
-}
-
-function formatCinematicKeyframes(keyframes) {
-  const lines = ["Keyframe List", ""];
-  for (const item of keyframes || []) {
-    if (!item || typeof item !== "object") continue;
-    lines.push(
-      `${item.id || "K?"}:`,
-      `- time: ${item.time}s / frame ${item.frame_index}`,
-      `- pose: ${JSON.stringify(item.pose || {})}`,
-      `- composition: ${item.composition || ""}`,
-      `- reason: ${item.reason || ""}`,
-      `- dwell_time: ${item.dwell_time || 0}`,
-      ""
-    );
-  }
-  return lines.join("\n");
-}
-
-function formatCinematicTrajectory(project) {
-  const trajectory = project.trajectory_plan || {};
-  const generated = project.generated_action || {};
-  return [
-    "Trajectory",
-    `- type: ${trajectory.type || "--"}`,
-    `- action: ${generated.name || "--"} (${generated.pose_count || 0} points)`,
-    `- action_path: ${generated.path || "--"}`,
-    `- blending strategy: ${JSON.stringify(trajectory.blending_strategy || {})}`,
-    `- speed profile: ${JSON.stringify(trajectory.speed_profile || {})}`,
-    `- recommended execution: ${JSON.stringify(trajectory.recommended_execution || {})}`,
-  ].join("\n");
-}
-
-function summarizeCinematicResult(data) {
-  const project = data.project || {};
-  const analysis = project.motion_analysis || {};
-  return {
-    message: data.message,
-    project_path: data.project_path,
-    action_name: data.action_name,
-    action_path: data.action_path,
-    pose_count: data.pose_count,
-    workflow_stage: project.workflow_stage,
-    summary: analysis.summary,
-    keyframe_count: Array.isArray(data.keyframes) ? data.keyframes.length : Array.isArray(project.director_keyframes) ? project.director_keyframes.length : undefined,
-    generated_action: project.generated_action,
+function renderSubjectLockStatus() {
+  const data = state.subjectLock || {};
+  const phaseLabels = {
+    idle: "空闲",
+    starting: "启动中",
+    moving_to_point: "前往标定点",
+    centering: "精细居中",
+    ready: "可播放",
+    needs_speed: "检查未通过",
+    moving_to_start: "回到起点",
+    at_start: "已到起点",
+    playing: "播放中",
+    finished: "已完成",
+    stopped: "已停止",
+    error: "错误",
   };
+  const phase = data.phase || "idle";
+  const good = ["ready", "at_start", "finished"].includes(phase);
+  const bad = ["error", "needs_speed"].includes(phase);
+  $("#subjectLockMode").textContent = data.dry_run === false ? "REAL" : "DRY-RUN";
+  $("#subjectLockMode").className = `status-pill ${data.dry_run === false ? "bad" : "good"}`;
+  $("#subjectLockPhase").textContent = phaseLabels[phase] || phase;
+  $("#subjectLockPhase").className = `status-pill ${good ? "good" : bad ? "bad" : "warn"}`;
+  $("#subjectLockProgress").value = Math.max(0, Math.min(1, Number(data.progress || 0)));
+  $("#subjectLockCurrentProfile").textContent = data.profile_name || data.profile_id || "--";
+  $("#subjectLockPointState").textContent = `${data.calibration_point_index || 0} / ${data.calibration_point_count || 11}`;
+  $("#subjectLockErrorState").textContent = data.horizontal_error_norm == null ? "--" : formatNum(data.horizontal_error_norm, 4);
+  $("#subjectLockVisionAge").textContent = data.latest_vision_age_ms == null ? "--" : `${formatNum(data.latest_vision_age_ms, 1)} ms`;
+  $("#subjectLockHoldReason").textContent = data.hold_reason || "--";
+  $("#subjectLockFrequency").textContent = data.actual_update_hz ? `${formatNum(data.actual_update_hz, 2)} Hz` : "--";
+  $("#subjectLockP95").textContent = data.p95_interval_ms ? `${formatNum(data.p95_interval_ms, 2)} ms` : "--";
+  $("#subjectLockSkipped").textContent = String(data.skipped_tick_count || 0);
+  $("#subjectLockMessage").textContent = data.last_error || data.message || "等待操作";
+  $("#subjectLockMessage").className = `inline-status ${bad ? "bad-text" : good ? "ok-text" : ""}`;
+  const targets = data.targets_deg || {};
+  $("#subjectLockTargetJ10").textContent = targets.j10 == null ? "--" : `${formatNum(targets.j10, 3)} mm`;
+  $("#subjectLockTargetJ11").textContent = targets.j11 == null ? "--" : `${formatNum(targets.j11, 3)}°`;
+  $("#subjectLockWriteCount").textContent = String(data.write_count || 0);
+  const running = Boolean(data.running);
+  $("#startSubjectLockCalibrationBtn").disabled = running;
+  $("#validateSubjectLockBtn").disabled = running || !currentSubjectLockProfileId();
+  $("#moveSubjectLockToStartBtn").disabled = running || !state.subjectLockProfile?.validation?.valid;
+  $("#playSubjectLockBtn").disabled = running || !state.subjectLockProfile?.validation?.valid;
+  $("#stopSubjectLockBtn").disabled = !running;
+}
+
+function renderSubjectLockProfiles() {
+  const wrap = $("#subjectLockProfilesList");
+  const profiles = state.subjectLockProfiles || [];
+  wrap.innerHTML = profiles.length
+    ? profiles
+        .map((item) => {
+          const selected = item.profile_id === currentSubjectLockProfileId();
+          const valid = Boolean(item.validation?.valid);
+          return `<div class="subject-lock-profile-row ${selected ? "active" : ""}">
+            <button class="compact-list-row compact-list-button" data-subject-lock-profile="${escapeAttr(item.profile_id || "")}">
+              <strong>${escapeHtml(item.name || item.profile_id || "未命名")}</strong>
+              <span>${formatNum(item.rail?.start_mm, 1)} → ${formatNum(item.rail?.end_mm, 1)} mm · ${valid ? "可播放" : "需检查"}</span>
+            </button>
+            <button class="subject-lock-delete" data-subject-lock-delete="${escapeAttr(item.profile_id || "")}" title="删除轨迹" aria-label="删除轨迹">×</button>
+          </div>`;
+        })
+        .join("")
+    : `<div class="empty-text">暂无主体锁定轨迹</div>`;
+}
+
+function renderSubjectLockProfile() {
+  const profile = state.subjectLockProfile || {};
+  const rail = profile.rail || {};
+  const validation = profile.validation || {};
+  const metrics = validation.metrics || {};
+  if (profile.profile_id) {
+    $("#subjectLockName").value = profile.name || profile.profile_id;
+    $("#subjectLockStartMm").value = rail.start_mm ?? -50;
+    $("#subjectLockEndMm").value = rail.end_mm ?? 50;
+    $("#subjectLockSpeedMmS").value = rail.requested_speed_mm_s ?? 2;
+  }
+  $("#subjectLockValidation").textContent = validation.valid ? "检查通过" : validation.message ? "检查未通过" : "未检查";
+  $("#subjectLockValidation").className = `status-pill ${validation.valid ? "good" : validation.message ? "bad" : "warn"}`;
+  $("#subjectLockRequestedSpeed").textContent = rail.requested_speed_mm_s == null ? "--" : `${formatNum(rail.requested_speed_mm_s, 3)} mm/s`;
+  $("#subjectLockSafeSpeed").textContent = validation.safe_max_speed_mm_s == null ? "--" : `${formatNum(validation.safe_max_speed_mm_s, 3)} mm/s`;
+  $("#subjectLockJ11Speed").textContent = metrics.max_j11_speed_deg_s == null ? "--" : `${formatNum(metrics.max_j11_speed_deg_s, 3)}°/s`;
+  $("#subjectLockJ11Accel").textContent = metrics.max_j11_accel_deg_s2 == null ? "--" : `${formatNum(metrics.max_j11_accel_deg_s2, 3)}°/s²`;
+  renderSubjectLockCurve(profile);
+  renderSubjectLockStatus();
+}
+
+function renderSubjectLockCurve(profile) {
+  const svg = $("#subjectLockCurve");
+  const x = profile?.curve?.x || [];
+  const y = profile?.curve?.y || [];
+  if (x.length < 2 || x.length !== y.length) {
+    svg.innerHTML = `<text x="320" y="132" text-anchor="middle" class="curve-empty">等待标定数据</text>`;
+    return;
+  }
+  const minX = Math.min(...x);
+  const maxX = Math.max(...x);
+  const minY = Math.min(...y);
+  const maxY = Math.max(...y);
+  const pad = 34;
+  const sx = (value) => pad + ((value - minX) / Math.max(1e-9, maxX - minX)) * (640 - pad * 2);
+  const sy = (value) => 260 - pad - ((value - minY) / Math.max(1e-9, maxY - minY || 1)) * (260 - pad * 2);
+  const points = x.map((value, index) => `${sx(value).toFixed(2)},${sy(y[index]).toFixed(2)}`).join(" ");
+  svg.innerHTML = `
+    <line class="curve-axis" x1="${pad}" y1="${260 - pad}" x2="${640 - pad}" y2="${260 - pad}" />
+    <line class="curve-axis" x1="${pad}" y1="${pad}" x2="${pad}" y2="${260 - pad}" />
+    <polyline class="curve-line" points="${points}" />
+    ${x.map((value, index) => `<circle class="curve-point" cx="${sx(value)}" cy="${sy(y[index])}" r="4" />`).join("")}
+    <text class="curve-label" x="${pad}" y="248">${formatNum(minX, 1)} mm</text>
+    <text class="curve-label" x="${640 - pad}" y="248" text-anchor="end">${formatNum(maxX, 1)} mm</text>
+    <text class="curve-label" x="42" y="24">J11 ${formatNum(maxY, 1)}°</text>`;
 }
 
 function renderCompactFileList(selector, items) {
@@ -1270,24 +1321,6 @@ function renderCompactFileList(selector, items) {
             <span>${formatFileSize(item.size)} · ${new Date(Number(item.modified_at || 0) * 1000).toLocaleString()}</span>
           </div>`
         )
-        .join("")
-    : `<div class="empty-text">暂无文件</div>`;
-}
-
-function renderCinematicFileList(selector, items, kind) {
-  const wrap = $(selector);
-  wrap.innerHTML = items.length
-    ? items
-        .map((item) => {
-          const attrs =
-            kind === "record"
-              ? `data-cinematic-record-path="${escapeAttr(item.path || "")}" data-cinematic-record-name="${escapeAttr(item.name || "")}"`
-              : `data-cinematic-project-path="${escapeAttr(item.path || "")}" data-cinematic-project-name="${escapeAttr(item.name || "")}"`;
-          return `<button class="compact-list-row compact-list-button" ${attrs}>
-            <strong>${escapeHtml(item.name)}</strong>
-            <span>${formatFileSize(item.size)} · ${new Date(Number(item.modified_at || 0) * 1000).toLocaleString()}</span>
-          </button>`;
-        })
         .join("")
     : `<div class="empty-text">暂无文件</div>`;
 }
@@ -1773,6 +1806,137 @@ function handleVisionFrameClick(event) {
   $("#visionTargetToolState").textContent = `已填入点击坐标：x=${x}, y=${y}`;
 }
 
+
+async function refreshSubjectLockPreview(options = {}) {
+  try {
+    state.subjectLockVision = await getJson("/api/v1/vision/latest", { timeout: 5000 });
+    const image = $("#subjectLockPreviewFrame");
+    image.src = `/api/v1/vision/frame.jpg?t=${Date.now()}`;
+    const source = state.subjectLockVision.target_source || "none";
+    $("#subjectLockTargetState").textContent = state.subjectLockVision.has_target || state.subjectLockVision.detected ? `已锁定 · ${source}` : "尚未框选主体";
+    renderSubjectLockOverlay();
+  } catch (error) {
+    $("#subjectLockTargetState").textContent = "视觉服务不可用";
+    if (!options.quiet) showError(error);
+  }
+}
+
+function subjectLockImageRect() {
+  const preview = $(".subject-lock-preview");
+  const image = $("#subjectLockPreviewFrame");
+  if (!preview || !image) return null;
+  const parent = preview.getBoundingClientRect();
+  const rect = image.getBoundingClientRect();
+  if (!rect.width || !rect.height) return null;
+  return { x: rect.left - parent.left, y: rect.top - parent.top, width: rect.width, height: rect.height, pageRect: rect };
+}
+
+function renderSubjectLockOverlay() {
+  const overlay = $("#subjectLockOverlay");
+  const latest = state.subjectLockVision || {};
+  if (!overlay) return;
+  overlay.replaceChildren();
+  const imageRect = subjectLockImageRect();
+  const width = Number(latest.camera?.width || 0);
+  const height = Number(latest.camera?.height || 0);
+  if (!imageRect || width <= 0 || height <= 0) return;
+  const sx = imageRect.width / width;
+  const sy = imageRect.height / height;
+  const make = (tag, attrs) => {
+    const node = document.createElementNS("http://www.w3.org/2000/svg", tag);
+    Object.entries(attrs).forEach(([key, value]) => node.setAttribute(key, String(value)));
+    overlay.appendChild(node);
+    return node;
+  };
+  const toX = (value) => imageRect.x + Number(value || 0) * sx;
+  const toY = (value) => imageRect.y + Number(value || 0) * sy;
+  const desired = latest.offset?.desired_center || latest.desired_center || [width / 2, height / 2];
+  make("line", { class: "desired", x1: toX(desired[0]) - 12, y1: toY(desired[1]), x2: toX(desired[0]) + 12, y2: toY(desired[1]) });
+  make("line", { class: "desired", x1: toX(desired[0]), y1: toY(desired[1]) - 12, x2: toX(desired[0]), y2: toY(desired[1]) + 12 });
+  const bbox = latest.bbox || latest.target?.bbox;
+  if (Array.isArray(bbox) && bbox.length >= 4) {
+    make("rect", { class: "bbox", x: toX(bbox[0]), y: toY(bbox[1]), width: Math.max(1, Number(bbox[2]) * sx), height: Math.max(1, Number(bbox[3]) * sy) });
+  }
+}
+
+function bindSubjectLockDragSelect() {
+  const preview = $(".subject-lock-preview");
+  if (!preview) return;
+  preview.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0) return;
+    const rect = $("#subjectLockPreviewFrame").getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    event.preventDefault();
+    preview.setPointerCapture?.(event.pointerId);
+    state.subjectLockDrag = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, endX: event.clientX, endY: event.clientY };
+    renderSubjectLockSelection();
+  });
+  preview.addEventListener("pointermove", (event) => {
+    if (!state.subjectLockDrag || state.subjectLockDrag.pointerId !== event.pointerId) return;
+    state.subjectLockDrag.endX = event.clientX;
+    state.subjectLockDrag.endY = event.clientY;
+    renderSubjectLockSelection();
+  });
+  preview.addEventListener("pointerup", finishSubjectLockDragSelect);
+  preview.addEventListener("pointercancel", clearSubjectLockDragSelect);
+}
+
+function renderSubjectLockSelection() {
+  const overlay = $("#subjectLockOverlay");
+  const drag = state.subjectLockDrag;
+  if (!overlay || !drag) return;
+  const parent = $(".subject-lock-preview").getBoundingClientRect();
+  let node = $("#subjectLockSelectionBox");
+  if (!node) {
+    node = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    node.setAttribute("id", "subjectLockSelectionBox");
+    node.setAttribute("class", "selection-box");
+    overlay.appendChild(node);
+  }
+  const x1 = drag.startX - parent.left;
+  const y1 = drag.startY - parent.top;
+  const x2 = drag.endX - parent.left;
+  const y2 = drag.endY - parent.top;
+  node.setAttribute("x", String(Math.min(x1, x2)));
+  node.setAttribute("y", String(Math.min(y1, y2)));
+  node.setAttribute("width", String(Math.abs(x2 - x1)));
+  node.setAttribute("height", String(Math.abs(y2 - y1)));
+}
+
+async function finishSubjectLockDragSelect(event) {
+  const drag = state.subjectLockDrag;
+  if (!drag || drag.pointerId !== event.pointerId) return;
+  const latest = state.subjectLockVision || {};
+  const width = Number(latest.camera?.width || 0);
+  const height = Number(latest.camera?.height || 0);
+  const rect = $("#subjectLockPreviewFrame").getBoundingClientRect();
+  const x1 = Math.max(rect.left, Math.min(rect.right, drag.startX));
+  const y1 = Math.max(rect.top, Math.min(rect.bottom, drag.startY));
+  const x2 = Math.max(rect.left, Math.min(rect.right, drag.endX));
+  const y2 = Math.max(rect.top, Math.min(rect.bottom, drag.endY));
+  clearSubjectLockDragSelect();
+  if (width <= 0 || height <= 0 || !rect.width || !rect.height) return;
+  const body = {
+    x: Math.round(((Math.min(x1, x2) - rect.left) / rect.width) * width),
+    y: Math.round(((Math.min(y1, y2) - rect.top) / rect.height) * height),
+    w: Math.round((Math.abs(x2 - x1) / rect.width) * width),
+    h: Math.round((Math.abs(y2 - y1) / rect.height) * height),
+  };
+  if (body.w < 8 || body.h < 8) return;
+  try {
+    const result = await postJson("/api/v1/vision/target/select", body);
+    $("#subjectLockTargetState").textContent = result.message || "主体已框选";
+    await refreshSubjectLockPreview();
+  } catch (error) {
+    showError(error);
+  }
+}
+
+function clearSubjectLockDragSelect() {
+  state.subjectLockDrag = null;
+  $("#subjectLockSelectionBox")?.remove();
+}
+
 function renderRobot() {
   if (!state.robot) return;
   state.session.mode = state.robot.mode || state.session.mode;
@@ -1781,7 +1945,7 @@ function renderRobot() {
   const joints = state.robot.joints_deg || {};
   JOINTS.forEach(([key]) => {
     const el = $(`#joint-${key}`);
-    if (el) el.textContent = `${formatNum(joints[key] ?? 0, 2)}°`;
+    if (el) el.textContent = formatJointReadout(key, joints[key] ?? 0);
     const input = $(`#fk-${key}`);
     if (input && input.value === "") input.value = formatNum(joints[key] ?? 0, 2);
   });
@@ -2393,6 +2557,7 @@ function renderHardwareCheck() {
 }
 
 function showPage(name) {
+  if (name !== "cinematic") stopSubjectLockPolling();
   $$(".nav-item").forEach((btn) => btn.classList.toggle("active", btn.dataset.page === name));
   $$(".page").forEach((page) => page.classList.remove("active"));
   $(`#page${capitalize(name)}`).classList.add("active");
@@ -2404,7 +2569,12 @@ function showPage(name) {
     refreshVisionPreview();
   }
   if (name === "agent") loadAgentStatus();
-  if (name === "cinematic") loadCinematicStatus();
+  if (name === "cinematic") {
+    loadSubjectLockStatus().then(() => {
+      if (state.subjectLock?.running) startSubjectLockPolling();
+    });
+    refreshSubjectLockPreview();
+  }
   if (name === "kinematics") {
     loadKinematicsStatus();
     refreshKinematicsRender();
@@ -2492,6 +2662,11 @@ function formatNum(value, digits = 2) {
   const n = Number(value);
   if (!Number.isFinite(n)) return "--";
   return n.toFixed(digits);
+}
+
+function formatJointReadout(jointKey, value) {
+  const formatted = formatNum(value, 2);
+  return jointKey === "j10" ? `${formatted} mm` : `${formatted}°`;
 }
 
 function escapeHtml(value) {

@@ -68,6 +68,9 @@ from .schemas import (
     MovePoseRequest,
     PlayActionRequest,
     SavePoseRequest,
+    SubjectLockCalibrationStartRequest,
+    SubjectLockProfileActionRequest,
+    SubjectLockValidateRequest,
 )
 from .state_manager import SessionStateManager
 from .websocket_manager import WebSocketManager
@@ -92,6 +95,7 @@ class WebControlService:
         self._lock = threading.RLock()
         self._action_thread: threading.Thread | None = None
         self._follow_controller: Any | None = None
+        self._subject_lock_controller: Any | None = None
         self._continuous_jog_thread: threading.Thread | None = None
         self._continuous_jog_stop = threading.Event()
         self._continuous_jog_status: dict[str, Any] = {"running": False, "message": "连续控制未启动。"}
@@ -553,6 +557,60 @@ class WebControlService:
         return self._unwrap_bridge(result, code="CINEMATIC_ACTION_FAILED")
 
     # ------------------------------------------------------------------
+    # 主体锁定运镜
+    # ------------------------------------------------------------------
+    def subject_lock_status(self) -> dict[str, Any]:
+        return self._get_subject_lock_controller().get_status()
+
+    def subject_lock_profiles(self) -> list[dict[str, Any]]:
+        return self._get_subject_lock_controller().list_profiles()
+
+    def subject_lock_profile(self, profile_id: str) -> dict[str, Any]:
+        return self._subject_lock_call("SUBJECT_LOCK_PROFILE_FAILED", self._get_subject_lock_controller().load_profile, profile_id)
+
+    def subject_lock_delete(self, profile_id: str) -> dict[str, Any]:
+        return self._subject_lock_call("SUBJECT_LOCK_DELETE_FAILED", self._get_subject_lock_controller().delete_profile, profile_id)
+
+    def subject_lock_calibration_start(self, request: SubjectLockCalibrationStartRequest) -> dict[str, Any]:
+        self._prepare_subject_lock_motion(request.confirm_text)
+        controller = self._get_subject_lock_controller()
+        return self._subject_lock_call(
+            "SUBJECT_LOCK_CALIBRATION_FAILED",
+            controller.start_calibration,
+            request.name,
+            request.start_mm,
+            request.end_mm,
+            request.speed_mm_s,
+        )
+
+    def subject_lock_validate(self, profile_id: str, request: SubjectLockValidateRequest) -> dict[str, Any]:
+        return self._subject_lock_call(
+            "SUBJECT_LOCK_VALIDATE_FAILED",
+            self._get_subject_lock_controller().validate_profile,
+            profile_id,
+            request.speed_mm_s,
+        )
+
+    def subject_lock_move_to_start(self, profile_id: str, request: SubjectLockProfileActionRequest) -> dict[str, Any]:
+        self._prepare_subject_lock_motion(request.confirm_text)
+        return self._subject_lock_call(
+            "SUBJECT_LOCK_MOVE_TO_START_FAILED",
+            self._get_subject_lock_controller().move_to_start,
+            profile_id,
+        )
+
+    def subject_lock_play(self, profile_id: str, request: SubjectLockProfileActionRequest) -> dict[str, Any]:
+        self._prepare_subject_lock_motion(request.confirm_text)
+        return self._subject_lock_call("SUBJECT_LOCK_PLAY_FAILED", self._get_subject_lock_controller().play, profile_id)
+
+    def subject_lock_stop(self, reason: str = "manual_stop") -> dict[str, Any]:
+        controller = getattr(self, "_subject_lock_controller", None)
+        if controller is None:
+            return {"message": "主体锁定运镜未启动。", "subject_lock": self._get_subject_lock_controller().get_status()}
+        status = controller.stop(reason)
+        return {"message": "主体锁定运镜已停止。", "subject_lock": status}
+
+    # ------------------------------------------------------------------
     # 会话
     # ------------------------------------------------------------------
     def session_status(self) -> dict[str, Any]:
@@ -563,6 +621,7 @@ class WebControlService:
         return state
 
     def connect(self, request: ConnectRequest) -> dict[str, Any]:
+        self._stop_subject_lock_controller("mode_change")
         with self._lock:
             self._stop_follow_controller("mode_change")
             mode = self._normalize_mode(request.mode)
@@ -580,6 +639,7 @@ class WebControlService:
             return {"message": result.get("message", "连接完成。"), "session": session, "bridge": data}
 
     def disconnect(self) -> dict[str, Any]:
+        self._stop_subject_lock_controller("disconnect")
         with self._lock:
             self._stop_follow_controller("disconnect")
             result = self.bridge.disconnect()
@@ -589,6 +649,7 @@ class WebControlService:
             return {"message": result.get("message", "已断开。"), "session": session, "bridge": data}
 
     def set_mode(self, mode: str, confirm_text: str = "") -> dict[str, Any]:
+        self._stop_subject_lock_controller("mode_change")
         with self._lock:
             self._stop_follow_controller("mode_change")
             normalized = self._normalize_mode(mode)
@@ -609,7 +670,9 @@ class WebControlService:
                 and self._continuous_jog_thread
                 and self._continuous_jog_thread.is_alive()
             )
-            result = self.bridge.get_cached_state() if jog_running else self.bridge.get_state()
+            subject = getattr(self, "_subject_lock_controller", None)
+            subject_running = bool(subject is not None and subject.get_status().get("running"))
+            result = self.bridge.get_cached_state() if jog_running or subject_running else self.bridge.get_state()
             return self._unwrap_bridge(result, code="STATE_FAILED")
 
     def get_calibration_status(self) -> dict[str, Any]:
@@ -874,12 +937,14 @@ class WebControlService:
             return self._unwrap_bridge(result, code="HOME_PRECHECK_FAILED")
 
     def stop(self) -> dict[str, Any]:
+        subject = self._detach_subject_lock_controller("emergency_stop")
         with self._lock:
             follow_status = self._stop_follow_controller("emergency_stop")
             self.stop_continuous_jog(join_timeout=0.2)
             result = self.bridge.stop()
             data = self._unwrap_bridge(result, code="STOP_FAILED")
-            return {"message": result.get("message", "已急停。"), "bridge": data, "follow": follow_status}
+        subject_status = subject.stop("emergency_stop") if subject is not None else None
+        return {"message": result.get("message", "已急停。"), "bridge": data, "follow": follow_status, "subject_lock": subject_status}
 
     def set_gripper(self, request: GripperRequest) -> dict[str, Any]:
         with self._lock:
@@ -966,6 +1031,7 @@ class WebControlService:
         return {"message": "视觉跟随参数已保存。", "follow": follow, "config_path": str(config_path)}
 
     def start_follow(self, request: FollowStartRequest) -> dict[str, Any]:
+        self._stop_subject_lock_controller("follow_start")
         if self._action_thread and self._action_thread.is_alive():
             self.bridge.stop_action()
             self._action_thread.join(timeout=0.5)
@@ -1068,7 +1134,7 @@ class WebControlService:
 
     def play_action(self, request: PlayActionRequest) -> dict[str, Any]:
         with self._lock:
-            self._require_real_confirm(request.confirm_text, action="播放真实动作")
+            self._before_manual_motion(request.confirm_text)
             if self._action_thread and self._action_thread.is_alive():
                 self.bridge.stop_action()
                 self._action_thread.join(timeout=0.5)
@@ -1146,6 +1212,7 @@ class WebControlService:
                 "robot": robot,
                 "action": self.current_action_status(),
                 "follow": self.follow_status(),
+                "subject_lock": self.subject_lock_status(),
                 "continuous_jog": self.continuous_jog_status(),
                 "error": error,
             },
@@ -1189,6 +1256,86 @@ class WebControlService:
     # ------------------------------------------------------------------
     # 内部工具
     # ------------------------------------------------------------------
+    def _get_subject_lock_controller(self) -> Any:
+        existing = getattr(self, "_subject_lock_controller", None)
+        if existing is not None:
+            return existing
+        vision_root = self.base_dir.parent / "视觉识别与跟随"
+        from 控制桥接_common import ensure_import_paths
+
+        ensure_import_paths([vision_root])
+        from vision.主体锁定控制器_subject_lock_controller import SubjectLockController
+
+        follow_cfg = self._load_vision_follow_config(vision_root)
+        owner: dict[str, Any] = {}
+        controller = SubjectLockController(
+            self.base_dir.parent / "视觉识别与跟随" / "runtime" / "subject_lock_profiles",
+            latest_provider=self.vision_latest,
+            state_provider=self._follow_initial_state,
+            stream_writer=lambda targets: self._subject_lock_stream_targets(owner["controller"], targets),
+            stream_sync=self._subject_lock_stream_sync,
+            dry_run=self.bridge.mode != "real",
+            target_validator=self.bridge.validate_stream_joint_targets,
+            config={
+                "control_update_hz": 40.0,
+                "vision_stale_timeout_sec": float(follow_cfg.get("vision_stale_timeout_sec", 0.25)),
+                "pan_sign": float(follow_cfg.get("pan_sign", 1.0)),
+                "max_j11_speed_deg_s": float(follow_cfg.get("max_pan_speed_deg_s", 12.0)),
+                "max_j11_accel_deg_s2": float(follow_cfg.get("pan_accel_deg_s2", 30.0)),
+            },
+        )
+        owner["controller"] = controller
+        self._subject_lock_controller = controller
+        return controller
+
+    def _prepare_subject_lock_motion(self, confirm_text: str) -> None:
+        self._require_real_confirm(confirm_text, action="主体锁定真实运动")
+        if self.bridge.mode == "real" and not self.bridge.is_connected():
+            raise WebAPIError("REAL_SESSION_REQUIRED", "启动真实主体锁定运镜前，请先连接 real 模式。")
+        controller = getattr(self, "_subject_lock_controller", None)
+        if controller is not None and controller.get_status().get("running"):
+            controller.stop("replaced")
+        if self._action_thread and self._action_thread.is_alive():
+            self.bridge.stop_action()
+            self._action_thread.join(timeout=0.5)
+        if self._continuous_jog_thread and self._continuous_jog_thread.is_alive():
+            self.stop_continuous_jog(join_timeout=0.8)
+        with self._lock:
+            self._stop_follow_controller("subject_lock_start")
+
+    def _detach_subject_lock_controller(self, reason: str) -> Any | None:
+        controller = getattr(self, "_subject_lock_controller", None)
+        if controller is None:
+            return None
+        self._subject_lock_controller = None
+        controller.request_stop(reason)
+        return controller
+
+    def _stop_subject_lock_controller(self, reason: str) -> dict[str, Any] | None:
+        controller = self._detach_subject_lock_controller(reason)
+        if controller is None:
+            return None
+        return controller.stop(reason)
+
+    def _subject_lock_stream_targets(self, owner: Any, targets_deg: dict[str, float]) -> dict[str, Any]:
+        with self._lock:
+            if getattr(self, "_subject_lock_controller", None) is not owner:
+                return {"ok": False, "message": "主体锁定会话已停止。", "data": {"written_joints": []}}
+            return self.bridge.stream_joint_targets(targets_deg)
+
+    def _subject_lock_stream_sync(self) -> dict[str, Any]:
+        with self._lock:
+            return self.bridge.sync_after_joint_stream()
+
+    @staticmethod
+    def _subject_lock_call(code: str, fn: Any, *args: Any) -> dict[str, Any]:
+        try:
+            return fn(*args)
+        except WebAPIError:
+            raise
+        except (ValueError, FileNotFoundError, RuntimeError) as exc:
+            raise WebAPIError(code, str(exc), status_code=400) from exc
+
     def _stop_follow_controller(self, reason: str) -> dict[str, Any] | None:
         if self._follow_controller is None:
             return None
@@ -1216,6 +1363,7 @@ class WebControlService:
 
     def _before_manual_motion(self, confirm_text: str = "") -> None:
         self._require_real_confirm(confirm_text, action="真实模式手动运动")
+        self._detach_subject_lock_controller("manual_motion")
         if self._action_thread and self._action_thread.is_alive():
             self.bridge.stop_action()
             self._action_thread.join(timeout=0.5)

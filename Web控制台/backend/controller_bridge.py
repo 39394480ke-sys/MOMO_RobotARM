@@ -767,6 +767,25 @@ class ControllerBridge:
         except Exception as exc:
             return self._exception("连续批量目标写入失败", exc)
 
+    def validate_stream_joint_targets(self, targets_deg: Mapping[str, float]) -> dict[str, Any]:
+        """预检查位置流的关节限位与 raw 边界，不读取、不写入。"""
+
+        try:
+            self._ensure_connected_for_motion()
+            targets = {normalize_joint_key(str(joint)): float(value) for joint, value in targets_deg.items()}
+            self._ensure_controller()
+            if self.controller is None or not hasattr(self.controller, "validate_stream_joint_targets"):
+                return bridge_fail("当前控制器不支持批量关节目标预检查。")
+            result = self.controller.validate_stream_joint_targets(targets)
+            data = {
+                "targets_deg": targets,
+                "written_joints": [],
+                "goal_raw_by_joint": dict(getattr(result, "目标raw", {})),
+            }
+            return normalize_bridge_result(result, "连续批量目标安全检查通过。", data)
+        except Exception as exc:
+            return self._exception("连续批量目标检查失败", exc)
+
     def sync_after_joint_stream(self) -> dict[str, Any]:
         """连续控制结束后读取并保存一次真实状态。"""
 

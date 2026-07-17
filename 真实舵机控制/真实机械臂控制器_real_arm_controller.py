@@ -303,6 +303,38 @@ class RealArmController:
         except Exception as 错误:
             return 批量流写入结果(False, f"连续批量目标写入失败：{错误}", (), {})
 
+    def validate_stream_joint_targets(self, target_deg_by_joint: dict[str, float]) -> 批量流写入结果:
+        """只做角度、标定映射和 raw 边界检查，不读取、不写入。"""
+
+        if not self.connected:
+            return 批量流写入结果(False, "尚未连接。请先输入：连接", (), {})
+        unknown = [joint for joint in target_deg_by_joint if joint not in self.joint_config_by_key]
+        if unknown:
+            return 批量流写入结果(False, f"未知关节：{unknown[0]}", (), {})
+        try:
+            targets = {joint: float(value) for joint, value in target_deg_by_joint.items()}
+            angle_check = self.safety_checker.check_all_joint_angles(targets, self.joint_config_by_key)
+            if not angle_check.成功:
+                return 批量流写入结果(False, angle_check.消息, (), {})
+            calibration_check = self.safety_checker.check_calibration_for_move(list(targets))
+            if not calibration_check.成功:
+                return 批量流写入结果(False, calibration_check.消息, (), {})
+            entries = {joint: self._calibration_entry_for_move(joint) for joint in targets}
+            goals = {
+                joint: int(
+                    joint_deg_to_goal_detail(
+                        joint, target, self.joint_config_by_key[joint], entries[joint], self.runtime_state
+                    )["goal_raw"]
+                )
+                for joint, target in targets.items()
+            }
+            raw_check = self.safety_checker.check_goal_raws(goals, entries)
+            if not raw_check.成功:
+                return 批量流写入结果(False, raw_check.消息, (), goals)
+            return 批量流写入结果(True, "连续批量目标安全检查通过。", (), goals)
+        except Exception as 错误:
+            return 批量流写入结果(False, f"连续批量目标检查失败：{错误}", (), {})
+
     def sync_after_joint_stream(self) -> 操作结果:
         """连续位置流结束后只同步一次真实位置和运行状态。"""
 

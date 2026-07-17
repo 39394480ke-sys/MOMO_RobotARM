@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 from io import BytesIO
+import re
 import threading
 import time
 import traceback
@@ -219,6 +220,9 @@ class WebControlService:
                 "session_id": "agent-confirmation",
                 "raw_payload": {"agent_cancellation": result},
             }
+        direct_reply = self._handle_agent_direct_command(content)
+        if direct_reply is not None:
+            return direct_reply
         demo_reply = self._handle_agent_demo_message(content)
         if demo_reply is not None:
             return demo_reply
@@ -241,6 +245,94 @@ class WebControlService:
         except Exception as exc:
             self._remember_error("AGENT_ASK_FAILED", str(exc))
             raise WebAPIError("AGENT_ASK_FAILED", f"AI 对话失败：{exc}") from exc
+
+    def _handle_agent_direct_command(self, content: str) -> dict[str, Any] | None:
+        """Reliably map explicit Chinese motion commands before model fallback."""
+
+        normalized = " ".join(str(content or "").strip().split())
+        if not normalized:
+            return None
+        if re.search(r"(停止|关闭|结束)视觉跟随|视觉跟随(停止|关闭|结束)", normalized):
+            result = self.stop_follow()
+            reply = str(result.get("message") or "视觉跟随已停止。")
+            return self._agent_direct_result(reply, {"stop_face_follow": result})
+        if re.search(r"(停止机械臂|机械臂停止|立即停止|急停)", normalized):
+            result = self.stop()
+            reply = str(result.get("message") or "机械臂已停止并保持当前位置。")
+            return self._agent_direct_result(reply, {"stop_robot": result})
+
+        proposal: dict[str, Any] | None = None
+        if re.search(r"(启动|开始|打开)视觉跟随", normalized):
+            proposal = self.agent_propose_tool("start_face_follow", {})
+        elif re.search(r"(打开|张开|松开)夹爪", normalized):
+            proposal = self.agent_propose_tool("set_gripper", {"open_ratio": 1.0})
+        elif re.search(r"(关闭|闭合|夹紧)夹爪", normalized):
+            proposal = self.agent_propose_tool("set_gripper", {"open_ratio": 0.0})
+        elif re.search(r"(返回|回到|回)\s*home\b", normalized, re.IGNORECASE):
+            proposal = self.agent_propose_tool("run_robot_behavior", {"name": "home"})
+        else:
+            action_match = re.fullmatch(
+                r"(?:请)?(?:播放|执行)(?:动作)?[\s「『“\"]*([^\s」』”\"]{1,40}?)[\s」』”\"]*(?:动作)?",
+                normalized,
+            )
+            if action_match:
+                proposal = self.agent_propose_tool(
+                    "play_action", {"name": action_match.group(1), "speed": 1.0, "loop": False}
+                )
+            else:
+                joint_arguments = self._agent_direct_joint_arguments(normalized)
+                if joint_arguments is not None:
+                    proposal = self.agent_propose_tool("move_joint", joint_arguments)
+        if proposal is None:
+            return None
+        pending = proposal["pending_action"]
+        summary = pending.get("summary", {}) if isinstance(pending.get("summary"), dict) else {}
+        reply = str(summary.get("confirmation_text") or proposal.get("message") or "动作等待确认。")
+        return {
+            "message": str(proposal.get("message") or "动作已生成，等待二次确认。"),
+            "reply": reply,
+            "session_id": "agent-direct-command",
+            "pending_action": pending,
+            "raw_payload": {"direct_command": True, "pending_action": pending},
+        }
+
+    @staticmethod
+    def _agent_direct_result(reply: str, payload: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "message": reply,
+            "reply": reply,
+            "session_id": "agent-direct-command",
+            "raw_payload": {"direct_command": True, **payload},
+        }
+
+    @staticmethod
+    def _agent_direct_joint_arguments(content: str) -> dict[str, Any] | None:
+        joint_match = re.search(r"j(1[0-5])", content, re.IGNORECASE)
+        if joint_match is None or not re.search(r"(旋转|转动|移动|调整|增加|减少|升高|降低|设为)", content):
+            return None
+        joint_name = f"j{joint_match.group(1)}"
+        value_match = re.search(r"([-+]?\d+(?:\.\d+)?)\s*(毫米|mm|度|°)", content, re.IGNORECASE)
+        if value_match is None:
+            return None
+        value = float(value_match.group(1))
+        unit = value_match.group(2).lower()
+        if joint_name == "j10" and unit not in {"毫米", "mm"}:
+            raise WebAPIError("AGENT_MOTION_REJECTED", "J10 请使用毫米。")
+        if joint_name != "j10" and unit in {"毫米", "mm"}:
+            raise WebAPIError("AGENT_MOTION_REJECTED", f"{joint_name.upper()} 请使用度。")
+        absolute = bool(re.search(r"(移动到|旋转到|转到|调整到|设为|目标)", content))
+        if absolute:
+            return {"joint_name": joint_name, "mode": "absolute", "value": value}
+        negative = bool(re.search(r"(反向|负向|逆时针|减少|降低)", content))
+        positive = bool(re.search(r"(正向|顺时针|增加|升高)", content))
+        explicit_sign = value_match.group(1).startswith(("+", "-"))
+        if not (negative or positive or explicit_sign):
+            return None
+        if negative:
+            value = -abs(value)
+        elif positive:
+            value = abs(value)
+        return {"joint_name": joint_name, "mode": "relative", "value": value}
 
     def agent_reset_session(self) -> dict[str, Any]:
         try:

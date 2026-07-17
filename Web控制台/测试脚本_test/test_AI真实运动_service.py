@@ -212,6 +212,51 @@ class AgentRealMotionServiceTest(unittest.TestCase):
         self.assertEqual(result["pending_action"]["arguments"], {"name": "挥手", "speed": 1.25, "loop": False})
         self.assertEqual(bridge.play_calls, [])
 
+    def test_direct_chinese_joint_command_creates_confirmation_without_model(self) -> None:
+        service, bridge = make_service()
+
+        result = service._handle_agent_direct_command("请将 J12 正向旋转 1 度")
+
+        self.assertEqual(result["pending_action"]["arguments"]["joint_name"], "j12")
+        self.assertEqual(result["pending_action"]["arguments"]["value"], 1.0)
+        self.assertEqual(bridge.moves, [])
+
+    def test_direct_absolute_rail_command_uses_mm_target(self) -> None:
+        service, _bridge = make_service()
+
+        result = service._handle_agent_direct_command("请把 J10 移动到 -30 毫米")
+
+        arguments = result["pending_action"]["arguments"]
+        self.assertEqual(arguments["mode"], "absolute")
+        self.assertEqual(arguments["value"], -30.0)
+
+    def test_direct_stop_follow_is_immediate_and_never_creates_pending_action(self) -> None:
+        service, _bridge = make_service()
+        service.stop_follow = lambda: {"message": "视觉跟随已停止。"}
+
+        result = service._handle_agent_direct_command("停止视觉跟随")
+
+        self.assertEqual(result["reply"], "视觉跟随已停止。")
+        self.assertNotIn("pending_action", result)
+
+    def test_non_command_still_falls_through_to_model(self) -> None:
+        service, _bridge = make_service()
+        self.assertIsNone(service._handle_agent_direct_command("解释一下 J12 是做什么的"))
+
+    def test_direct_named_commands_all_use_the_standard_pending_store(self) -> None:
+        service, _bridge = make_service()
+        cases = [
+            ("打开夹爪", "set_gripper"),
+            ("回 Home", "run_robot_behavior"),
+            ("播放挥手动作", "play_action"),
+            ("启动视觉跟随", "start_face_follow"),
+        ]
+        for phrase, tool_name in cases:
+            result = service._handle_agent_direct_command(phrase)
+            action = result["pending_action"]
+            self.assertEqual(action["tool_name"], tool_name)
+            service.agent_cancel_pending(action["id"])
+
     def test_busy_action_rejects_new_increasing_risk_proposal(self) -> None:
         service, bridge = make_service()
         bridge.action_status = {"state": "playing", "name": "挥手"}

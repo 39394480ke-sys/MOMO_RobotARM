@@ -38,6 +38,20 @@
 - [ARM 依赖说明](../requirements-arm.txt)
 - [启动脚本目录](../scripts/)
 
+### 现场数据备份
+
+GitHub 只保存模板；真实标定、动作库、视觉现场参数和 `*.local.yaml` 由开发板保管。备份分两层：
+
+- 开发板每天 03:15 在仓库外生成带 SHA-256 清单的快照，默认保留 30 天：`scripts/install_board_backup_cron.sh`
+- Mac 每天 03:45 通过 SSH/rsync 拉取后逐文件校验，不会用远端空目录删除本地备份：`scripts/install_mac_backup_launch_agent.sh`
+
+手动运行也使用同一套校验逻辑：
+
+```bash
+python scripts/backup_board_local_data.py
+python scripts/pull_board_backups_to_mac.py
+```
+
 ## 历史阶段资料
 
 下面这些文档保留历史上下文，但不一定代表当前运行真相。当前硬件和运行方式优先看根 README、真实配置和标定文件。

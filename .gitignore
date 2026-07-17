@@ -13,6 +13,7 @@ Web控制台/环境变量.env
 视觉识别与跟随/环境变量.env
 真实舵机控制/环境变量.env
 语音Agent/环境变量.env
+语音Agent/Agent配置.local.yaml
 视觉识别与跟随/runtime/cinematic_director_projects/
 视觉识别与跟随/runtime/cinematic_records/
 **/runtime/pids/

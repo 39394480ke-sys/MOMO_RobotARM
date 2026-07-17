@@ -88,8 +88,28 @@ def robot_tool_specs() -> list[dict[str, Any]]:
         {
             "type": "function",
             "function": {
+                "name": "move_joint",
+                "description": (
+                    "提议移动导轨版机械臂的一个关节。J10 的数值单位是毫米，J11-J15 的数值单位是度；"
+                    "relative 表示相对当前位置移动，absolute 表示移动到绝对位置。此工具只生成待确认动作。"
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "joint_name": {"type": "string", "enum": sorted(ALLOWED_JOINT_NAMES)},
+                        "mode": {"type": "string", "enum": ["relative", "absolute"]},
+                        "value": {"type": "number"},
+                    },
+                    "required": ["joint_name", "mode", "value"],
+                    "additionalProperties": False,
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "rotate_joint",
-                "description": "让导轨版机械臂 j10-j15 中某个关节小幅移动，delta_deg 必须在安全步长以内。j10 是底盘导轨，其余为旋转关节。",
+                "description": "兼容旧会话的相对移动工具；新请求请使用 move_joint。J10 数值按毫米解释。",
                 "parameters": {
                     "type": "object",
                     "properties": {

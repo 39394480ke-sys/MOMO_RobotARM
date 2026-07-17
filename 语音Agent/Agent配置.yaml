@@ -61,6 +61,7 @@ safety:
     - get_robot_state
     - stop_robot
     - set_gripper
+    - move_joint
     - rotate_joint
     - run_robot_behavior
     - play_action

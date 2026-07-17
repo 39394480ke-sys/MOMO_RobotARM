@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 from .工具定义_robot_tools import ALLOWED_JOINT_NAMES, JOINT_ALIAS, SUPPORTED_BEHAVIORS
@@ -16,6 +17,15 @@ from 通用_http import HTTPJsonError, request_json_object  # noqa: E402
 
 
 ALWAYS_ALLOWED = {"get_robot_state", "stop_robot"}
+
+JOINT_RULES: dict[str, dict[str, Any]] = {
+    "j10": {"unit": "mm", "modes": {"relative", "absolute"}, "minimum": -50.0, "maximum": 50.0},
+    "j11": {"unit": "deg", "modes": {"relative", "absolute"}, "minimum": -180.0, "maximum": 180.0},
+    "j12": {"unit": "deg", "modes": {"relative"}, "max_delta": 3.0},
+    "j13": {"unit": "deg", "modes": {"relative"}, "max_delta": 3.0},
+    "j14": {"unit": "deg", "modes": {"relative"}, "max_delta": 3.0},
+    "j15": {"unit": "deg", "modes": {"relative"}, "max_delta": 3.0},
+}
 
 
 def normalize_joint_name(name: str) -> str:
@@ -47,6 +57,8 @@ class SafetyPolicy:
         match tool_name:
             case "set_gripper":
                 return self._check_gripper(arguments)
+            case "move_joint":
+                return self._check_move_joint_shape(arguments)
             case "rotate_joint":
                 return self._check_rotate_joint(arguments)
             case "run_robot_behavior":
@@ -88,6 +100,72 @@ class SafetyPolicy:
         if abs(delta) > max_delta:
             raise ValueError(f"rotate_joint 单次步进不能超过 ±{max_delta} 度。")
         return {"joint_name": joint, "delta_deg": delta}
+
+    def _check_move_joint_shape(self, arguments: dict[str, Any]) -> dict[str, Any]:
+        joint = normalize_joint_name(str(arguments.get("joint_name", "")))
+        mode = str(arguments.get("mode", "")).strip().lower()
+        if mode not in {"relative", "absolute"}:
+            raise ValueError("move_joint.mode 必须是 relative 或 absolute。")
+        try:
+            value = float(arguments["value"])
+        except Exception as exc:
+            raise ValueError("move_joint 需要数字 value。") from exc
+        if not math.isfinite(value):
+            raise ValueError("关节运动数值必须是有限数字。")
+        return {"joint_name": joint, "mode": mode, "value": value}
+
+    def validate_move_joint(
+        self,
+        arguments: dict[str, Any],
+        current_joints: dict[str, Any],
+        *,
+        legacy: bool = False,
+    ) -> dict[str, Any]:
+        if self._contains_forbidden_raw(arguments):
+            raise ValueError("Agent 不允许提供 raw 舵机值。")
+        if legacy:
+            normalized = self._check_move_joint_shape(
+                {
+                    "joint_name": arguments.get("joint_name"),
+                    "mode": "relative",
+                    "value": arguments.get("delta_deg"),
+                }
+            )
+        else:
+            normalized = self._check_move_joint_shape(arguments)
+        joint = normalized["joint_name"]
+        mode = normalized["mode"]
+        value = float(normalized["value"])
+        rule = JOINT_RULES[joint]
+        if mode not in rule["modes"]:
+            raise ValueError(f"{joint.upper()} 不支持 {mode} 模式。")
+        try:
+            current = float(current_joints[joint])
+        except Exception as exc:
+            raise ValueError(f"无法读取 {joint.upper()} 当前值。") from exc
+        if not math.isfinite(current):
+            raise ValueError(f"{joint.upper()} 当前值不是有限数字。")
+        target = value if mode == "absolute" else current + value
+        delta = target - current
+        if not math.isfinite(target):
+            raise ValueError("关节运动目标必须是有限数字。")
+        max_delta = rule.get("max_delta")
+        if max_delta is not None and abs(delta) > float(max_delta):
+            raise ValueError(f"{joint.upper()} 单次运动不能超过 ±{float(max_delta):g}°。")
+        minimum = rule.get("minimum")
+        maximum = rule.get("maximum")
+        if minimum is not None and maximum is not None and not float(minimum) <= target <= float(maximum):
+            suffix = "mm" if rule["unit"] == "mm" else "°"
+            raise ValueError(f"{joint.upper()} 目标 {target:g}{suffix} 超出安全范围 {minimum:g} 到 {maximum:g}{suffix}。")
+        return {
+            "joint_name": joint,
+            "mode": mode,
+            "value": value,
+            "current_value": current,
+            "delta": delta,
+            "target": target,
+            "unit": rule["unit"],
+        }
 
     def _check_behavior(self, arguments: dict[str, Any]) -> dict[str, Any]:
         name = str(arguments.get("name", "")).strip()

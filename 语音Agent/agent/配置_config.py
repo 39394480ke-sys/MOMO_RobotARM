@@ -12,12 +12,20 @@ DEFAULT_CONFIG_PATH = BASE_DIR / "Agent配置.yaml"
 
 ensure_project_root_on_path()
 
-from 通用_io import env_bool, env_value, read_config, resolve_path as resolve_common_path  # noqa: E402
+from 通用_io import deep_merge, env_bool, env_value, read_config, read_structured, resolve_path as resolve_common_path  # noqa: E402
 
 
 def load_config(path: str | Path | None = None) -> dict[str, Any]:
     config_path = resolve_path(path or DEFAULT_CONFIG_PATH)
     config = read_config(config_path)
+    local_path = config_path.with_name(f"{config_path.stem}.local{config_path.suffix}")
+    if local_path.exists():
+        try:
+            config = deep_merge(config, read_structured(local_path))
+        except Exception as exc:
+            raise ValueError(f"Agent 本机配置读取失败：{local_path}: {exc}") from exc
+        config["_config_path"] = str(config_path.resolve())
+        config["_base_dir"] = str(config_path.resolve().parent)
     env_paths = secret_env_paths(config)
     agent = config.setdefault("agent", {})
     openai_compatible = config.setdefault("openai_compatible", {})

@@ -308,7 +308,7 @@ class WebControlService:
     @staticmethod
     def _agent_direct_joint_arguments(content: str) -> dict[str, Any] | None:
         joint_match = re.search(r"j(1[0-5])", content, re.IGNORECASE)
-        if joint_match is None or not re.search(r"(旋转|转动|移动|调整|增加|减少|升高|降低|设为)", content):
+        if joint_match is None or not re.search(r"(旋转|转动|移动|运动|调整|增加|减少|升高|降低|设为)", content):
             return None
         joint_name = f"j{joint_match.group(1)}"
         value_match = re.search(r"([-+]?\d+(?:\.\d+)?)\s*(毫米|mm|度|°)", content, re.IGNORECASE)
@@ -320,7 +320,7 @@ class WebControlService:
             raise WebAPIError("AGENT_MOTION_REJECTED", "J10 请使用毫米。")
         if joint_name != "j10" and unit in {"毫米", "mm"}:
             raise WebAPIError("AGENT_MOTION_REJECTED", f"{joint_name.upper()} 请使用度。")
-        absolute = bool(re.search(r"(移动到|旋转到|转到|调整到|设为|目标)", content))
+        absolute = bool(re.search(r"(移动到|运动到|旋转到|转到|调整到|设为|目标)", content))
         if absolute:
             return {"joint_name": joint_name, "mode": "absolute", "value": value}
         negative = bool(re.search(r"(反向|负向|逆时针|减少|降低)", content))
@@ -1565,12 +1565,10 @@ class WebControlService:
                     arguments = policy.validate_move_joint(source, snapshot["joints"])
                 except Exception as exc:
                     raise WebAPIError("AGENT_MOTION_REJECTED", str(exc)) from exc
-                result = self.move_joints(
-                    MoveJointsRequest(
-                        targets_deg={arguments["joint_name"]: arguments["target"]},
-                        speed_percent=50,
-                        confirm_text=self.confirm_text,
-                    )
+                self._before_manual_motion(self.confirm_text)
+                result = self._unwrap_bridge(
+                    self.bridge.move_single_joint_target(arguments["joint_name"], arguments["target"]),
+                    code="MOVE_JOINTS_FAILED",
                 )
             elif tool_name == "set_gripper":
                 self._agent_require_gripper()

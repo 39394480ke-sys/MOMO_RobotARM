@@ -27,6 +27,7 @@ class FakeBridge:
         self.connected = True
         self.joints = {"j10": 0.0, "j11": 0.0, "j12": 0.0, "j13": 0.0, "j14": 0.0, "j15": 0.0}
         self.moves: list[dict[str, float]] = []
+        self.single_moves: list[dict[str, float]] = []
         self.gripper_values: list[float] = []
         self.home_precheck_count = 0
         self.home_count = 0
@@ -47,6 +48,11 @@ class FakeBridge:
         self.moves.append(dict(targets))
         self.joints.update(targets)
         return {"ok": True, "message": "已移动", "data": {"targets_deg": dict(targets)}}
+
+    def move_single_joint_target(self, joint_key: str, target: float) -> dict:
+        self.single_moves.append({joint_key: target})
+        self.joints[joint_key] = target
+        return {"ok": True, "message": "单关节已移动", "data": {"targets_deg": {joint_key: target}}}
 
     def set_gripper(self, open_ratio: float) -> dict:
         if not self.gripper_available:
@@ -131,7 +137,8 @@ class AgentRealMotionServiceTest(unittest.TestCase):
 
         result = service.agent_confirm_pending(action["id"])
 
-        self.assertEqual(bridge.moves, [{"j10": 40.0}])
+        self.assertEqual(bridge.single_moves, [{"j10": 40.0}])
+        self.assertEqual(bridge.moves, [])
         self.assertEqual(result["executed_action"]["status"], "executed")
 
     def test_confirmation_revalidates_relative_target_against_latest_state(self) -> None:
@@ -141,7 +148,8 @@ class AgentRealMotionServiceTest(unittest.TestCase):
 
         service.agent_confirm_pending(proposal["pending_action"]["id"])
 
-        self.assertEqual(bridge.moves, [{"j10": 10.5}])
+        self.assertEqual(bridge.single_moves, [{"j10": 10.5}])
+        self.assertEqual(bridge.moves, [])
 
     def test_real_tools_must_be_locally_enabled_and_connected(self) -> None:
         service, bridge = make_service()
@@ -229,6 +237,16 @@ class AgentRealMotionServiceTest(unittest.TestCase):
         arguments = result["pending_action"]["arguments"]
         self.assertEqual(arguments["mode"], "absolute")
         self.assertEqual(arguments["value"], -30.0)
+
+    def test_direct_rail_question_with_motion_to_is_a_command(self) -> None:
+        service, _bridge = make_service()
+
+        result = service._handle_agent_direct_command("能否控制 j10 运动到 50mm 的位置")
+
+        arguments = result["pending_action"]["arguments"]
+        self.assertEqual(arguments["joint_name"], "j10")
+        self.assertEqual(arguments["mode"], "absolute")
+        self.assertEqual(arguments["value"], 50.0)
 
     def test_direct_stop_follow_is_immediate_and_never_creates_pending_action(self) -> None:
         service, _bridge = make_service()

@@ -290,11 +290,12 @@ class AgentRealMotionServiceTest(unittest.TestCase):
                 "missing": [],
                 "confidence": 1.0,
                 "source_text": "让肩部抬一点",
-                "evidence": {"joint": "肩部", "direction_or_target": "抬", "value": "一点", "unit": ""},
+                "evidence": {"joint": "j12", "direction_or_target": "抬", "value": "一点", "unit": ""},
             }
         )
 
         self.assertIn("具体", result["reply"])
+        self.assertNotIn("要操作的关节", result["reply"])
         self.assertNotIn("pending_action", result)
         self.assertEqual(bridge.single_moves, [])
 

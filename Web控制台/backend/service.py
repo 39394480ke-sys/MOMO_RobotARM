@@ -283,7 +283,9 @@ class WebControlService:
                 labels = {
                     "joint_name": "要操作的关节（J10-J15）",
                     "mode": "是相对移动还是到达绝对位置",
+                    "direction": "明确的移动方向或目标关系",
                     "value": "具体移动量",
+                    "unit": "明确单位（J10 用毫米，J11-J15 用度）",
                     "open_ratio": "夹爪要打开还是闭合",
                     "name": "具体动作名称",
                     "clear_request": "完整操作要求",
@@ -337,8 +339,23 @@ class WebControlService:
         source = str(intent.get("source_text") or "").strip().lower()
         evidence = intent.get("evidence") if isinstance(intent.get("evidence"), dict) else {}
         gaps: list[str] = []
+        joint_excerpt = str(evidence.get("joint") or "").strip().lower()
+        joint = str(arguments.get("joint_name") or "").strip().lower()
+        joint_aliases = {
+            "j10": ("j10", "底盘导轨", "导轨"),
+            "j11": ("j11", "底座旋转", "底座"),
+            "j12": ("j12", "肩部抬升", "肩部"),
+            "j13": ("j13", "肘部弯曲", "肘部"),
+            "j14": ("j14", "腕部俯仰", "俯仰"),
+            "j15": ("j15", "腕部旋转", "腕部"),
+        }
+        joint_grounded = bool(joint_excerpt and joint_excerpt in source)
+        if not joint_grounded and joint_excerpt == joint:
+            joint_grounded = any(alias in source for alias in joint_aliases.get(joint, ()))
+        if not joint_grounded:
+            gaps.append("joint_name")
+
         fields = {
-            "joint": "joint_name",
             "direction_or_target": "direction",
             "value": "value",
             "unit": "unit",
@@ -366,7 +383,6 @@ class WebControlService:
                 gaps.append("value")
 
         unit_excerpt = str(evidence.get("unit") or "").strip().lower()
-        joint = str(arguments.get("joint_name") or "").strip().lower()
         valid_unit = unit_excerpt in ({"mm", "毫米"} if joint == "j10" else {"度", "°"})
         if not valid_unit:
             gaps.append("unit")

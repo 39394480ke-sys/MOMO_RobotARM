@@ -329,6 +329,13 @@ pre {
   min-height: 44px;
 }
 
+.joint-row button[data-joint] {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: none;
+}
+
 .joint-row button.active-jog {
   background: var(--blue);
   border-color: var(--blue);
@@ -868,6 +875,100 @@ th {
   color: #c4b5fd;
 }
 
+.agent-message-content {
+  min-width: 0;
+}
+
+.agent-pending-card {
+  margin-top: 10px;
+  max-width: 520px;
+  overflow: hidden;
+  border: 1px solid #64748b;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #111827;
+}
+
+.agent-pending-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-bottom: 1px solid #cbd5e1;
+  background: #e2e8f0;
+}
+
+.agent-pending-head strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: #111827;
+}
+
+.agent-pending-head span {
+  flex: 0 0 auto;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.agent-pending-card dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  margin: 0;
+  background: #cbd5e1;
+}
+
+.agent-pending-card dl > div {
+  min-width: 0;
+  padding: 8px 12px;
+  background: #fff;
+}
+
+.agent-pending-card dt {
+  color: #64748b;
+  font-size: 11px;
+}
+
+.agent-pending-card dd {
+  margin: 2px 0 0;
+  overflow-wrap: anywhere;
+  font-weight: 700;
+}
+
+.agent-pending-card p {
+  margin: 0;
+  padding: 9px 12px;
+  color: #475569;
+  font-size: 12px;
+}
+
+.agent-pending-actions {
+  display: flex;
+  gap: 8px;
+  padding: 0 12px 12px;
+}
+
+.agent-pending-actions button {
+  height: 36px;
+  min-width: 96px;
+}
+
+.agent-pending-card.executed {
+  border-color: #16a34a;
+}
+
+.agent-pending-card.cancelled,
+.agent-pending-card.expired,
+.agent-pending-card.invalidated {
+  opacity: 0.78;
+}
+
+.agent-pending-card.executing {
+  border-color: #d97706;
+}
+
 .agent-image-attachment {
   margin: 12px 0 0;
   max-width: 360px;
@@ -1093,6 +1194,10 @@ th {
   }
 
   .recording-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .agent-pending-card dl {
     grid-template-columns: 1fr;
   }
 

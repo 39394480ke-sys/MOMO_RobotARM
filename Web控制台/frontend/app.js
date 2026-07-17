@@ -29,6 +29,7 @@ const state = {
   agent: null,
   agentMessages: [],
   lastAgentReply: null,
+  agentPendingTimer: null,
   cinematic: null,
   cinematicProject: null,
   cinematicProjectPath: "",
@@ -59,6 +60,7 @@ async function init() {
   await loadConfig();
   await refreshAll();
   connectWebSocket();
+  state.agentPendingTimer = window.setInterval(expireAgentPendingActions, 1000);
 }
 
 function bindEvents() {
@@ -103,6 +105,7 @@ function bindEvents() {
   $("#sendAgentBtn").addEventListener("click", sendAgentMessage);
   $("#resetAgentBtn").addEventListener("click", resetAgentSession);
   $("#clearAgentChatBtn").addEventListener("click", clearAgentChat);
+  $("#agentChatLog").addEventListener("click", handleAgentPendingActionClick);
   $$(".agent-quick-btn").forEach((btn) => btn.addEventListener("click", () => useAgentPrompt(btn.dataset.agentPrompt || "")));
   $("#refreshCinematicBtn").addEventListener("click", loadCinematicStatus);
   $("#analyzeCinematicBtn").addEventListener("click", analyzeCinematicLatest);
@@ -343,6 +346,7 @@ async function loadAgentStatus() {
   try {
     state.agent = await getJson("/api/v1/agent/status");
     renderAgentStatus();
+    restoreAgentPendingAction(state.agent.pending_action);
   } catch (error) {
     showError(error);
   }
@@ -530,7 +534,7 @@ function buildJointControls() {
     row.innerHTML = `
       <span class="joint-name">${label}</span>
       <button data-joint="${key}" data-dir="-1">-</button>
-      <span class="joint-value" id="joint-${key}">--°</span>
+      <span class="joint-value" id="joint-${key}">${formatJointReadout(key, undefined)}</span>
       <button data-joint="${key}" data-dir="1">+</button>
     `;
     wrap.appendChild(row);
@@ -540,6 +544,11 @@ function buildJointControls() {
     if (!btn || state.jointControlMode !== "step") return;
     const step = selectedJointStep() * Number(btn.dataset.dir);
     jointStep(btn.dataset.joint, step);
+  });
+  wrap.addEventListener("contextmenu", (event) => {
+    const btn = event.target.closest("button[data-joint]");
+    if (!btn) return;
+    event.preventDefault();
   });
   wrap.addEventListener("pointerdown", (event) => {
     const btn = event.target.closest("button[data-joint]");
@@ -862,12 +871,14 @@ async function connectSession() {
   const body = await withSafety({ mode }, mode === "real");
   if (!body) return;
   await postJsonLogged("/api/v1/session/connect", body);
+  invalidateVisibleAgentPendingActions("连接状态已变化");
   state.modeSelectDirty = false;
   await refreshSession();
 }
 
 async function disconnectSession() {
   await postJsonLogged("/api/v1/session/disconnect", {});
+  invalidateVisibleAgentPendingActions("连接已断开");
   state.modeSelectDirty = false;
   await refreshSession();
 }
@@ -877,6 +888,7 @@ async function switchMode() {
   const body = await withSafety({ mode }, mode === "real");
   if (!body) return;
   await postJsonLogged("/api/v1/session/mode", body);
+  invalidateVisibleAgentPendingActions("控制模式已变化");
   state.modeSelectDirty = false;
   await refreshSession();
 }
@@ -999,7 +1011,13 @@ async function sendAgentMessage() {
     const data = await postJson("/api/v1/agent/ask", { text, speak: false }, { timeout: 70000 });
     state.lastAgentReply = data;
     const posterUrl = data.raw_payload?.poster_demo ? data.raw_payload?.poster_url : "";
-    appendAgentMessage("AI", data.reply || data.message || "已完成。", "ai", posterUrl ? { type: "image", url: posterUrl, title: "AI 海报" } : null);
+    appendAgentMessage(
+      "AI",
+      data.reply || data.message || "已完成。",
+      "ai",
+      posterUrl ? { type: "image", url: posterUrl, title: "AI 海报" } : null,
+      data.pending_action || null
+    );
     log("info", "AI 对话完成");
     if (data.raw_payload?.agent_demo || data.raw_payload?.poster_demo) {
       await Promise.allSettled([refreshSession(), refreshState(), loadActions()]);
@@ -1049,6 +1067,7 @@ async function stopNow() {
     errors.push(error);
   }
   log("info", "急停请求已发送");
+  invalidateVisibleAgentPendingActions("急停已清除待确认动作");
   await Promise.allSettled([refreshState(), refreshFollow()]);
   if (errors.length) {
     showError(errors[errors.length - 1]);
@@ -1144,8 +1163,9 @@ function renderAgentStatus() {
   $("#agentToolCheck").className = toolCheck.ok ? "ok-text" : "bad-text";
 }
 
-function appendAgentMessage(role, text, kind, attachment = null) {
-  state.agentMessages.push({ role, text, kind, attachment, time: new Date().toLocaleTimeString() });
+function appendAgentMessage(role, text, kind, attachment = null, pendingAction = null) {
+  if (pendingAction) invalidateVisibleAgentPendingActions("已被新的待确认动作替换");
+  state.agentMessages.push({ role, text, kind, attachment, pendingAction, time: new Date().toLocaleTimeString() });
   state.agentMessages = state.agentMessages.slice(-80);
   renderAgentMessages();
 }
@@ -1155,11 +1175,143 @@ function renderAgentMessages() {
     .map(
       (item) => `<div class="agent-message ${escapeAttr(item.kind)}">
         <strong>[${escapeHtml(item.role)}]</strong>
-        <span>${escapeHtml(item.text).replace(/\n/g, "<br>")}${renderAgentAttachment(item.attachment)}</span>
+        <div class="agent-message-content">${escapeHtml(item.text).replace(/\n/g, "<br>")}${renderAgentAttachment(item.attachment)}${renderAgentPendingAction(item.pendingAction)}</div>
       </div>`
     )
     .join("");
   $("#agentChatLog").scrollTop = $("#agentChatLog").scrollHeight;
+}
+
+function renderAgentPendingAction(action) {
+  if (!action || !action.id) return "";
+  const summary = action.summary || {};
+  const status = action.uiStatus || action.status || "pending";
+  const statusLabels = {
+    pending: "等待确认",
+    executing: "执行中",
+    executed: "已执行",
+    cancelled: "已取消",
+    expired: "已过期",
+    invalidated: "已失效",
+  };
+  const unit = summary.unit === "mm" ? "mm" : "°";
+  const values = [];
+  if (summary.joint) values.push(["关节", summary.joint]);
+  if (summary.current != null) values.push(["当前", `${formatNum(summary.current, 2)} ${unit}`]);
+  if (summary.delta != null) values.push(["变化", `${formatSignedAgentValue(summary.delta)} ${unit}`]);
+  if (summary.target != null) values.push(["目标", `${formatNum(summary.target, 2)} ${unit}`]);
+  if (summary.open_ratio != null) values.push(["夹爪开度", `${formatNum(Number(summary.open_ratio) * 100, 0)}%`]);
+  if (summary.speed_percent != null) values.push(["速度", `${summary.speed_percent}%`]);
+  if (summary.speed != null) values.push(["播放速度", `${formatNum(summary.speed, 1)}x`]);
+  if (summary.frame_count != null) values.push(["动作帧", String(summary.frame_count)]);
+  if (Array.isArray(summary.joints) && summary.joints.length) {
+    values.push(["跟随关节", summary.joints.map((joint) => String(joint).toUpperCase()).join(" / ")]);
+  }
+  const remaining = Math.max(0, Math.ceil((Number(action.expires_at || 0) * 1000 - Date.now()) / 1000));
+  const canAct = status === "pending" && remaining > 0;
+  const detail = action.uiMessage || (canAct ? `${remaining} 秒内有效` : statusLabels[status] || status);
+  return `<section class="agent-pending-card ${escapeAttr(status)}" data-agent-action-id="${escapeAttr(action.id)}">
+    <div class="agent-pending-head">
+      <strong>${escapeHtml(summary.title || "待确认动作")}</strong>
+      <span>${escapeHtml(statusLabels[status] || status)}</span>
+    </div>
+    <dl>${values.map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`).join("")}</dl>
+    <p>${escapeHtml(detail)}</p>
+    <div class="agent-pending-actions">
+      <button class="primary" data-agent-pending-command="confirm" ${canAct ? "" : "disabled"}>确认执行</button>
+      <button data-agent-pending-command="cancel" ${canAct ? "" : "disabled"}>取消</button>
+    </div>
+  </section>`;
+}
+
+function handleAgentPendingActionClick(event) {
+  const button = event.target.closest("[data-agent-pending-command]");
+  if (!button || button.disabled) return;
+  const card = button.closest("[data-agent-action-id]");
+  if (!card) return;
+  const actionId = card.dataset.agentActionId;
+  if (button.dataset.agentPendingCommand === "confirm") confirmAgentPendingAction(actionId);
+  if (button.dataset.agentPendingCommand === "cancel") cancelAgentPendingAction(actionId);
+}
+
+async function confirmAgentPendingAction(actionId) {
+  setAgentPendingActionState(actionId, "executing", "正在复核状态并执行");
+  try {
+    const data = await postJson("/api/v1/agent/pending/confirm", { action_id: actionId }, { timeout: 70000 });
+    setAgentPendingActionState(actionId, "executed", data.message || "动作已执行");
+    appendAgentMessage("SYSTEM", data.message || "动作已执行。", "system");
+    await Promise.allSettled([refreshSession(), refreshState(), loadActions(), refreshFollow()]);
+  } catch (error) {
+    setAgentPendingActionState(actionId, "invalidated", error.message || String(error));
+    showError(error);
+  }
+}
+
+async function cancelAgentPendingAction(actionId) {
+  setAgentPendingActionState(actionId, "executing", "正在取消");
+  try {
+    const data = await postJson("/api/v1/agent/pending/cancel", { action_id: actionId }, { timeout: 10000 });
+    setAgentPendingActionState(actionId, "cancelled", data.message || "待确认动作已取消");
+  } catch (error) {
+    setAgentPendingActionState(actionId, "invalidated", error.message || String(error));
+    showError(error);
+  }
+}
+
+function setAgentPendingActionState(actionId, status, message = "") {
+  const item = state.agentMessages.find((entry) => entry.pendingAction?.id === actionId);
+  if (!item) return;
+  item.pendingAction.uiStatus = status;
+  item.pendingAction.uiMessage = message;
+  renderAgentMessages();
+}
+
+function invalidateVisibleAgentPendingActions(message) {
+  let changed = false;
+  state.agentMessages.forEach((item) => {
+    const action = item.pendingAction;
+    if (action && (action.uiStatus || action.status) === "pending") {
+      action.uiStatus = "invalidated";
+      action.uiMessage = message;
+      changed = true;
+    }
+  });
+  if (changed) renderAgentMessages();
+}
+
+function expireAgentPendingActions() {
+  let changed = false;
+  state.agentMessages.forEach((item) => {
+    const action = item.pendingAction;
+    if (!action || (action.uiStatus || action.status) !== "pending") return;
+    if (Date.now() >= Number(action.expires_at || 0) * 1000) {
+      action.uiStatus = "expired";
+      action.uiMessage = "30 秒确认时间已结束，请重新生成动作";
+      changed = true;
+    }
+  });
+  if (changed) {
+    renderAgentMessages();
+    return;
+  }
+  $$(".agent-pending-card.pending > p").forEach((element) => {
+    const card = element.closest("[data-agent-action-id]");
+    const item = state.agentMessages.find((entry) => entry.pendingAction?.id === card?.dataset.agentActionId);
+    if (!item) return;
+    const remaining = Math.max(0, Math.ceil((Number(item.pendingAction.expires_at || 0) * 1000 - Date.now()) / 1000));
+    element.textContent = `${remaining} 秒内有效`;
+  });
+}
+
+function restoreAgentPendingAction(action) {
+  if (!action?.id || state.agentMessages.some((item) => item.pendingAction?.id === action.id)) return;
+  appendAgentMessage("SYSTEM", "已恢复尚未确认的动作。", "system", null, action);
+}
+
+function formatSignedAgentValue(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return "--";
+  return `${number >= 0 ? "+" : ""}${number.toFixed(2)}`;
 }
 
 function renderAgentAttachment(attachment) {
@@ -1781,7 +1933,7 @@ function renderRobot() {
   const joints = state.robot.joints_deg || {};
   JOINTS.forEach(([key]) => {
     const el = $(`#joint-${key}`);
-    if (el) el.textContent = `${formatNum(joints[key] ?? 0, 2)}°`;
+    if (el) el.textContent = formatJointReadout(key, joints[key] ?? 0);
     const input = $(`#fk-${key}`);
     if (input && input.value === "") input.value = formatNum(joints[key] ?? 0, 2);
   });
@@ -2492,6 +2644,11 @@ function formatNum(value, digits = 2) {
   const n = Number(value);
   if (!Number.isFinite(n)) return "--";
   return n.toFixed(digits);
+}
+
+function formatJointReadout(jointKey, value) {
+  const formatted = formatNum(value, 2);
+  return jointKey === "j10" ? `${formatted} mm` : `${formatted}°`;
 }
 
 function escapeHtml(value) {

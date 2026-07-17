@@ -64,6 +64,7 @@ arguments: object
 missing: array of missing or ambiguous field names
 reply: kind=clarify 时用中文简短说明缺少什么，其他情况为空字符串
 confidence: 0 到 1
+evidence: 从用户原话逐字复制的证据，包含 joint、direction_or_target、value、unit；原话没有的必须留空，不得改写或猜测
 
 领域映射：J10=底盘导轨（毫米），J11=底座旋转，J12=肩部抬升，J13=肘部弯曲，J14=腕部俯仰，J15=腕部旋转。J11-J15 的单位是度。
 
@@ -83,11 +84,11 @@ confidence: 0 到 1
             "messages": [
                 {"role": "system", "content": prompt},
                 {"role": "user", "content": "能否控制 j10 运动到 50mm 的位置"},
-                {"role": "assistant", "content": '{"kind":"command","tool_name":"move_joint","arguments":{"joint_name":"j10","mode":"absolute","value":50},"missing":[],"reply":"","confidence":1.0}'},
+                {"role": "assistant", "content": '{"kind":"command","tool_name":"move_joint","arguments":{"joint_name":"j10","mode":"absolute","value":50},"missing":[],"reply":"","confidence":1.0,"evidence":{"joint":"j10","direction_or_target":"运动到","value":"50","unit":"mm"}}'},
                 {"role": "user", "content": "j12 正转度"},
-                {"role": "assistant", "content": '{"kind":"clarify","tool_name":"move_joint","arguments":{"joint_name":"j12","mode":"relative"},"missing":["value"],"reply":"请说明 J12 要正转多少度。","confidence":1.0}'},
+                {"role": "assistant", "content": '{"kind":"clarify","tool_name":"move_joint","arguments":{"joint_name":"j12","mode":"relative"},"missing":["value"],"reply":"请说明 J12 要正转多少度。","confidence":1.0,"evidence":{"joint":"j12","direction_or_target":"正转","value":"","unit":"度"}}'},
                 {"role": "user", "content": "J12 是做什么的？"},
-                {"role": "assistant", "content": '{"kind":"conversation","tool_name":"","arguments":{},"missing":[],"reply":"","confidence":1.0}'},
+                {"role": "assistant", "content": '{"kind":"conversation","tool_name":"","arguments":{},"missing":[],"reply":"","confidence":1.0,"evidence":{}}'},
                 {"role": "user", "content": user_text},
             ],
             "temperature": 0.0,
@@ -101,7 +102,9 @@ confidence: 0 到 1
             payload.pop("response_format", None)
             data = self._post_chat(payload)
         content = str(_choice_message(data).get("content") or "")
-        return _normalize_robot_intent(_parse_json_object(content))
+        intent = _normalize_robot_intent(_parse_json_object(content))
+        intent["source_text"] = user_text
+        return intent
 
     def close(self) -> None:
         self.session_manager.save_session(self.session)
@@ -330,6 +333,7 @@ def _normalize_robot_intent(value: Any) -> dict[str, Any]:
     if kind not in {"command", "clarify", "conversation"}:
         kind = "clarify"
     arguments = value.get("arguments") if isinstance(value.get("arguments"), dict) else {}
+    evidence = value.get("evidence") if isinstance(value.get("evidence"), dict) else {}
     missing = value.get("missing") if isinstance(value.get("missing"), list) else []
     try:
         confidence = max(0.0, min(1.0, float(value.get("confidence", 0.0))))
@@ -342,4 +346,5 @@ def _normalize_robot_intent(value: Any) -> dict[str, Any]:
         "missing": [str(item) for item in missing if str(item).strip()],
         "reply": str(value.get("reply") or "").strip(),
         "confidence": confidence,
+        "evidence": {str(key): str(item) for key, item in evidence.items() if item is not None},
     }

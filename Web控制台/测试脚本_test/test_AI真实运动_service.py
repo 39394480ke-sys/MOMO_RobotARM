@@ -271,10 +271,31 @@ class AgentRealMotionServiceTest(unittest.TestCase):
                 "arguments": {"joint_name": "j12", "mode": "relative", "value": 1.0},
                 "missing": [],
                 "confidence": 0.98,
+                "source_text": "j12 正转 1 度",
+                "evidence": {"joint": "j12", "direction_or_target": "正转", "value": "1", "unit": "度"},
             }
         )
 
         self.assertEqual(result["pending_action"]["tool_name"], "move_joint")
+        self.assertEqual(bridge.single_moves, [])
+
+    def test_semantic_model_cannot_invent_a_number_for_vague_language(self) -> None:
+        service, bridge = make_service()
+
+        result = service._handle_agent_semantic_intent(
+            {
+                "kind": "command",
+                "tool_name": "move_joint",
+                "arguments": {"joint_name": "j12", "mode": "relative", "value": 1.0},
+                "missing": [],
+                "confidence": 1.0,
+                "source_text": "让肩部抬一点",
+                "evidence": {"joint": "肩部", "direction_or_target": "抬", "value": "一点", "unit": ""},
+            }
+        )
+
+        self.assertIn("具体", result["reply"])
+        self.assertNotIn("pending_action", result)
         self.assertEqual(bridge.single_moves, [])
 
     def test_semantic_ambiguity_only_asks_for_missing_information(self) -> None:

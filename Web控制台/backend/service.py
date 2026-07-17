@@ -275,6 +275,8 @@ class WebControlService:
             for field in required[tool_name]:
                 if field not in arguments or arguments[field] in {None, ""}:
                     missing.append(field)
+        if tool_name == "move_joint" and kind == "command":
+            missing.extend(self._agent_motion_grounding_gaps(intent, arguments))
         if kind == "clarify" or missing or confidence < 0.70 or tool_name not in required:
             reply = str(intent.get("reply") or "").strip()
             if not reply:
@@ -327,6 +329,48 @@ class WebControlService:
             "session_id": "agent-semantic-intent",
             "raw_payload": {"semantic_intent": intent, **(extra or {})},
         }
+
+    @staticmethod
+    def _agent_motion_grounding_gaps(intent: dict[str, Any], arguments: dict[str, Any]) -> list[str]:
+        """Require every motion value to be visibly grounded in the user's words."""
+
+        source = str(intent.get("source_text") or "").strip().lower()
+        evidence = intent.get("evidence") if isinstance(intent.get("evidence"), dict) else {}
+        gaps: list[str] = []
+        fields = {
+            "joint": "joint_name",
+            "direction_or_target": "direction",
+            "value": "value",
+            "unit": "unit",
+        }
+        for evidence_key, missing_key in fields.items():
+            excerpt = str(evidence.get(evidence_key) or "").strip().lower()
+            if not excerpt or excerpt not in source:
+                gaps.append(missing_key)
+
+        value_excerpt = str(evidence.get("value") or "").strip().lower()
+        vague_values = ("一点", "一些", "稍微", "小幅", "适当", "随便", "大概", "左右")
+        if any(marker in value_excerpt for marker in vague_values):
+            gaps.append("value")
+        number_match = re.search(r"[-+]?\d+(?:\.\d+)?", value_excerpt)
+        has_chinese_number = bool(re.search(r"[零〇一二两三四五六七八九十百]", value_excerpt))
+        if number_match is None and not has_chinese_number:
+            gaps.append("value")
+        if number_match is not None:
+            try:
+                stated = float(number_match.group(0))
+                parsed = float(arguments.get("value"))
+                if abs(abs(stated) - abs(parsed)) > 1e-6:
+                    gaps.append("value")
+            except (TypeError, ValueError):
+                gaps.append("value")
+
+        unit_excerpt = str(evidence.get("unit") or "").strip().lower()
+        joint = str(arguments.get("joint_name") or "").strip().lower()
+        valid_unit = unit_excerpt in ({"mm", "毫米"} if joint == "j10" else {"度", "°"})
+        if not valid_unit:
+            gaps.append("unit")
+        return list(dict.fromkeys(gaps))
 
     def _handle_agent_direct_command(self, content: str) -> dict[str, Any] | None:
         """Reliably map explicit Chinese motion commands before model fallback."""

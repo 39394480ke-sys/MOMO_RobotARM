@@ -203,6 +203,20 @@ class AgentRealMotionServiceTest(unittest.TestCase):
     def test_start_follow_uses_real_mode_after_confirmation(self) -> None:
         service, _bridge = make_service()
         requests = []
+        service.follow_status = lambda: {
+            "running": False,
+            "latest_url": "http://camera.local:8000/latest",
+            "robot_api_base": "http://127.0.0.1:8010",
+            "effective_config": {
+                "pan_joint": "j11",
+                "tilt_joint": "j13",
+                "enabled_follow_joints": ["j11", "j13"],
+                "pan_gain_deg_per_norm": 1.0,
+                "tilt_gain_deg_per_norm": 1.0,
+                "max_pan_step_deg": 2.0,
+                "max_tilt_step_deg": 2.0,
+            },
+        }
         service.start_follow = lambda request: requests.append(request) or {"message": "视觉跟随已启动"}
 
         proposal = service.agent_propose_tool("start_face_follow", {})
@@ -210,6 +224,9 @@ class AgentRealMotionServiceTest(unittest.TestCase):
 
         self.assertEqual(len(requests), 1)
         self.assertFalse(requests[0].dry_run)
+        self.assertEqual(requests[0].latest_url, "http://camera.local:8000/latest")
+        self.assertEqual(requests[0].enabled_follow_joints, ["j11", "j13"])
+        self.assertEqual(requests[0].pan_gain, 1.0)
 
     def test_stop_invalidates_pending_action(self) -> None:
         service, _bridge = make_service()

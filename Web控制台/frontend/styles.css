@@ -1201,6 +1201,33 @@ th {
     grid-template-columns: 1fr;
   }
 
+  #pageAgent .section-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  #pageAgent .section-head .inline-actions {
+    width: 100%;
+  }
+
+  .agent-message {
+    grid-template-columns: 1fr;
+  }
+
+  .agent-pending-card {
+    width: 100%;
+    max-width: none;
+  }
+
+  .agent-config-panel .kv.wide {
+    grid-template-columns: 90px minmax(0, 1fr);
+  }
+
+  .agent-config-panel .kv dd {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
   .joint-tools {
     justify-content: flex-start;
   }

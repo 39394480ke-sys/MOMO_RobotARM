@@ -1499,8 +1499,24 @@ class WebControlService:
                     )
                 )
             elif tool_name == "start_face_follow":
+                follow = self.follow_status()
+                effective = follow.get("effective_config", {}) if isinstance(follow.get("effective_config"), dict) else {}
                 result = self.start_follow(
-                    FollowStartRequest(dry_run=snapshot["mode"] != "real", confirm_text=self.confirm_text)
+                    FollowStartRequest(
+                        latest_url=str(follow.get("latest_url") or self.config.get("follow", {}).get("latest_url") or "http://127.0.0.1:8000/latest"),
+                        robot_api_base=str(follow.get("robot_api_base") or self.config.get("follow", {}).get("robot_api_base") or self._local_api_base()),
+                        pan_joint=effective.get("pan_joint"),
+                        tilt_joint=effective.get("tilt_joint"),
+                        enabled_follow_joints=effective.get("enabled_follow_joints"),
+                        pan_gain=effective.get("pan_gain_deg_per_norm"),
+                        tilt_gain=effective.get("tilt_gain_deg_per_norm"),
+                        pan_sign=effective.get("pan_sign"),
+                        tilt_sign=effective.get("tilt_sign"),
+                        max_pan_step_deg=effective.get("max_pan_step_deg"),
+                        max_tilt_step_deg=effective.get("max_tilt_step_deg"),
+                        dry_run=snapshot["mode"] != "real",
+                        confirm_text=self.confirm_text,
+                    )
                 )
             else:
                 raise WebAPIError("AGENT_TOOL_REJECTED", f"待确认工具无法执行：{tool_name}")

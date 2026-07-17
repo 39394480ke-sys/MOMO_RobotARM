@@ -56,33 +56,38 @@ class OpenAICompatibleAgentClient:
         user_text = str(message or "").strip()
         if not user_text:
             return {"kind": "clarify", "tool_name": "", "arguments": {}, "missing": ["request"], "reply": "请说明想让机械臂做什么。", "confidence": 1.0}
-        prompt = """You are a semantic command parser for a robot arm. Do not execute tools and do not discuss whether you can control hardware.
-Return exactly one JSON object with these fields:
+        prompt = """你是机械臂的语义指令解析器。只判断用户想让系统做什么，不要回答“我能不能控制硬件”，不要执行工具。
+只输出一个 JSON 对象，字段如下：
 kind: command | clarify | conversation
 tool_name: get_robot_state | stop_robot | stop_face_follow | set_gripper | move_joint | run_robot_behavior | play_action | start_face_follow | ""
 arguments: object
 missing: array of missing or ambiguous field names
-reply: a concise Chinese clarification when kind=clarify, otherwise an empty string
-confidence: number from 0 to 1
+reply: kind=clarify 时用中文简短说明缺少什么，其他情况为空字符串
+confidence: 0 到 1
 
-Rules:
-- Convert meaning, not fixed wording. "j12 正转 1 度", "让十二号关节往正方向走一度" and equivalent expressions mean move_joint relative +1 degree.
-- A polite question with a complete concrete target, such as "能否控制 j10 运动到 50mm 的位置", is a command.
-- move_joint arguments must contain joint_name (j10..j15), mode (relative|absolute), and numeric value. Positive/forward/clockwise means a positive relative value; negative/reverse/counterclockwise means negative.
-- J10 uses millimetres. J11-J15 use degrees. Never invent a number, joint, direction, unit, action name, or absolute/relative mode.
-- If any required detail is absent or ambiguous, kind=clarify, list every missing field, and ask specifically for them in Chinese. Example: "j12 正转度" is missing value; "转一点" is missing joint_name, direction and value.
-- J12-J15 absolute targets are not accepted: ask the user for a relative direction and change amount.
-- set_gripper uses open_ratio 1.0 for open and 0.0 for close.
-- run_robot_behavior only uses {"name":"home"}.
-- play_action requires the exact action-library name and uses {"name":...,"speed":1.0,"loop":false}.
-- Starting visual follow is start_face_follow. Stopping motion/follow is an immediate reducing-risk command.
-- Questions, explanations, and normal chat that do not request a robot action are kind=conversation.
-- Never turn an unclear request into a command.
+领域映射：J10=底盘导轨（毫米），J11=底座旋转，J12=肩部抬升，J13=肘部弯曲，J14=腕部俯仰，J15=腕部旋转。J11-J15 的单位是度。
+
+规则：
+- 理解语义而不是匹配固定文字。礼貌问句“能否……”“可以……吗”只要包含明确的操作对象和具体数值，就是 command，不是能力咨询。
+- move_joint 必须有 joint_name（j10..j15）、mode（relative|absolute）和数字 value。正转/正向/顺时针是正的相对值，反转/反向/逆时针是负的相对值。
+- 绝不得猜测数值、关节、方向、单位、动作名或绝对/相对模式。缺少或有歧义时必须 clarify，missing 列出所有缺少字段。
+- J12-J15 不接受绝对目标，必须追问相对方向和变化量。
+- 打开夹爪是 set_gripper {"open_ratio":1.0}，闭合夹爪是 {"open_ratio":0.0}。
+- 回 Home 是 run_robot_behavior {"name":"home"}。播放动作必须有确切动作库名称。
+- 启动视觉跟随是 start_face_follow；停止机械臂或停止跟随是立即降低风险的指令。
+- 只询问原理、能力、状态解释或普通聊天，且没有要求执行具体动作时，才是 conversation。
+- 模糊指令绝不得变成 command。
 """
         payload = {
             "model": self.backend_cfg.get("model"),
             "messages": [
                 {"role": "system", "content": prompt},
+                {"role": "user", "content": "能否控制 j10 运动到 50mm 的位置"},
+                {"role": "assistant", "content": '{"kind":"command","tool_name":"move_joint","arguments":{"joint_name":"j10","mode":"absolute","value":50},"missing":[],"reply":"","confidence":1.0}'},
+                {"role": "user", "content": "j12 正转度"},
+                {"role": "assistant", "content": '{"kind":"clarify","tool_name":"move_joint","arguments":{"joint_name":"j12","mode":"relative"},"missing":["value"],"reply":"请说明 J12 要正转多少度。","confidence":1.0}'},
+                {"role": "user", "content": "J12 是做什么的？"},
+                {"role": "assistant", "content": '{"kind":"conversation","tool_name":"","arguments":{},"missing":[],"reply":"","confidence":1.0}'},
                 {"role": "user", "content": user_text},
             ],
             "temperature": 0.0,

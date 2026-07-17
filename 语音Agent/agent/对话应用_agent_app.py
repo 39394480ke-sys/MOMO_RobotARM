@@ -47,6 +47,12 @@ class AgentApp:
             self.say(reply.text)
         return reply
 
+    def interpret_text(self, text: str) -> dict[str, Any]:
+        interpreter = getattr(self.client, "interpret_robot_intent", None)
+        if not callable(interpreter):
+            return {"kind": "conversation", "tool_name": "", "arguments": {}, "missing": [], "reply": "", "confidence": 0.0}
+        return interpreter(str(text or ""))
+
     def run_voice_turn(self, speak: bool = True) -> AgentReply:
         try:
             wav_bytes = record_until_enter(self.config)

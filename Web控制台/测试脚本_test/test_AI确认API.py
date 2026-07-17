@@ -25,6 +25,11 @@ class FakeReply:
 class FakeAgentApp:
     def __init__(self) -> None:
         self.ask_count = 0
+        self.interpret_count = 0
+
+    def interpret_text(self, content: str) -> dict:
+        self.interpret_count += 1
+        return {"kind": "conversation", "tool_name": "", "arguments": {}, "missing": [], "confidence": 1.0}
 
     def ask_text(self, content: str, speak: bool = False) -> FakeReply:
         self.ask_count += 1

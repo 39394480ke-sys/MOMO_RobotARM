@@ -220,9 +220,6 @@ class WebControlService:
                 "session_id": "agent-confirmation",
                 "raw_payload": {"agent_cancellation": result},
             }
-        direct_reply = self._handle_agent_direct_command(content)
-        if direct_reply is not None:
-            return direct_reply
         demo_reply = self._handle_agent_demo_message(content)
         if demo_reply is not None:
             return demo_reply
@@ -231,6 +228,10 @@ class WebControlService:
             return poster_reply
         try:
             app = self._get_agent_app(force_new_session=bool(request.force_new_session))
+            semantic_intent = app.interpret_text(content)
+            semantic_reply = self._handle_agent_semantic_intent(semantic_intent)
+            if semantic_reply is not None:
+                return semantic_reply
             reply = app.ask_text(content, speak=bool(request.speak))
             result = {
                 "message": "AI 对话完成。",
@@ -245,6 +246,87 @@ class WebControlService:
         except Exception as exc:
             self._remember_error("AGENT_ASK_FAILED", str(exc))
             raise WebAPIError("AGENT_ASK_FAILED", f"AI 对话失败：{exc}") from exc
+
+    def _handle_agent_semantic_intent(self, intent: dict[str, Any]) -> dict[str, Any] | None:
+        """Validate a model-produced intent before creating or executing anything."""
+
+        if not isinstance(intent, dict) or str(intent.get("kind") or "conversation") == "conversation":
+            return None
+        kind = str(intent.get("kind") or "clarify")
+        tool_name = str(intent.get("tool_name") or "").strip()
+        arguments = dict(intent.get("arguments") or {}) if isinstance(intent.get("arguments"), dict) else {}
+        missing = [str(item) for item in intent.get("missing", []) if str(item).strip()] if isinstance(intent.get("missing"), list) else []
+        try:
+            confidence = float(intent.get("confidence", 0.0))
+        except (TypeError, ValueError):
+            confidence = 0.0
+
+        required = {
+            "move_joint": ("joint_name", "mode", "value"),
+            "set_gripper": ("open_ratio",),
+            "run_robot_behavior": ("name",),
+            "play_action": ("name",),
+            "start_face_follow": (),
+            "stop_face_follow": (),
+            "stop_robot": (),
+            "get_robot_state": (),
+        }
+        if tool_name in required:
+            for field in required[tool_name]:
+                if field not in arguments or arguments[field] in {None, ""}:
+                    missing.append(field)
+        if kind == "clarify" or missing or confidence < 0.70 or tool_name not in required:
+            reply = str(intent.get("reply") or "").strip()
+            if not reply:
+                labels = {
+                    "joint_name": "要操作的关节（J10-J15）",
+                    "mode": "是相对移动还是到达绝对位置",
+                    "value": "具体移动量",
+                    "open_ratio": "夹爪要打开还是闭合",
+                    "name": "具体动作名称",
+                    "clear_request": "完整操作要求",
+                }
+                details = "、".join(labels.get(item, item) for item in dict.fromkeys(missing))
+                reply = f"这条指令不够明确，请补充：{details}。" if details else "这条指令不够明确，请说明具体动作。"
+            return self._agent_semantic_message(reply, intent)
+
+        if tool_name == "stop_robot":
+            result = self.stop()
+            return self._agent_semantic_message(str(result.get("message") or "机械臂已停止。"), intent, {"stop_robot": result})
+        if tool_name == "stop_face_follow":
+            result = self.stop_follow()
+            return self._agent_semantic_message(str(result.get("message") or "视觉跟随已停止。"), intent, {"stop_face_follow": result})
+        if tool_name == "get_robot_state":
+            state = self.get_robot_state()
+            joints = state.get("joints_deg", {}) if isinstance(state.get("joints_deg"), dict) else {}
+            summary = "、".join(f"{key.upper()}={float(value):.2f}" for key, value in joints.items())
+            connection_text = "已连接" if state.get("connected") else "未连接"
+            reply = f"当前模式 {state.get('mode')}，{connection_text}。{summary}"
+            return self._agent_semantic_message(reply, intent, {"robot_state": state})
+
+        try:
+            proposal = self.agent_propose_tool(tool_name, arguments)
+        except WebAPIError as exc:
+            return self._agent_semantic_message(f"这条动作不能执行：{exc.message}", intent, {"rejected": True, "code": exc.code})
+        pending = proposal["pending_action"]
+        summary = pending.get("summary", {}) if isinstance(pending.get("summary"), dict) else {}
+        reply = str(summary.get("confirmation_text") or "动作已生成，请核对后确认执行。")
+        return {
+            "message": "AI 已理解指令，动作等待二次确认。",
+            "reply": reply,
+            "session_id": "agent-semantic-intent",
+            "pending_action": pending,
+            "raw_payload": {"semantic_intent": intent, "pending_action": pending},
+        }
+
+    @staticmethod
+    def _agent_semantic_message(reply: str, intent: dict[str, Any], extra: dict[str, Any] | None = None) -> dict[str, Any]:
+        return {
+            "message": "AI 语义解析完成。",
+            "reply": str(reply),
+            "session_id": "agent-semantic-intent",
+            "raw_payload": {"semantic_intent": intent, **(extra or {})},
+        }
 
     def _handle_agent_direct_command(self, content: str) -> dict[str, Any] | None:
         """Reliably map explicit Chinese motion commands before model fallback."""

@@ -261,6 +261,41 @@ class AgentRealMotionServiceTest(unittest.TestCase):
         service, _bridge = make_service()
         self.assertIsNone(service._handle_agent_direct_command("解释一下 J12 是做什么的"))
 
+    def test_semantic_intent_creates_the_same_safe_pending_action(self) -> None:
+        service, bridge = make_service()
+
+        result = service._handle_agent_semantic_intent(
+            {
+                "kind": "command",
+                "tool_name": "move_joint",
+                "arguments": {"joint_name": "j12", "mode": "relative", "value": 1.0},
+                "missing": [],
+                "confidence": 0.98,
+            }
+        )
+
+        self.assertEqual(result["pending_action"]["tool_name"], "move_joint")
+        self.assertEqual(bridge.single_moves, [])
+
+    def test_semantic_ambiguity_only_asks_for_missing_information(self) -> None:
+        service, bridge = make_service()
+
+        result = service._handle_agent_semantic_intent(
+            {
+                "kind": "clarify",
+                "tool_name": "move_joint",
+                "arguments": {"joint_name": "j12", "mode": "relative"},
+                "missing": ["value"],
+                "reply": "请说明 J12 要正转多少度。",
+                "confidence": 0.96,
+            }
+        )
+
+        self.assertIn("多少度", result["reply"])
+        self.assertNotIn("pending_action", result)
+        self.assertEqual(bridge.moves, [])
+        self.assertEqual(bridge.single_moves, [])
+
     def test_direct_named_commands_all_use_the_standard_pending_store(self) -> None:
         service, _bridge = make_service()
         cases = [

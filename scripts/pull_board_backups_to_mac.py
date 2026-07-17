@@ -28,6 +28,17 @@ def pull_snapshots(
     snapshots = local_root / "snapshots"
     ssh = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", host]
     remote_snapshots = f"{remote_root.rstrip('/')}/snapshots"
+    remote_backup_command = [
+        "/home/fibo/miniforge3/bin/python",
+        "/home/fibo/MOMO_RobotARM/scripts/backup_board_local_data.py",
+        "--project-root",
+        "/home/fibo/MOMO_RobotARM",
+        "--backup-root",
+        remote_root.rstrip("/"),
+        "--retention-days",
+        str(retention_days),
+    ]
+    subprocess.run(ssh + [shlex.join(remote_backup_command)], check=True)
     subprocess.run(ssh + [f"test -d {shlex.quote(remote_snapshots)}"], check=True)
     snapshots.mkdir(parents=True, exist_ok=True)
     rsync = [

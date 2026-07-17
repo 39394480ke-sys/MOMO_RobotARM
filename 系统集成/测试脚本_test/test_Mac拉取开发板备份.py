@@ -34,9 +34,10 @@ class MacPullBackupTest(unittest.TestCase):
 
         commands = [call.args[0] for call in run.call_args_list]
         self.assertIn("BatchMode=yes", commands[0])
-        self.assertEqual(commands[0][-2:], ["fibo@board.local", "test -d /remote/backups/snapshots"])
-        self.assertIn("--partial", commands[1])
-        self.assertNotIn("--delete", commands[1])
+        self.assertIn("backup_board_local_data.py", commands[0][-1])
+        self.assertEqual(commands[1][-2:], ["fibo@board.local", "test -d /remote/backups/snapshots"])
+        self.assertIn("--partial", commands[2])
+        self.assertNotIn("--delete", commands[2])
 
     def test_checksum_failure_is_reported(self) -> None:
         snapshot = create_snapshot(self.project, self.local, datetime.now(timezone.utc))

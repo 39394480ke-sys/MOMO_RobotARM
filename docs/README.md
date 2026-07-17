@@ -43,7 +43,7 @@
 GitHub 只保存模板；真实标定、动作库、视觉现场参数和 `*.local.yaml` 由开发板保管。备份分两层：
 
 - 开发板每天 03:15 在仓库外生成带 SHA-256 清单的快照，默认保留 30 天：`scripts/install_board_backup_cron.sh`
-- Mac 每天 03:45 通过 SSH/rsync 拉取后逐文件校验，不会用远端空目录删除本地备份：`scripts/install_mac_backup_launch_agent.sh`
+- Mac 每天 03:45 先通过 SSH 触发开发板快照，再用 rsync 拉取并逐文件校验；不会用远端空目录删除本地备份：`scripts/install_mac_backup_launch_agent.sh`
 
 手动运行也使用同一套校验逻辑：
 

@@ -71,6 +71,9 @@ class FakeBridge:
             return {"ok": False, "message": "动作不存在", "data": {}}
         return {"ok": True, "message": "动作", "data": {"name": name, "frames": [{}, {}, {}], "duration_sec": 2.0}}
 
+    def list_actions(self) -> dict:
+        return {"ok": True, "message": "动作列表", "data": {"actions": [{"name": "挥手"}]}}
+
     def play_action(self, name: str, speed: float, loop: bool) -> dict:
         self.play_calls.append({"name": name, "speed": speed, "loop": loop})
         return {"ok": True, "message": "播放完成", "data": {"name": name}}
@@ -190,6 +193,24 @@ class AgentRealMotionServiceTest(unittest.TestCase):
         service._action_thread.join(timeout=1.0)
 
         self.assertEqual(bridge.play_calls, [{"name": "挥手", "speed": 1.5, "loop": False}])
+
+    def test_legacy_agent_demo_execution_only_creates_standard_confirmation(self) -> None:
+        service, bridge = make_service()
+        service.config["agent_demo"] = {
+            "enabled": True,
+            "trigger_text": "生成轨迹",
+            "execute_texts": ["执行"],
+            "action_name": "挥手",
+            "speed": 1.25,
+        }
+
+        service._handle_agent_demo_message("生成轨迹")
+        result = service._handle_agent_demo_message("执行")
+
+        self.assertIsNotNone(result)
+        self.assertEqual(result["pending_action"]["tool_name"], "play_action")
+        self.assertEqual(result["pending_action"]["arguments"], {"name": "挥手", "speed": 1.25, "loop": False})
+        self.assertEqual(bridge.play_calls, [])
 
     def test_busy_action_rejects_new_increasing_risk_proposal(self) -> None:
         service, bridge = make_service()

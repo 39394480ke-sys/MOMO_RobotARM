@@ -56,7 +56,6 @@ safety:
   allow_real_robot_tools: false
   require_confirm_for_real: true
   confirm_text: 我确认机械臂周围安全
-  max_rotate_joint_delta_deg: 5.0
   allowed_tools:
     - get_robot_state
     - stop_robot

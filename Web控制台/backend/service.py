@@ -285,21 +285,20 @@ class WebControlService:
             pending = dict(self._agent_demo_pending_action)
             self._agent_demo_pending_action = None
             action_name = str(pending.get("name") or action_name).strip()
-            if not self._action_exists(action_name):
-                raise WebAPIError("AGENT_DEMO_ACTION_NOT_FOUND", f"请先在动作示教里保存动作：{action_name}")
-            result = self.play_action(
-                PlayActionRequest(
-                    name=action_name,
-                    speed=float(pending.get("speed", demo.get("speed", 1.0)) or 1.0),
-                    loop=False,
-                    confirm_text="",
-                )
+            proposal = self.agent_propose_tool(
+                "play_action",
+                {
+                    "name": action_name,
+                    "speed": float(pending.get("speed", demo.get("speed", 1.0)) or 1.0),
+                    "loop": False,
+                },
             )
             return {
-                "message": "AI 演示动作已开始。",
-                "reply": f"已开始执行环绕主体运镜轨迹，正在播放动作：{action_name}。",
+                "message": "AI 演示动作等待确认。",
+                "reply": str(proposal.get("message") or f"播放动作 {action_name} 需要确认。"),
                 "session_id": "agent-demo",
-                "raw_payload": {"agent_demo": True, "action": result},
+                "pending_action": proposal["pending_action"],
+                "raw_payload": {"agent_demo": True, "pending_action": proposal["pending_action"]},
             }
         return None
 

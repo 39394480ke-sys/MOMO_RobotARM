@@ -20,6 +20,8 @@ from .schemas import (
     ActionRecordingCaptureRequest,
     ActionRecordingStartRequest,
     AgentAskRequest,
+    AgentPendingActionRequest,
+    AgentToolProposalRequest,
     CartesianJogRequest,
     CalibrationBatchCurrentAngleRequest,
     CalibrationCurrentAngleRequest,
@@ -158,6 +160,21 @@ async def agent_tool_check() -> dict[str, Any]:
 @app.post("/api/v1/agent/ask")
 async def agent_ask(request: AgentAskRequest) -> dict[str, Any]:
     return await _call(service.agent_ask, request, broadcast=False)
+
+
+@app.post("/api/v1/agent/tool/propose")
+async def agent_tool_propose(request: AgentToolProposalRequest) -> dict[str, Any]:
+    return await _call(service.agent_propose_tool, request.tool_name, request.arguments, broadcast=False)
+
+
+@app.post("/api/v1/agent/pending/confirm")
+async def agent_pending_confirm(request: AgentPendingActionRequest) -> dict[str, Any]:
+    return await _call(service.agent_confirm_pending, request.action_id)
+
+
+@app.post("/api/v1/agent/pending/cancel")
+async def agent_pending_cancel(request: AgentPendingActionRequest) -> dict[str, Any]:
+    return await _call(service.agent_cancel_pending, request.action_id, broadcast=False)
 
 
 @app.post("/api/v1/agent/reset-session")

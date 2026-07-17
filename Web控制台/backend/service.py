@@ -197,6 +197,28 @@ class WebControlService:
         content = str(request.text or "").strip()
         if not content:
             raise WebAPIError("BAD_INPUT", "请输入要发送给 AI 的内容。")
+        if content == "确认执行":
+            pending = self._agent_pending.current()
+            if pending is None:
+                raise WebAPIError("AGENT_PENDING_NOT_FOUND", "当前没有可以确认执行的动作。")
+            result = self.agent_confirm_pending(str(pending["id"]))
+            return {
+                "message": "AI 动作已确认。",
+                "reply": str(result.get("message") or "已确认并执行动作。"),
+                "session_id": "agent-confirmation",
+                "raw_payload": {"agent_confirmation": result},
+            }
+        if content == "取消执行":
+            pending = self._agent_pending.current()
+            if pending is None:
+                raise WebAPIError("AGENT_PENDING_NOT_FOUND", "当前没有可以取消的动作。")
+            result = self.agent_cancel_pending(str(pending["id"]))
+            return {
+                "message": "AI 动作已取消。",
+                "reply": str(result.get("message") or "待确认动作已取消。"),
+                "session_id": "agent-confirmation",
+                "raw_payload": {"agent_cancellation": result},
+            }
         demo_reply = self._handle_agent_demo_message(content)
         if demo_reply is not None:
             return demo_reply
@@ -206,12 +228,16 @@ class WebControlService:
         try:
             app = self._get_agent_app(force_new_session=bool(request.force_new_session))
             reply = app.ask_text(content, speak=bool(request.speak))
-            return {
+            result = {
                 "message": "AI 对话完成。",
                 "reply": reply.text,
                 "session_id": reply.session_id,
                 "raw_payload": reply.raw_payload,
             }
+            pending = reply.raw_payload.get("pending_action") if isinstance(reply.raw_payload, dict) else None
+            if isinstance(pending, dict):
+                result["pending_action"] = pending
+            return result
         except Exception as exc:
             self._remember_error("AGENT_ASK_FAILED", str(exc))
             raise WebAPIError("AGENT_ASK_FAILED", f"AI 对话失败：{exc}") from exc

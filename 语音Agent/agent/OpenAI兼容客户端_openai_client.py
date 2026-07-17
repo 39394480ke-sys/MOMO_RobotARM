@@ -87,6 +87,14 @@ class OpenAICompatibleAgentClient:
                 name = str(call.get("name", "")).strip()
                 arguments = call.get("arguments") if isinstance(call.get("arguments"), dict) else {}
                 result = self.tool_bridge.execute(name, arguments)
+                pending = result.get("result", {}).get("pending_action") if isinstance(result.get("result"), dict) else None
+                if isinstance(pending, dict):
+                    summary = pending.get("summary", {}) if isinstance(pending.get("summary"), dict) else {}
+                    return AgentReply(
+                        text=str(summary.get("confirmation_text") or "动作已生成，请查看具体内容并确认执行。"),
+                        session_id=self.session["session_id"],
+                        raw_payload={"pending_action": pending, "tool_result": result},
+                    )
                 tool_summaries.append(f"{name}: {json.dumps(result, ensure_ascii=False)}")
                 if not json_calls:
                     raw_messages.append(

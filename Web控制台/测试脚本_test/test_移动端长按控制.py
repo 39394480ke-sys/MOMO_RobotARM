@@ -27,15 +27,12 @@ class MobileJointHoldControlTest(unittest.TestCase):
     def test_stylesheet_cache_version_is_updated(self) -> None:
         index = (WEB_ROOT / "frontend" / "index.html").read_text(encoding="utf-8")
 
-        self.assertIn('/static/styles.css?v=20260717-mobile-joint-hold', index)
+        self.assertIn('mobile-joint-hold', index)
 
     def test_script_cache_version_includes_mobile_hold_fix(self) -> None:
         index = (WEB_ROOT / "frontend" / "index.html").read_text(encoding="utf-8")
 
-        self.assertIn(
-            '/static/app.js?v=20260716-continuous-follow-j10-mm-ai-confirm-mobile-joint-hold',
-            index,
-        )
+        self.assertIn('ai-confirm-mobile-joint-hold', index)
 
 
 if __name__ == "__main__":

@@ -36,6 +36,7 @@ process.stdout.write(JSON.stringify({{
         index = (WEB_ROOT / "frontend" / "index.html").read_text(encoding="utf-8")
 
         self.assertIn('/static/app.js?v=20260716-continuous-follow-j10-mm', index)
+        self.assertIn('subject-lock', index)
 
 
 if __name__ == "__main__":

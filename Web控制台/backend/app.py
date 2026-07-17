@@ -44,6 +44,9 @@ from .schemas import (
     MovePoseRequest,
     PlayActionRequest,
     SavePoseRequest,
+    SubjectLockCalibrationStartRequest,
+    SubjectLockProfileActionRequest,
+    SubjectLockValidateRequest,
     VisionTargetSelectRequest,
 )
 from .service import WebControlService
@@ -211,6 +214,59 @@ async def cinematic_keyframes(request: CinematicKeyframesRequest) -> dict[str, A
 @app.post("/api/v1/cinematic/generate-action")
 async def cinematic_generate_action(request: CinematicGenerateActionRequest) -> dict[str, Any]:
     return await _call(service.cinematic_generate_action, request, broadcast=False)
+
+
+# ----------------------------------------------------------------------
+# 主体锁定运镜。旧 cinematic API 保留兼容，但 Web 不再调用。
+# ----------------------------------------------------------------------
+@app.get("/api/v1/subject-lock/status")
+async def subject_lock_status() -> dict[str, Any]:
+    return api_success(service.subject_lock_status())
+
+
+@app.get("/api/v1/subject-lock/profiles")
+async def subject_lock_profiles() -> dict[str, Any]:
+    return api_success({"profiles": service.subject_lock_profiles()})
+
+
+@app.get("/api/v1/subject-lock/profiles/{profile_id}")
+async def subject_lock_profile(profile_id: str) -> dict[str, Any]:
+    return api_success(service.subject_lock_profile(profile_id))
+
+
+@app.delete("/api/v1/subject-lock/profiles/{profile_id}")
+async def subject_lock_profile_delete(profile_id: str) -> dict[str, Any]:
+    return await _call(service.subject_lock_delete, profile_id, broadcast=False)
+
+
+@app.post("/api/v1/subject-lock/calibration/start")
+async def subject_lock_calibration_start(request: SubjectLockCalibrationStartRequest) -> dict[str, Any]:
+    return await _call(service.subject_lock_calibration_start, request)
+
+
+@app.post("/api/v1/subject-lock/calibration/stop")
+async def subject_lock_calibration_stop() -> dict[str, Any]:
+    return await _call(service.subject_lock_stop, "manual_stop")
+
+
+@app.post("/api/v1/subject-lock/profiles/{profile_id}/validate")
+async def subject_lock_validate(profile_id: str, request: SubjectLockValidateRequest) -> dict[str, Any]:
+    return await _call(service.subject_lock_validate, profile_id, request, broadcast=False)
+
+
+@app.post("/api/v1/subject-lock/profiles/{profile_id}/move-to-start")
+async def subject_lock_move_to_start(profile_id: str, request: SubjectLockProfileActionRequest) -> dict[str, Any]:
+    return await _call(service.subject_lock_move_to_start, profile_id, request)
+
+
+@app.post("/api/v1/subject-lock/profiles/{profile_id}/play")
+async def subject_lock_play(profile_id: str, request: SubjectLockProfileActionRequest) -> dict[str, Any]:
+    return await _call(service.subject_lock_play, profile_id, request)
+
+
+@app.post("/api/v1/subject-lock/playback/stop")
+async def subject_lock_playback_stop() -> dict[str, Any]:
+    return await _call(service.subject_lock_stop, "manual_stop")
 
 
 # ----------------------------------------------------------------------

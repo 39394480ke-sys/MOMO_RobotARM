@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>机械臂 Web 控制台</title>
-    <link rel="stylesheet" href="/static/styles.css?v=20260717-mobile-joint-hold" />
+    <link rel="stylesheet" href="/static/styles.css?v=20260717-mobile-joint-hold-subject-lock" />
   </head>
   <body>
     <div id="app">
@@ -32,7 +32,7 @@
           <button class="nav-item" data-page="actions">动作</button>
           <button class="nav-item" data-page="follow">视觉跟随</button>
           <button class="nav-item" data-page="agent">AI 对话</button>
-          <button class="nav-item" data-page="cinematic">AI 运镜</button>
+          <button class="nav-item" data-page="cinematic">主体锁定运镜</button>
           <button class="nav-item" data-page="kinematics">运动学</button>
           <button class="nav-item" data-page="calibration">标定</button>
           <button class="nav-item" data-page="settings">设置</button>
@@ -380,86 +380,95 @@
 
           <section id="pageCinematic" class="page">
             <div class="section-head">
-              <h2>AI 运镜</h2>
+              <h2>主体锁定运镜</h2>
               <div class="inline-actions">
-                <button id="refreshCinematicBtn">刷新状态</button>
-                <button id="analyzeCinematicBtn" class="primary">分析最新试拍</button>
-                <button id="keyframesCinematicBtn">生成关键帧</button>
-                <button id="generateCinematicActionBtn">生成动作</button>
+                <button id="refreshSubjectLockBtn">刷新</button>
+                <button id="stopSubjectLockBtn" class="danger">停止</button>
               </div>
             </div>
-            <div class="settings-grid">
-              <section class="panel cinematic-panel">
+            <div class="settings-grid subject-lock-grid">
+              <section class="panel subject-lock-setup-panel">
                 <div class="panel-head">
-                  <h3>试拍与导演项目</h3>
-                  <span id="cinematicStatusState" class="status-pill warn">未检查</span>
+                  <h3>轨迹参数</h3>
+                  <span id="subjectLockMode" class="status-pill warn">未加载</span>
                 </div>
+                <label class="field">
+                  <span>轨迹名称</span>
+                  <input id="subjectLockName" value="主体锁定_01" maxlength="64" />
+                </label>
+                <div class="inline-status">参与关节：J10 导轨 + J11 底座旋转</div>
+                <div class="input-grid three">
+                  <label class="field"><span>起点 mm</span><input id="subjectLockStartMm" type="number" min="-140" max="140" step="0.5" value="-50" /></label>
+                  <label class="field"><span>终点 mm</span><input id="subjectLockEndMm" type="number" min="-140" max="140" step="0.5" value="50" /></label>
+                  <label class="field"><span>拍摄速度 mm/s</span><input id="subjectLockSpeedMmS" type="number" min="0.2" max="20" step="0.2" value="2" /></label>
+                </div>
+                <div class="button-row">
+                  <button id="startSubjectLockCalibrationBtn" class="primary">开始自动标定</button>
+                  <button id="validateSubjectLockBtn">检查轨迹</button>
+                </div>
+              </section>
+
+              <section class="panel subject-lock-status-panel">
+                <div class="panel-head">
+                  <h3>运行状态</h3>
+                  <span id="subjectLockPhase" class="status-pill warn">空闲</span>
+                </div>
+                <progress id="subjectLockProgress" max="1" value="0"></progress>
                 <dl class="kv wide">
-                  <dt>最新试拍</dt><dd id="cinematicLatestRecord">--</dd>
-                  <dt>最新项目</dt><dd id="cinematicLatestProject">--</dd>
-                  <dt>记录目录</dt><dd id="cinematicRecordDir">--</dd>
-                  <dt>项目目录</dt><dd id="cinematicProjectDir">--</dd>
+                  <dt>轨迹</dt><dd id="subjectLockCurrentProfile">--</dd>
+                  <dt>标定点</dt><dd id="subjectLockPointState">0 / 11</dd>
+                  <dt>水平误差</dt><dd id="subjectLockErrorState">--</dd>
+                  <dt>视觉年龄</dt><dd id="subjectLockVisionAge">--</dd>
+                  <dt>保持原因</dt><dd id="subjectLockHoldReason">--</dd>
+                  <dt>控制频率</dt><dd id="subjectLockFrequency">--</dd>
+                  <dt>周期 p95</dt><dd id="subjectLockP95">--</dd>
+                  <dt>跳过周期</dt><dd id="subjectLockSkipped">--</dd>
                 </dl>
+                <div id="subjectLockMessage" class="inline-status">等待操作</div>
               </section>
-              <section class="panel cinematic-panel">
-                <div class="panel-head"><h3>运镜参数</h3></div>
-                <label class="field">
-                  <span>试拍记录</span>
-                  <input id="cinematicRecordPath" placeholder="点击最近试拍记录自动填入" />
-                </label>
-                <label class="field">
-                  <span>导演项目</span>
-                  <input id="cinematicProjectPath" placeholder="点击最近导演项目自动填入" />
-                </label>
-                <div class="input-grid two">
-                  <label class="field">
-                    <span>最少关键帧</span>
-                    <input id="cinematicMinKeyframes" type="number" min="3" max="8" step="1" value="3" />
-                  </label>
-                  <label class="field">
-                    <span>最多关键帧</span>
-                    <input id="cinematicMaxKeyframes" type="number" min="3" max="8" step="1" value="8" />
-                  </label>
-                </div>
-                <label class="field">
-                  <span>动作名称</span>
-                  <input id="cinematicActionName" placeholder="例如：AI运镜_产品展示_01" />
-                </label>
-                <button id="playCinematicActionBtn">播放生成动作</button>
-                <details class="debug-output-panel">
-                  <summary>调试输出</summary>
-                  <pre id="cinematicConfigJson" class="result-box"></pre>
-                </details>
-              </section>
-              <section class="panel cinematic-result-panel">
+
+              <section class="panel subject-lock-preview-panel">
                 <div class="panel-head">
-                  <h3>处理结果</h3>
-                  <span id="cinematicProjectStage" class="inline-status">未加载项目</span>
+                  <h3>主体框选</h3>
+                  <button id="refreshSubjectLockPreviewBtn">刷新画面</button>
                 </div>
-                <details class="debug-output-panel">
-                  <summary>调试输出</summary>
-                  <pre id="cinematicResultJson" class="result-box"></pre>
-                </details>
+                <div class="vision-preview subject-lock-preview">
+                  <img id="subjectLockPreviewFrame" alt="主体锁定画面" />
+                  <svg id="subjectLockOverlay" class="vision-overlay" aria-hidden="true"></svg>
+                </div>
+                <div id="subjectLockTargetState" class="inline-status">尚未框选主体</div>
               </section>
-              <section class="panel cinematic-detail-panel">
-                <div class="panel-head"><h3>分析</h3></div>
-                <pre id="cinematicAnalysisText" class="result-box cinematic-text">等待试拍分析。</pre>
+
+              <section class="panel subject-lock-trajectory-panel">
+                <div class="panel-head">
+                  <h3>锁定轨迹</h3>
+                  <span id="subjectLockValidation" class="status-pill warn">未检查</span>
+                </div>
+                <svg id="subjectLockCurve" class="subject-lock-curve" viewBox="0 0 640 260" role="img" aria-label="J10 与 J11 锁定曲线"></svg>
+                <dl class="kv wide">
+                  <dt>设定速度</dt><dd id="subjectLockRequestedSpeed">--</dd>
+                  <dt>最高安全速度</dt><dd id="subjectLockSafeSpeed">--</dd>
+                  <dt>J11 最大速度</dt><dd id="subjectLockJ11Speed">--</dd>
+                  <dt>J11 最大加速度</dt><dd id="subjectLockJ11Accel">--</dd>
+                </dl>
+                <div class="button-row">
+                  <button id="moveSubjectLockToStartBtn">回到起点</button>
+                  <button id="playSubjectLockBtn" class="primary">正式播放</button>
+                </div>
               </section>
-              <section class="panel cinematic-detail-panel">
-                <div class="panel-head"><h3>关键帧</h3></div>
-                <pre id="cinematicKeyframesText" class="result-box cinematic-text">等待关键帧生成。</pre>
+
+              <section class="panel subject-lock-profiles-panel">
+                <div class="panel-head"><h3>已保存轨迹</h3></div>
+                <div id="subjectLockProfilesList" class="compact-list"></div>
               </section>
-              <section class="panel cinematic-detail-panel">
-                <div class="panel-head"><h3>轨迹 / 动作</h3></div>
-                <pre id="cinematicTrajectoryText" class="result-box cinematic-text">等待轨迹生成。</pre>
-              </section>
-              <section class="panel cinematic-list-panel">
-                <div class="panel-head"><h3>最近试拍记录</h3></div>
-                <div id="cinematicRecordsList" class="compact-list"></div>
-              </section>
-              <section class="panel cinematic-list-panel">
-                <div class="panel-head"><h3>最近导演项目</h3></div>
-                <div id="cinematicProjectsList" class="compact-list"></div>
+
+              <section class="panel subject-lock-detail-panel">
+                <div class="panel-head"><h3>当前目标</h3></div>
+                <dl class="kv wide">
+                  <dt>J10</dt><dd id="subjectLockTargetJ10">--</dd>
+                  <dt>J11</dt><dd id="subjectLockTargetJ11">--</dd>
+                  <dt>写入</dt><dd id="subjectLockWriteCount">--</dd>
+                </dl>
               </section>
             </div>
           </section>
@@ -636,9 +645,9 @@
                   <button id="resetMotionTuningBtn">恢复推荐值</button>
                 </div>
                 <div class="input-grid two">
-                  <label class="field"><span>AI 运镜速度 %</span><input id="motionSpeedPercent" type="number" min="10" max="100" step="1" /></label>
+                  <label class="field"><span>动作播放速度 %</span><input id="motionSpeedPercent" type="number" min="10" max="100" step="1" /></label>
                   <label class="field"><span>长按刷新率 Hz</span><input id="continuousUpdateHz" type="number" min="2" max="60" step="1" /></label>
-                  <label class="field"><span>AI 运镜刷新率 Hz</span><input id="playbackUpdateHz" type="number" min="2" max="60" step="1" /></label>
+                  <label class="field"><span>动作播放刷新率 Hz</span><input id="playbackUpdateHz" type="number" min="2" max="60" step="1" /></label>
                 </div>
                 <div class="motion-direction-block">
                   <div class="subhead">长按方向修正</div>
@@ -689,6 +698,6 @@
       </div>
     </div>
 
-    <script src="/static/app.js?v=20260716-continuous-follow-j10-mm-ai-confirm-mobile-joint-hold"></script>
+    <script src="/static/app.js?v=20260716-continuous-follow-j10-mm-ai-confirm-mobile-joint-hold-continuous-follow-subject-lock-fix1"></script>
   </body>
 </html>

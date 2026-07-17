@@ -51,6 +51,22 @@ class SemanticIntentTest(unittest.TestCase):
         self.assertEqual(intent["missing"], ["value"])
         self.assertIn("多少度", intent["reply"])
 
+    def test_model_preserves_every_action_in_a_combined_command(self) -> None:
+        client, _captured = self.make_client(
+            '{"kind":"command","execution_mode":"simultaneous","actions":['
+            '{"tool_name":"move_joint","arguments":{"joint_name":"j10","mode":"absolute","value":30},'
+            '"evidence":{"joint":"j10","direction_or_target":"运动到","value":"30","unit":"mm"}},'
+            '{"tool_name":"move_joint","arguments":{"joint_name":"j11","mode":"relative","value":30},'
+            '"evidence":{"joint":"j11","direction_or_target":"正转","value":"30","unit":"度"}}],'
+            '"missing":[],"reply":"","confidence":0.99}'
+        )
+
+        intent = client.interpret_robot_intent("同时让 j10 运动到 30mm，j11 正转 30 度")
+
+        self.assertEqual(intent["execution_mode"], "simultaneous")
+        self.assertEqual([item["arguments"]["joint_name"] for item in intent["actions"]], ["j10", "j11"])
+        self.assertEqual(intent["actions"][1]["evidence"]["direction_or_target"], "正转")
+
 
 if __name__ == "__main__":
     unittest.main()

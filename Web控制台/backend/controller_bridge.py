@@ -707,6 +707,25 @@ class ControllerBridge:
         except Exception as exc:
             return self._exception("单关节移动失败", exc)
 
+    def move_partial_joint_targets(self, targets_deg: dict[str, float]) -> dict[str, Any]:
+        """批量下发指定关节，不把未指定关节补为零。"""
+
+        try:
+            self._ensure_connected_for_motion()
+            targets = {normalize_joint_key(key): float(value) for key, value in dict(targets_deg).items()}
+            if not targets:
+                return bridge_fail("没有可下发的关节目标。")
+            self._ensure_controller()
+            if self.mode in {"dry_run", "real"} and hasattr(self.controller, "move_joints"):
+                result = self.controller.move_joints(targets)
+                normalized = normalize_bridge_result(result, "批量关节移动完成。", {"targets_deg": targets})
+            else:
+                return bridge_fail("当前控制器不支持安全的部分关节批量下发。")
+            self._log("info" if normalized["ok"] else "error", "partial_joint_targets", normalized["message"], targets_deg=targets)
+            return normalized
+        except Exception as exc:
+            return self._exception("批量关节移动失败", exc)
+
     def stream_single_joint_target(self, joint_key: str, target_deg: float) -> dict[str, Any]:
         """连续位置流单帧，不读取全关节、不落盘、不写逐帧日志。"""
 

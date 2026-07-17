@@ -1207,6 +1207,21 @@ function renderAgentPendingAction(action) {
   if (Array.isArray(summary.joints) && summary.joints.length) {
     values.push(["跟随关节", summary.joints.map((joint) => String(joint).toUpperCase()).join(" / ")]);
   }
+  const planItems = Array.isArray(summary.items) ? summary.items : [];
+  const planHtml = planItems.length
+    ? `<div class="agent-pending-plan">${planItems
+        .map((item) => {
+          const itemUnit = item.unit === "mm" ? "mm" : "°";
+          return `<div class="agent-pending-plan-row">
+            <strong>${escapeHtml(item.joint || "--")}</strong>
+            <span>${escapeHtml(`${formatNum(item.current, 2)} ${itemUnit}`)}</span>
+            <span aria-hidden="true">→</span>
+            <span>${escapeHtml(`${formatNum(item.target, 2)} ${itemUnit}`)}</span>
+            <small>${escapeHtml(`${formatSignedAgentValue(item.delta)} ${itemUnit}`)}</small>
+          </div>`;
+        })
+        .join("")}</div>`
+    : "";
   const remaining = Math.max(0, Math.ceil((Number(action.expires_at || 0) * 1000 - Date.now()) / 1000));
   const canAct = status === "pending" && remaining > 0;
   const detail = action.uiMessage || (canAct ? `${remaining} 秒内有效` : statusLabels[status] || status);
@@ -1216,6 +1231,7 @@ function renderAgentPendingAction(action) {
       <span>${escapeHtml(statusLabels[status] || status)}</span>
     </div>
     <dl>${values.map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`).join("")}</dl>
+    ${planHtml}
     <p>${escapeHtml(detail)}</p>
     <div class="agent-pending-actions">
       <button class="primary" data-agent-pending-command="confirm" ${canAct ? "" : "disabled"}>确认执行</button>

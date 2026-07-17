@@ -252,6 +252,11 @@ class WebControlService:
 
         if not isinstance(intent, dict) or str(intent.get("kind") or "conversation") == "conversation":
             return None
+        actions = [item for item in intent.get("actions", []) if isinstance(item, dict)] if isinstance(intent.get("actions"), list) else []
+        if len(actions) > 1:
+            return self._handle_agent_semantic_plan(intent, actions)
+        if len(actions) == 1 and not str(intent.get("tool_name") or "").strip():
+            intent = {**intent, **actions[0], "source_text": intent.get("source_text", "")}
         kind = str(intent.get("kind") or "clarify")
         tool_name = str(intent.get("tool_name") or "").strip()
         arguments = dict(intent.get("arguments") or {}) if isinstance(intent.get("arguments"), dict) else {}
@@ -382,11 +387,95 @@ class WebControlService:
             except (TypeError, ValueError):
                 gaps.append("value")
 
+        if str(arguments.get("mode") or "").strip().lower() == "relative":
+            direction_excerpt = str(evidence.get("direction_or_target") or "").strip().lower()
+            positive_markers = ("正", "顺时针", "增加", "增大", "抬", "升", "向上", "伸出")
+            negative_markers = ("反", "逆时针", "减少", "减小", "降", "向下", "缩回", "后退")
+            has_positive_direction = any(marker in direction_excerpt for marker in positive_markers) or value_excerpt.startswith("+")
+            has_negative_direction = any(marker in direction_excerpt for marker in negative_markers) or value_excerpt.startswith("-")
+            try:
+                parsed_value = float(arguments.get("value"))
+            except (TypeError, ValueError):
+                parsed_value = 0.0
+            if parsed_value > 0 and not has_positive_direction:
+                gaps.append("direction")
+            elif parsed_value < 0 and not has_negative_direction:
+                gaps.append("direction")
+            elif parsed_value == 0:
+                gaps.append("value")
+
         unit_excerpt = str(evidence.get("unit") or "").strip().lower()
         valid_unit = unit_excerpt in ({"mm", "毫米"} if joint == "j10" else {"度", "°"})
         if not valid_unit:
             gaps.append("unit")
         return list(dict.fromkeys(gaps))
+
+    def _handle_agent_semantic_plan(self, intent: dict[str, Any], actions: list[dict[str, Any]]) -> dict[str, Any]:
+        """对多动作语义计划做整体校验；任一项不明确就不创建确认卡。"""
+
+        kind = str(intent.get("kind") or "clarify")
+        try:
+            confidence = float(intent.get("confidence", 0.0))
+        except (TypeError, ValueError):
+            confidence = 0.0
+        if kind == "clarify":
+            reply = str(intent.get("reply") or "").strip() or "这组动作中有要求不够明确，请补充后再整体执行。"
+            return self._agent_semantic_message(reply, intent)
+
+        execution_mode = str(intent.get("execution_mode") or "").strip().lower()
+        issues: list[str] = []
+        seen_joints: set[str] = set()
+        normalized_actions: list[dict[str, Any]] = []
+        for index, action in enumerate(actions, start=1):
+            tool_name = str(action.get("tool_name") or "").strip()
+            arguments = dict(action.get("arguments") or {}) if isinstance(action.get("arguments"), dict) else {}
+            missing = [str(item) for item in action.get("missing", []) if str(item).strip()] if isinstance(action.get("missing"), list) else []
+            if tool_name != "move_joint":
+                issues.append(f"第 {index} 个动作不是可批量确认的关节移动")
+                continue
+            for field in ("joint_name", "mode", "value"):
+                if field not in arguments or arguments[field] in {None, ""}:
+                    missing.append(field)
+            item_intent = {**action, "source_text": intent.get("source_text", "")}
+            missing.extend(self._agent_motion_grounding_gaps(item_intent, arguments))
+            if missing:
+                labels = {
+                    "joint_name": "关节",
+                    "mode": "相对或绝对移动方式",
+                    "direction": "正反方向",
+                    "value": "具体数值",
+                    "unit": "单位",
+                }
+                detail = "、".join(labels.get(field, field) for field in dict.fromkeys(missing))
+                issues.append(f"第 {index} 个动作缺少或无法核对：{detail}")
+            joint = str(arguments.get("joint_name") or "").strip().lower()
+            if joint and joint in seen_joints:
+                issues.append(f"{joint.upper()} 在同一计划中重复出现")
+            seen_joints.add(joint)
+            normalized_actions.append(arguments)
+
+        if execution_mode != "simultaneous":
+            issues.append("是同时执行还是按顺序执行")
+        if confidence < 0.70:
+            issues.append("AI 对这组指令的理解把握不足")
+        if issues:
+            reply = str(intent.get("reply") or "").strip() or f"整组动作不会执行，请说明：{'；'.join(issues)}。"
+            return self._agent_semantic_message(reply, intent)
+
+        try:
+            proposal = self.agent_propose_joint_plan(normalized_actions, execution_mode=execution_mode)
+        except WebAPIError as exc:
+            return self._agent_semantic_message(f"这组动作不能执行：{exc.message}", intent, {"rejected": True, "code": exc.code})
+        pending = proposal["pending_action"]
+        summary = pending.get("summary", {}) if isinstance(pending.get("summary"), dict) else {}
+        reply = str(summary.get("confirmation_text") or "多关节动作已生成，请核对后确认执行。")
+        return {
+            "message": "AI 已理解多动作指令，整体等待二次确认。",
+            "reply": reply,
+            "session_id": "agent-semantic-intent",
+            "pending_action": pending,
+            "raw_payload": {"semantic_intent": intent, "pending_action": pending},
+        }
 
     def _handle_agent_direct_command(self, content: str) -> dict[str, Any] | None:
         """Reliably map explicit Chinese motion commands before model fallback."""
@@ -1676,6 +1765,60 @@ class WebControlService:
             pending = self._agent_pending.create(name, safe_args, summary, snapshot)
             return {"message": "动作已生成，等待二次确认。", "pending_action": pending}
 
+    def agent_propose_joint_plan(self, moves: list[dict[str, Any]], execution_mode: str) -> dict[str, Any]:
+        """校验整个多关节计划后，只创建一张待确认卡。"""
+
+        with self._lock:
+            if execution_mode != "simultaneous" or len(moves) < 2:
+                raise WebAPIError("AGENT_PLAN_REJECTED", "多关节计划必须明确要求同时执行，且至少包含两个关节。")
+            config = self._load_agent_config()
+            agent_root = Path(__file__).resolve().parents[2] / "语音Agent"
+            if str(agent_root) not in sys.path:
+                sys.path.insert(0, str(agent_root))
+            from agent.安全策略_safety_policy import SafetyPolicy
+
+            policy = SafetyPolicy(config)
+            state = self.get_robot_state()
+            snapshot = self._agent_state_snapshot(state)
+            if snapshot["mode"] == "real" and not snapshot["connected"]:
+                raise WebAPIError("REAL_SESSION_REQUIRED", "执行真实 AI 动作前，请先连接 real 模式。")
+            self._agent_require_idle()
+
+            normalized_moves: list[dict[str, Any]] = []
+            seen: set[str] = set()
+            for move in moves:
+                try:
+                    policy.check("move_joint", move, robot_mode=snapshot["mode"])
+                    normalized = policy.validate_move_joint(move, snapshot["joints"])
+                except Exception as exc:
+                    raise WebAPIError("AGENT_MOTION_REJECTED", str(exc)) from exc
+                joint = str(normalized["joint_name"])
+                if joint in seen:
+                    raise WebAPIError("AGENT_PLAN_REJECTED", f"{joint.upper()} 在计划中重复出现。")
+                seen.add(joint)
+                normalized_moves.append(normalized)
+
+            items = [self._agent_joint_summary(move) for move in normalized_moves]
+            descriptions = [
+                f"{item['joint']} {item['current']:g}{'mm' if item['unit'] == 'mm' else '°'} → "
+                f"{item['target']:g}{'mm' if item['unit'] == 'mm' else '°'}"
+                for item in items
+            ]
+            summary = {
+                "title": f"同时移动 {len(items)} 个关节",
+                "execution_mode": "simultaneous",
+                "items": items,
+                "speed_percent": 50,
+                "confirmation_text": f"将批量下发：{'；'.join(descriptions)}。请确认机械臂周围安全后执行。",
+            }
+            pending = self._agent_pending.create(
+                "move_joint_plan",
+                {"execution_mode": "simultaneous", "moves": normalized_moves},
+                summary,
+                snapshot,
+            )
+            return {"message": "多关节动作已生成，等待二次确认。", "pending_action": pending}
+
     def agent_confirm_pending(self, action_id: str) -> dict[str, Any]:
         """消费待确认动作，并在最新状态复核后同进程执行。"""
 
@@ -1710,6 +1853,27 @@ class WebControlService:
                 self._before_manual_motion(self.confirm_text)
                 result = self._unwrap_bridge(
                     self.bridge.move_single_joint_target(arguments["joint_name"], arguments["target"]),
+                    code="MOVE_JOINTS_FAILED",
+                )
+            elif tool_name == "move_joint_plan":
+                moves = arguments.get("moves", []) if isinstance(arguments.get("moves"), list) else []
+                targets: dict[str, float] = {}
+                for move in moves:
+                    source = {
+                        "joint_name": move["joint_name"],
+                        "mode": move["mode"],
+                        "value": move["value"],
+                    }
+                    try:
+                        normalized = policy.validate_move_joint(source, snapshot["joints"])
+                    except Exception as exc:
+                        raise WebAPIError("AGENT_MOTION_REJECTED", str(exc)) from exc
+                    targets[normalized["joint_name"]] = normalized["target"]
+                if len(targets) != len(moves) or len(targets) < 2:
+                    raise WebAPIError("AGENT_PLAN_REJECTED", "多关节计划内容不完整或存在重复关节。")
+                self._before_manual_motion(self.confirm_text)
+                result = self._unwrap_bridge(
+                    self.bridge.move_partial_joint_targets(targets),
                     code="MOVE_JOINTS_FAILED",
                 )
             elif tool_name == "set_gripper":

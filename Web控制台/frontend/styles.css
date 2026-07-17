@@ -937,6 +937,32 @@ th {
   font-weight: 700;
 }
 
+.agent-pending-plan {
+  display: grid;
+  gap: 1px;
+  background: #cbd5e1;
+}
+
+.agent-pending-plan-row {
+  display: grid;
+  grid-template-columns: 48px minmax(70px, 1fr) 20px minmax(70px, 1fr) minmax(64px, auto);
+  align-items: center;
+  gap: 6px;
+  padding: 9px 12px;
+  background: #fff;
+}
+
+.agent-pending-plan-row span,
+.agent-pending-plan-row small {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.agent-pending-plan-row small {
+  color: #475569;
+  text-align: right;
+}
+
 .agent-pending-card p {
   margin: 0;
   padding: 9px 12px;
@@ -1199,6 +1225,15 @@ th {
 
   .agent-pending-card dl {
     grid-template-columns: 1fr;
+  }
+
+  .agent-pending-plan-row {
+    grid-template-columns: 42px minmax(62px, 1fr) 16px minmax(62px, 1fr);
+  }
+
+  .agent-pending-plan-row small {
+    grid-column: 2 / -1;
+    text-align: left;
   }
 
   #pageAgent .section-head {

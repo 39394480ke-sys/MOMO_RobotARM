@@ -147,6 +147,9 @@ class PendingActionStore:
         arguments = action.get("arguments", {}) if isinstance(action.get("arguments"), dict) else {}
         if tool_name == "move_joint":
             joint_names = [str(arguments.get("joint_name", ""))]
+        elif tool_name == "move_joint_plan":
+            moves = arguments.get("moves", []) if isinstance(arguments.get("moves"), list) else []
+            joint_names = [str(move.get("joint_name", "")) for move in moves if isinstance(move, dict)]
         elif tool_name == "run_robot_behavior" and arguments.get("name") == "home":
             joint_names = list(previous_joints)
         else:

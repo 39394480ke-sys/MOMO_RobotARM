@@ -96,6 +96,17 @@ class PendingActionStoreTest(unittest.TestCase):
         with self.assertRaises(PendingActionError):
             self.store.consume(action["id"], snapshot(j10=0.0, j12=1.51))
 
+    def test_joint_plan_compares_every_planned_joint(self) -> None:
+        action = self.store.create(
+            "move_joint_plan",
+            {"moves": [{"joint_name": "j10"}, {"joint_name": "j11"}]},
+            {},
+            snapshot(j10=0.0, j11=0.0, j12=8.0),
+        )
+
+        with self.assertRaisesRegex(PendingActionError, "J11 位置已变化"):
+            self.store.consume(action["id"], snapshot(j10=0.0, j11=0.51, j12=99.0))
+
     def test_invalidate_removes_current_action(self) -> None:
         self.store.create("move_joint", {"joint_name": "j10"}, {}, snapshot(j10=0.0))
 

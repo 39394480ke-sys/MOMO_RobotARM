@@ -61,6 +61,8 @@ class OpenAICompatibleAgentClient:
 kind: command | clarify | conversation
 tool_name: get_robot_state | stop_robot | stop_face_follow | set_gripper | move_joint | run_robot_behavior | play_action | start_face_follow | ""
 arguments: object
+actions: 用户一句话要求多个动作时，按原话顺序输出 [{tool_name, arguments, missing, evidence}]；单动作时为空数组
+execution_mode: simultaneous | sequential | ""；只有用户明说“同时”才是 simultaneous
 missing: array of missing or ambiguous field names
 reply: kind=clarify 时用中文简短说明缺少什么，其他情况为空字符串
 confidence: 0 到 1
@@ -78,6 +80,7 @@ evidence: 从用户原话逐字复制的证据，包含 joint、direction_or_tar
 - 启动视觉跟随是 start_face_follow；停止机械臂或停止跟随是立即降低风险的指令。
 - 只询问原理、能力、状态解释或普通聊天，且没有要求执行具体动作时，才是 conversation。
 - 模糊指令绝不得变成 command。
+- 一句话含多个动作时必须全部放入 actions，不得只取第一个。任一动作有歧义，整个计划必须 clarify，不得执行已明确的部分。
 """
         payload = {
             "model": self.backend_cfg.get("model"),
@@ -87,12 +90,16 @@ evidence: 从用户原话逐字复制的证据，包含 joint、direction_or_tar
                 {"role": "assistant", "content": '{"kind":"command","tool_name":"move_joint","arguments":{"joint_name":"j10","mode":"absolute","value":50},"missing":[],"reply":"","confidence":1.0,"evidence":{"joint":"j10","direction_or_target":"运动到","value":"50","unit":"mm"}}'},
                 {"role": "user", "content": "j12 正转度"},
                 {"role": "assistant", "content": '{"kind":"clarify","tool_name":"move_joint","arguments":{"joint_name":"j12","mode":"relative"},"missing":["value"],"reply":"请说明 J12 要正转多少度。","confidence":1.0,"evidence":{"joint":"j12","direction_or_target":"正转","value":"","unit":"度"}}'},
+                {"role": "user", "content": "能不能同时让 j10 运动到 30mm 的位置，同时 j11 转动 30 度"},
+                {"role": "assistant", "content": '{"kind":"clarify","tool_name":"","arguments":{},"execution_mode":"simultaneous","actions":[{"tool_name":"move_joint","arguments":{"joint_name":"j10","mode":"absolute","value":30},"missing":[],"evidence":{"joint":"j10","direction_or_target":"运动到","value":"30","unit":"mm"}},{"tool_name":"move_joint","arguments":{"joint_name":"j11","mode":"relative","value":30},"missing":["direction"],"evidence":{"joint":"j11","direction_or_target":"","value":"30","unit":"度"}}],"missing":["actions[1].direction"],"reply":"J10 的目标已明确；请说明 J11 是正转 30 度还是反转 30 度。","confidence":1.0,"evidence":{}}'},
+                {"role": "user", "content": "同时让 j10 运动到 30mm，j11 正转 30 度"},
+                {"role": "assistant", "content": '{"kind":"command","tool_name":"","arguments":{},"execution_mode":"simultaneous","actions":[{"tool_name":"move_joint","arguments":{"joint_name":"j10","mode":"absolute","value":30},"missing":[],"evidence":{"joint":"j10","direction_or_target":"运动到","value":"30","unit":"mm"}},{"tool_name":"move_joint","arguments":{"joint_name":"j11","mode":"relative","value":30},"missing":[],"evidence":{"joint":"j11","direction_or_target":"正转","value":"30","unit":"度"}}],"missing":[],"reply":"","confidence":1.0,"evidence":{}}'},
                 {"role": "user", "content": "J12 是做什么的？"},
                 {"role": "assistant", "content": '{"kind":"conversation","tool_name":"","arguments":{},"missing":[],"reply":"","confidence":1.0,"evidence":{}}'},
                 {"role": "user", "content": user_text},
             ],
             "temperature": 0.0,
-            "max_tokens": 500,
+            "max_tokens": 900,
             "response_format": {"type": "json_object"},
         }
         payload = {key: value for key, value in payload.items() if value is not None}
@@ -334,6 +341,22 @@ def _normalize_robot_intent(value: Any) -> dict[str, Any]:
         kind = "clarify"
     arguments = value.get("arguments") if isinstance(value.get("arguments"), dict) else {}
     evidence = value.get("evidence") if isinstance(value.get("evidence"), dict) else {}
+    raw_actions = value.get("actions") if isinstance(value.get("actions"), list) else []
+    actions: list[dict[str, Any]] = []
+    for item in raw_actions:
+        if not isinstance(item, dict):
+            continue
+        item_arguments = item.get("arguments") if isinstance(item.get("arguments"), dict) else {}
+        item_evidence = item.get("evidence") if isinstance(item.get("evidence"), dict) else {}
+        item_missing = item.get("missing") if isinstance(item.get("missing"), list) else []
+        actions.append(
+            {
+                "tool_name": str(item.get("tool_name") or "").strip(),
+                "arguments": dict(item_arguments),
+                "missing": [str(field) for field in item_missing if str(field).strip()],
+                "evidence": {str(key): str(field) for key, field in item_evidence.items() if field is not None},
+            }
+        )
     missing = value.get("missing") if isinstance(value.get("missing"), list) else []
     try:
         confidence = max(0.0, min(1.0, float(value.get("confidence", 0.0))))
@@ -347,4 +370,6 @@ def _normalize_robot_intent(value: Any) -> dict[str, Any]:
         "reply": str(value.get("reply") or "").strip(),
         "confidence": confidence,
         "evidence": {str(key): str(item) for key, item in evidence.items() if item is not None},
+        "actions": actions,
+        "execution_mode": str(value.get("execution_mode") or "").strip().lower(),
     }

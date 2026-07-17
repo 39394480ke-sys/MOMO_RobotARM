@@ -28,6 +28,7 @@ class FakeBridge:
         self.joints = {"j10": 0.0, "j11": 0.0, "j12": 0.0, "j13": 0.0, "j14": 0.0, "j15": 0.0}
         self.moves: list[dict[str, float]] = []
         self.single_moves: list[dict[str, float]] = []
+        self.partial_moves: list[dict[str, float]] = []
         self.gripper_values: list[float] = []
         self.home_precheck_count = 0
         self.home_count = 0
@@ -53,6 +54,11 @@ class FakeBridge:
         self.single_moves.append({joint_key: target})
         self.joints[joint_key] = target
         return {"ok": True, "message": "单关节已移动", "data": {"targets_deg": {joint_key: target}}}
+
+    def move_partial_joint_targets(self, targets: dict[str, float]) -> dict:
+        self.partial_moves.append(dict(targets))
+        self.joints.update(targets)
+        return {"ok": True, "message": "批量关节已移动", "data": {"targets_deg": dict(targets)}}
 
     def set_gripper(self, open_ratio: float) -> dict:
         if not self.gripper_available:
@@ -317,6 +323,110 @@ class AgentRealMotionServiceTest(unittest.TestCase):
         self.assertNotIn("pending_action", result)
         self.assertEqual(bridge.moves, [])
         self.assertEqual(bridge.single_moves, [])
+
+    def test_ambiguous_combined_command_rejects_the_whole_plan(self) -> None:
+        service, bridge = make_service()
+
+        result = service._handle_agent_semantic_intent(
+            {
+                "kind": "clarify",
+                "execution_mode": "simultaneous",
+                "actions": [
+                    {
+                        "tool_name": "move_joint",
+                        "arguments": {"joint_name": "j10", "mode": "absolute", "value": 30},
+                        "missing": [],
+                        "evidence": {"joint": "j10", "direction_or_target": "运动到", "value": "30", "unit": "mm"},
+                    },
+                    {
+                        "tool_name": "move_joint",
+                        "arguments": {"joint_name": "j11", "mode": "relative", "value": 30},
+                        "missing": ["direction"],
+                        "evidence": {"joint": "j11", "direction_or_target": "", "value": "30", "unit": "度"},
+                    },
+                ],
+                "missing": ["actions[1].direction"],
+                "reply": "J10 的目标已明确；请说明 J11 是正转 30 度还是反转 30 度。",
+                "confidence": 0.99,
+                "source_text": "同时让 j10 运动到 30mm，j11 转动 30 度",
+            }
+        )
+
+        self.assertIn("J11", result["reply"])
+        self.assertNotIn("pending_action", result)
+        self.assertIsNone(service._agent_pending.current())
+        self.assertEqual(bridge.partial_moves, [])
+
+    def test_server_rejects_combined_relative_move_without_a_direction_even_if_model_calls_it_command(self) -> None:
+        service, _bridge = make_service()
+
+        result = service._handle_agent_semantic_intent(
+            {
+                "kind": "command",
+                "execution_mode": "simultaneous",
+                "actions": [
+                    {
+                        "tool_name": "move_joint",
+                        "arguments": {"joint_name": "j10", "mode": "absolute", "value": 30},
+                        "missing": [],
+                        "evidence": {"joint": "j10", "direction_or_target": "运动到", "value": "30", "unit": "mm"},
+                    },
+                    {
+                        "tool_name": "move_joint",
+                        "arguments": {"joint_name": "j11", "mode": "relative", "value": 30},
+                        "missing": [],
+                        "evidence": {"joint": "j11", "direction_or_target": "转动", "value": "30", "unit": "度"},
+                    },
+                ],
+                "missing": [],
+                "reply": "",
+                "confidence": 1.0,
+                "source_text": "同时让 j10 运动到 30mm，j11 转动 30 度",
+            }
+        )
+
+        self.assertIn("正反方向", result["reply"])
+        self.assertNotIn("pending_action", result)
+
+    def test_complete_combined_command_creates_one_plan_and_executes_partial_targets(self) -> None:
+        service, bridge = make_service()
+
+        result = service._handle_agent_semantic_intent(
+            {
+                "kind": "command",
+                "execution_mode": "simultaneous",
+                "actions": [
+                    {
+                        "tool_name": "move_joint",
+                        "arguments": {"joint_name": "j10", "mode": "absolute", "value": 30},
+                        "missing": [],
+                        "evidence": {"joint": "j10", "direction_or_target": "运动到", "value": "30", "unit": "mm"},
+                    },
+                    {
+                        "tool_name": "move_joint",
+                        "arguments": {"joint_name": "j11", "mode": "relative", "value": 30},
+                        "missing": [],
+                        "evidence": {"joint": "j11", "direction_or_target": "正转", "value": "30", "unit": "度"},
+                    },
+                ],
+                "missing": [],
+                "reply": "",
+                "confidence": 0.99,
+                "source_text": "同时让 j10 运动到 30mm，j11 正转 30 度",
+            }
+        )
+
+        action = result["pending_action"]
+        self.assertEqual(action["tool_name"], "move_joint_plan")
+        self.assertEqual([item["joint"] for item in action["summary"]["items"]], ["J10", "J11"])
+        self.assertEqual(bridge.partial_moves, [])
+
+        service.agent_confirm_pending(action["id"])
+
+        self.assertEqual(bridge.partial_moves, [{"j10": 30.0, "j11": 30.0}])
+        self.assertEqual(bridge.moves, [])
+        self.assertEqual(bridge.single_moves, [])
+        self.assertEqual(bridge.joints["j12"], 0.0)
 
     def test_direct_named_commands_all_use_the_standard_pending_store(self) -> None:
         service, _bridge = make_service()

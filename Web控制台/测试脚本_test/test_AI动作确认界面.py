@@ -30,6 +30,10 @@ class AgentPendingActionUITest(unittest.TestCase):
     def test_joint_summary_formats_j10_as_mm_and_rotary_as_degrees(self) -> None:
         self.assertIn('summary.unit === "mm" ? "mm" : "°"', self.app)
 
+    def test_combined_joint_plan_renders_every_planned_move(self) -> None:
+        self.assertIn("summary.items", self.app)
+        self.assertIn("agent-pending-plan", self.styles)
+
     def test_agent_ask_attaches_server_pending_action(self) -> None:
         self.assertIn("data.pending_action", self.app)
         self.assertIn("pendingAction", self.app)

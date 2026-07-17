@@ -184,6 +184,16 @@ class RealControllerStreamTest(unittest.TestCase):
         self.assertEqual(self.spy.read_all_count, 0)
         self.assertEqual(self.save_count, 0)
 
+    def test_batch_stream_validation_checks_raw_without_writing_or_reading(self) -> None:
+        result = self.controller.validate_stream_joint_targets({"j10": 1.0, "j11": 2.0})
+
+        self.assertTrue(result.成功, result.消息)
+        self.assertEqual(set(result.目标raw), {"j10", "j11"})
+        self.assertEqual(result.已写入关节, ())
+        self.assertEqual(self.spy.write_count, 0)
+        self.assertEqual(self.spy.read_all_count, 0)
+        self.assertEqual(self.save_count, 0)
+
     def test_cached_state_uses_commanded_target_without_hardware_read(self) -> None:
         self.assertTrue(self.controller.stream_joint_target("j14", 1.5).成功)
 

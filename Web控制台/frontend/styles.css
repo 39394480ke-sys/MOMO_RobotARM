@@ -132,6 +132,7 @@ pre {
   padding: 6px 10px;
   font-size: 13px;
   background: #fff;
+  white-space: nowrap;
 }
 
 .status-pill.good {
@@ -670,6 +671,10 @@ pre {
   grid-template-columns: repeat(2, minmax(0, 160px));
 }
 
+.input-grid.three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .input-grid.four {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
@@ -775,21 +780,97 @@ th {
   grid-column: span 4;
 }
 
-.cinematic-panel,
-.cinematic-list-panel {
+.subject-lock-setup-panel,
+.subject-lock-status-panel {
   grid-column: span 6;
 }
 
-.cinematic-result-panel {
-  grid-column: span 12;
+.subject-lock-preview-panel,
+.subject-lock-profiles-panel {
+  grid-column: span 7;
+  min-width: 0;
 }
 
-.cinematic-detail-panel {
-  grid-column: span 4;
+.subject-lock-trajectory-panel,
+.subject-lock-detail-panel {
+  grid-column: span 5;
 }
 
-.cinematic-text {
-  min-height: 280px;
+.subject-lock-status-panel progress {
+  width: 100%;
+  height: 10px;
+  margin: 4px 0 16px;
+  accent-color: var(--blue);
+}
+
+.subject-lock-preview {
+  width: 100%;
+  min-width: 0;
+  aspect-ratio: 16 / 9;
+  min-height: 260px;
+}
+
+.subject-lock-preview img {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  max-width: 100%;
+  object-fit: contain;
+}
+
+.subject-lock-curve {
+  display: block;
+  width: 100%;
+  aspect-ratio: 640 / 260;
+  margin-bottom: 14px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #f8fafc;
+}
+
+.curve-axis {
+  stroke: #94a3b8;
+  stroke-width: 1;
+}
+
+.curve-line {
+  fill: none;
+  stroke: #0f766e;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.curve-point {
+  fill: #f59e0b;
+  stroke: #ffffff;
+  stroke-width: 2;
+}
+
+.curve-label,
+.curve-empty {
+  fill: #64748b;
+  font-size: 12px;
+}
+
+.subject-lock-profile-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 40px;
+  gap: 6px;
+  align-items: stretch;
+}
+
+.subject-lock-profile-row.active .compact-list-button {
+  border-color: #0f766e;
+  background: #ecfdf5;
+}
+
+.subject-lock-delete {
+  width: 40px;
+  min-width: 40px;
+  padding: 0;
+  font-size: 20px;
+  color: var(--muted);
 }
 
 .motion-tuning-panel,
@@ -1056,6 +1137,14 @@ th {
     flex-wrap: wrap;
   }
 
+  .top-status button {
+    white-space: nowrap;
+  }
+
+  .subject-lock-preview {
+    min-height: 180px;
+  }
+
   .joints-panel,
   .tcp-panel,
   .log-panel,
@@ -1069,10 +1158,12 @@ th {
   .hardware-panel,
   .agent-chat-panel,
   .agent-config-panel,
-  .cinematic-panel,
-  .cinematic-list-panel,
-  .cinematic-result-panel,
-  .cinematic-detail-panel,
+  .subject-lock-setup-panel,
+  .subject-lock-status-panel,
+  .subject-lock-preview-panel,
+  .subject-lock-trajectory-panel,
+  .subject-lock-profiles-panel,
+  .subject-lock-detail-panel,
   .motion-tuning-panel,
   .module-links-panel {
     grid-column: span 12;
@@ -1084,6 +1175,7 @@ th {
 
   .input-grid.five,
   .input-grid.six,
+  .input-grid.three,
   .jog-buttons,
   .direction-grid,
   .kin-summary-grid,

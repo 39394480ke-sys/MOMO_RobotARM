@@ -99,6 +99,22 @@ class CinematicGenerateActionRequest(BaseModel):
     action_name: str = ""
 
 
+class SubjectLockCalibrationStartRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=64)
+    start_mm: float = Field(..., ge=-140.0, le=140.0)
+    end_mm: float = Field(..., ge=-140.0, le=140.0)
+    speed_mm_s: float = Field(2.0, ge=0.2, le=20.0)
+    confirm_text: str = ""
+
+
+class SubjectLockValidateRequest(BaseModel):
+    speed_mm_s: float = Field(..., ge=0.2, le=20.0)
+
+
+class SubjectLockProfileActionRequest(BaseModel):
+    confirm_text: str = ""
+
+
 class MoveJointsRequest(BaseModel):
     targets_deg: dict[str, float]
     speed_percent: int = Field(50, ge=1, le=100)

@@ -34,6 +34,10 @@ def transcribe_audio(wav_bytes: bytes, config: dict[str, Any]) -> str:
     headers = {}
     api_key = resolve_secret_value(stt_cfg.get("api_key", ""), env_paths=secret_env_paths(config))
     if api_key:
+        if not api_key.isascii():
+            raise RuntimeError(
+                "STT API Key 格式无效，请把 SILICONFLOW_API_KEY 设置为控制台生成的真实 sk-... Key。"
+            )
         headers["Authorization"] = f"Bearer {api_key}"
     files = {"file": ("audio.wav", wav_bytes, "audio/wav")}
     data = {"model": stt_cfg.get("model", "whisper-1")}

@@ -16,6 +16,21 @@ from agent.语音转文字_stt import transcribe_audio
 
 
 class SpeechToTextClientTest(unittest.TestCase):
+    def test_non_ascii_api_key_is_rejected_before_building_http_headers(self) -> None:
+        config = {
+            "stt": {
+                "provider": "http",
+                "url": "https://api.siliconflow.cn/v1/audio/transcriptions",
+                "api_key": "你的 SiliconFlow API Key",
+            }
+        }
+
+        with patch("agent.语音转文字_stt.requests.post") as post:
+            with self.assertRaisesRegex(RuntimeError, "API Key 格式无效"):
+                transcribe_audio(b"wav", config)
+
+        post.assert_not_called()
+
     def test_timeout_is_reported_separately_from_unavailable_service(self) -> None:
         config = {"stt": {"provider": "http", "url": "https://example.invalid", "timeout_sec": 1}}
 

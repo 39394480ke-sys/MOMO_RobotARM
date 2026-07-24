@@ -16,8 +16,69 @@ from agent.语音转文字_stt import transcribe_audio
 
 
 class SpeechToTextClientTest(unittest.TestCase):
+    def test_missing_blank_and_placeholder_api_keys_are_rejected_before_network(self) -> None:
+        for api_key in ("", "   ", "${MISSING_STT_KEY}", "YOUR_API_KEY", "placeholder"):
+            with self.subTest(api_key=api_key):
+                config = {
+                    "stt": {
+                        "provider": "http",
+                        "url": "https://api.siliconflow.cn/v1/audio/transcriptions",
+                        "api_key": api_key,
+                    }
+                }
+                with patch("agent.语音转文字_stt.requests.post") as post:
+                    with self.assertRaisesRegex(RuntimeError, "API Key 未配置或仍为占位值"):
+                        transcribe_audio(b"wav", config)
+                post.assert_not_called()
+
+    def test_valid_api_key_is_sent_as_bearer_token(self) -> None:
+        config = {
+            "stt": {
+                "provider": "http",
+                "url": "https://api.siliconflow.cn/v1/audio/transcriptions",
+                "api_key": "sk-test-valid-123456",
+            }
+        }
+        response = type(
+            "Response",
+            (),
+            {
+                "status_code": 200,
+                "headers": {"content-type": "application/json"},
+                "json": lambda _self: {"text": "测试文本"},
+                "text": "",
+            },
+        )()
+
+        with patch("agent.语音转文字_stt.requests.post", return_value=response) as post:
+            self.assertEqual(transcribe_audio(b"wav", config), "测试文本")
+
+        self.assertEqual(post.call_args.kwargs["headers"], {"Authorization": "Bearer sk-test-valid-123456"})
+
+    def test_non_ascii_api_key_is_rejected_before_building_http_headers(self) -> None:
+        config = {
+            "stt": {
+                "provider": "http",
+                "url": "https://api.siliconflow.cn/v1/audio/transcriptions",
+                "api_key": "你的 SiliconFlow API Key",
+            }
+        }
+
+        with patch("agent.语音转文字_stt.requests.post") as post:
+            with self.assertRaisesRegex(RuntimeError, "API Key 格式无效"):
+                transcribe_audio(b"wav", config)
+
+        post.assert_not_called()
+
     def test_timeout_is_reported_separately_from_unavailable_service(self) -> None:
-        config = {"stt": {"provider": "http", "url": "https://example.invalid", "timeout_sec": 1}}
+        config = {
+            "stt": {
+                "provider": "http",
+                "url": "https://example.invalid",
+                "api_key": "sk-test-valid-123456",
+                "timeout_sec": 1,
+            }
+        }
 
         with patch("agent.语音转文字_stt.requests.post", side_effect=requests.Timeout):
             with self.assertRaisesRegex(RuntimeError, "超时"):

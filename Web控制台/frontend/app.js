@@ -30,8 +30,10 @@ const state = {
   agentMessages: [],
   lastAgentReply: null,
   agentPendingTimer: null,
+  agentAskBusy: false,
   agentVoiceRecorder: null,
   agentVoiceBusy: false,
+  agentVoiceMode: "idle",
   agentVoiceSelection: null,
   subjectLock: null,
   subjectLockProfiles: [],
@@ -1058,12 +1060,14 @@ async function saveFollowConfig() {
 }
 
 async function sendAgentMessage() {
+  if (state.agentAskBusy || state.agentVoiceMode !== "idle") return;
   const input = $("#agentInput");
   const text = input.value.trim();
   if (!text) return;
   input.value = "";
   appendAgentMessage("我", text, "user");
-  $("#sendAgentBtn").disabled = true;
+  state.agentAskBusy = true;
+  setAgentVoiceControls(state.agentVoiceMode);
   try {
     const data = await postJson("/api/v1/agent/ask", { text, speak: false }, { timeout: 70000 });
     state.lastAgentReply = data;
@@ -1083,7 +1087,8 @@ async function sendAgentMessage() {
     appendAgentMessage("ERROR", error.message || String(error), "error");
     showError(error);
   } finally {
-    $("#sendAgentBtn").disabled = false;
+    state.agentAskBusy = false;
+    setAgentVoiceControls(state.agentVoiceMode);
   }
 }
 
@@ -1113,7 +1118,7 @@ function initializeAgentVoice() {
 }
 
 async function toggleAgentVoiceRecording() {
-  if (!state.agentVoiceRecorder || state.agentVoiceBusy) return;
+  if (!state.agentVoiceRecorder || state.agentVoiceBusy || state.agentAskBusy) return;
   if (state.agentVoiceRecorder.state === "recording") {
     await stopAgentVoiceRecording();
     return;
@@ -1201,19 +1206,20 @@ function renderAgentVoiceElapsed(elapsedMs) {
 }
 
 function setAgentVoiceControls(mode) {
+  state.agentVoiceMode = mode;
   const voiceButton = $("#agentVoiceBtn");
   const cancelButton = $("#cancelAgentVoiceBtn");
   const input = $("#agentInput");
   const sendButton = $("#sendAgentBtn");
   voiceButton.classList.toggle("recording", mode === "recording");
   voiceButton.classList.toggle("transcribing", mode === "transcribing" || mode === "starting");
-  voiceButton.disabled = mode === "transcribing" || mode === "starting";
+  voiceButton.disabled = state.agentAskBusy || mode === "transcribing" || mode === "starting";
   voiceButton.setAttribute("aria-label", mode === "recording" ? "停止并识别录音" : "开始语音输入");
   voiceButton.title = mode === "recording" ? "停止并识别录音" : "开始语音输入";
   voiceButton.querySelector("span").textContent = mode === "recording" ? "■" : "🎙";
   cancelButton.classList.toggle("hidden", mode !== "recording");
   input.disabled = mode === "transcribing";
-  sendButton.disabled = mode === "transcribing";
+  sendButton.disabled = state.agentAskBusy || mode !== "idle";
 }
 
 function setAgentVoiceStatus(message, isError = false) {

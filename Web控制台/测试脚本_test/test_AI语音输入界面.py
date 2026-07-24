@@ -12,6 +12,7 @@ class AgentVoiceInputUITest(unittest.TestCase):
         self.app = (WEB_ROOT / "frontend" / "app.js").read_text(encoding="utf-8")
         self.styles = (WEB_ROOT / "frontend" / "styles.css").read_text(encoding="utf-8")
         self.index = (WEB_ROOT / "frontend" / "index.html").read_text(encoding="utf-8")
+        self.readme = (WEB_ROOT / "README_Web控制台.md").read_text(encoding="utf-8")
 
     def test_input_has_record_stop_cancel_and_live_status_controls(self) -> None:
         self.assertIn('id="agentVoiceBtn"', self.index)
@@ -35,6 +36,16 @@ class AgentVoiceInputUITest(unittest.TestCase):
         self.assertIn(".agent-voice-status", self.styles)
         self.assertIn("min-width: 44px;", self.styles)
         self.assertIn("min-height: 44px;", self.styles)
+
+    def test_agent_request_and_voice_input_share_a_single_busy_lock(self) -> None:
+        self.assertIn("agentAskBusy: false", self.app)
+        self.assertIn('agentVoiceMode: "idle"', self.app)
+        self.assertIn("state.agentAskBusy || mode !==", self.app)
+        self.assertIn("state.agentAskBusy || state.agentVoiceMode !==", self.app)
+
+    def test_docs_do_not_recommend_an_unauthenticated_public_tunnel(self) -> None:
+        self.assertNotIn("cloudflared tunnel --url", self.readme)
+        self.assertIn("身份认证", self.readme)
 
 
 if __name__ == "__main__":

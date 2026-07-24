@@ -1105,8 +1105,53 @@ th {
 .agent-input-row {
   margin-top: 10px;
   display: grid;
-  grid-template-columns: 1fr 88px;
+  grid-template-columns: 44px minmax(0, 1fr) 88px;
   gap: 8px;
+}
+
+.agent-voice-btn {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  font-size: 20px;
+}
+
+.agent-voice-btn.recording {
+  border-color: #dc2626;
+  background: #fff1f0;
+  color: #b91c1c;
+}
+
+.agent-voice-btn.transcribing {
+  border-color: #2563eb;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.agent-voice-meta {
+  min-height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 5px;
+}
+
+.agent-voice-status {
+  min-width: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.agent-voice-status.error {
+  color: var(--red);
+}
+
+.agent-voice-cancel {
+  min-height: 28px;
+  padding: 3px 8px;
+  color: var(--red);
+  font-size: 12px;
 }
 
 .compact-list {

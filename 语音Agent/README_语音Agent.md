@@ -27,7 +27,10 @@ Agent 的输出可能不稳定，不能让它直接写 Feetech 舵机、raw 值�
 
 ## STT / TTS / Agent backend / 工具调用
 
-STT 是 Speech To Text，把录音转成文字。默认配置调用 HTTP STT 服务：`http://127.0.0.1:9000/v1/audio/transcriptions`。
+STT 是 Speech To Text，把录音转成文字。默认配置调用 SiliconFlow 的 OpenAI-compatible
+接口 `https://api.siliconflow.cn/v1/audio/transcriptions`，模型为
+`FunAudioLLM/SenseVoiceSmall`。API Key 只保存在服务端环境变量
+`SILICONFLOW_API_KEY` 中，不会发送到浏览器。
 
 TTS 是 Text To Speech，把 Agent 回复转成语音播放。默认配置调用 HTTP TTS 服务：`http://127.0.0.1:9001/v1/audio/speech`。
 
@@ -230,7 +233,7 @@ safety:
 
 sounddevice 不可用：录音或 TTS 播放会提示不可用。安装 `sounddevice`，或使用 `--no-tts` 和文本 ask。
 
-STT 服务不可用：`voice` 会提示 STT 服务不可用。检查 `stt.url` 对应服务是否启动。
+STT 服务不可用：检查开发板网络、`SILICONFLOW_API_KEY` 以及 `stt.url`。连接超时和服务不可用会返回不同错误。
 
 TTS 服务不可用：文本结果仍会正常打印，只会显示 TTS 播放警告。
 

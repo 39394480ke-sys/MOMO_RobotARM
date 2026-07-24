@@ -39,6 +39,8 @@ def transcribe_audio(wav_bytes: bytes, config: dict[str, Any]) -> str:
     data = {"model": stt_cfg.get("model", "whisper-1")}
     try:
         response = requests.post(url, headers=headers, files=files, data=data, timeout=float(stt_cfg.get("timeout_sec", 30)))
+    except requests.Timeout as exc:
+        raise RuntimeError("STT 服务请求超时。") from exc
     except requests.RequestException as exc:
         raise RuntimeError("STT 服务不可用，请检查语音转文字服务是否启动。") from exc
     if response.status_code >= 400:

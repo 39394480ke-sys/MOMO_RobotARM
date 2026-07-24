@@ -10,6 +10,7 @@ service.py 只处理业务规则：
 
 from __future__ import annotations
 
+from array import array
 import json
 from io import BytesIO
 import re
@@ -19,6 +20,7 @@ import traceback
 import urllib.error
 import urllib.request
 import sys
+import wave
 from pathlib import Path
 from typing import Any
 
@@ -144,6 +146,96 @@ class WebControlService:
     # ------------------------------------------------------------------
     # AI Agent
     # ------------------------------------------------------------------
+    def agent_transcribe(self, wav_bytes: bytes) -> dict[str, Any]:
+        audio_size = len(wav_bytes)
+        duration_sec = 0.0
+        try:
+            config = self._load_agent_config()
+            duration_sec, pcm = self._validate_agent_wav(
+                wav_bytes,
+                max_record_sec=float(config.get("audio", {}).get("max_record_sec", 20)),
+            )
+            if self._pcm_rms(pcm) <= 80:
+                raise WebAPIError("AUDIO_SILENT", "没有检测到有效语音，请靠近麦克风后重试。")
+
+            agent_root = (
+                self.base_dir.parent / "语音Agent"
+                if hasattr(self, "base_dir")
+                else Path(__file__).resolve().parents[2] / "语音Agent"
+            )
+            if str(agent_root) not in sys.path:
+                sys.path.insert(0, str(agent_root))
+            from agent.语音转文字_stt import transcribe_audio
+
+            try:
+                text = str(transcribe_audio(wav_bytes, config) or "").strip()
+            except RuntimeError as exc:
+                message = str(exc)
+                if "超时" in message:
+                    raise WebAPIError("STT_TIMEOUT", "云端语音识别超时，请稍后重试。", status_code=504) from exc
+                if "不可用" in message:
+                    raise WebAPIError("STT_UNAVAILABLE", "云端语音识别服务不可用，请检查网络和配置。", status_code=503) from exc
+                raise WebAPIError("STT_FAILED", message or "云端语音识别失败。", status_code=502) from exc
+            if not text:
+                raise WebAPIError("STT_NO_SPEECH", "没有识别到有效语音，请重试。")
+            self.logger.log(
+                "info",
+                "agent_transcribe_succeeded",
+                "AI 语音转写完成。",
+                audio_size=audio_size,
+                duration_sec=round(duration_sec, 3),
+            )
+            return {"text": text}
+        except WebAPIError as exc:
+            self.logger.log(
+                "warning",
+                "agent_transcribe_failed",
+                "AI 语音转写失败。",
+                code=exc.code,
+                audio_size=audio_size,
+                duration_sec=round(duration_sec, 3),
+            )
+            raise
+
+    @staticmethod
+    def _validate_agent_wav(wav_bytes: bytes, *, max_record_sec: float) -> tuple[float, bytes]:
+        if not wav_bytes:
+            raise WebAPIError("AUDIO_EMPTY", "录音内容为空。")
+        if len(wav_bytes) > 1024 * 1024:
+            raise WebAPIError("AUDIO_TOO_LARGE", "录音文件超过 1 MiB 限制。", status_code=413)
+        try:
+            with wave.open(BytesIO(wav_bytes), "rb") as wav_file:
+                channels = wav_file.getnchannels()
+                sample_width = wav_file.getsampwidth()
+                sample_rate = wav_file.getframerate()
+                frame_count = wav_file.getnframes()
+                compression = wav_file.getcomptype()
+                if channels != 1 or sample_width != 2 or sample_rate != 16000 or compression != "NONE":
+                    raise WebAPIError(
+                        "AUDIO_FORMAT_UNSUPPORTED",
+                        "录音必须是 16 kHz、单声道、16-bit PCM WAV。",
+                        status_code=415,
+                    )
+                duration_sec = frame_count / sample_rate if sample_rate else 0.0
+                if duration_sec > max_record_sec:
+                    raise WebAPIError("AUDIO_TOO_LONG", f"录音不能超过 {max_record_sec:g} 秒。", status_code=413)
+                pcm = wav_file.readframes(frame_count)
+        except WebAPIError:
+            raise
+        except (EOFError, wave.Error) as exc:
+            raise WebAPIError("AUDIO_INVALID", "录音不是有效的 WAV 文件。", status_code=415) from exc
+        if not pcm:
+            raise WebAPIError("AUDIO_EMPTY", "录音内容为空。")
+        return duration_sec, pcm
+
+    @staticmethod
+    def _pcm_rms(pcm: bytes) -> float:
+        samples = array("h")
+        samples.frombytes(pcm)
+        if not samples:
+            return 0.0
+        return (sum(sample * sample for sample in samples) / len(samples)) ** 0.5
+
     def agent_status(self) -> dict[str, Any]:
         try:
             config = self._load_agent_config()

@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>机械臂 Web 控制台</title>
-    <link rel="stylesheet" href="/static/styles.css?v=20260717-mobile-joint-hold-subject-lock" />
+    <link rel="stylesheet" href="/static/styles.css?v=20260717-mobile-joint-hold-subject-lock-web-cloud-stt" />
   </head>
   <body>
     <div id="app">
@@ -357,8 +357,19 @@
                   <button class="agent-quick-btn" data-agent-prompt="请说明当前 Web 控制台可以安全做哪些操作">安全说明</button>
                 </div>
                 <div class="agent-input-row">
+                  <button
+                    id="agentVoiceBtn"
+                    class="agent-voice-btn"
+                    type="button"
+                    aria-label="开始语音输入"
+                    title="开始语音输入"
+                  ><span aria-hidden="true">🎙</span></button>
                   <input id="agentInput" placeholder="输入要问机械臂助手的话" />
                   <button id="sendAgentBtn" class="primary">发送</button>
+                </div>
+                <div class="agent-voice-meta">
+                  <span id="agentVoiceStatus" class="agent-voice-status" aria-live="polite"></span>
+                  <button id="cancelAgentVoiceBtn" class="agent-voice-cancel hidden" type="button">取消录音</button>
                 </div>
               </section>
               <section class="panel agent-config-panel">
@@ -698,6 +709,7 @@
       </div>
     </div>
 
-    <script src="/static/app.js?v=20260716-continuous-follow-j10-mm-ai-confirm-mobile-joint-hold-continuous-follow-subject-lock-fix1"></script>
+    <script src="/static/audio-recorder.js?v=20260724-web-cloud-stt"></script>
+    <script src="/static/app.js?v=20260716-continuous-follow-j10-mm-ai-confirm-mobile-joint-hold-continuous-follow-subject-lock-fix1-web-cloud-stt"></script>
   </body>
 </html>

@@ -30,6 +30,9 @@ const state = {
   agentMessages: [],
   lastAgentReply: null,
   agentPendingTimer: null,
+  agentVoiceRecorder: null,
+  agentVoiceBusy: false,
+  agentVoiceSelection: null,
   subjectLock: null,
   subjectLockProfiles: [],
   subjectLockProfile: null,
@@ -61,6 +64,7 @@ async function init() {
   buildFkInputs();
   buildJogButtons();
   bindEvents();
+  initializeAgentVoice();
   await loadConfig();
   await refreshAll();
   connectWebSocket();
@@ -110,6 +114,8 @@ function bindEvents() {
   });
   $("#refreshAgentBtn").addEventListener("click", loadAgentStatus);
   $("#sendAgentBtn").addEventListener("click", sendAgentMessage);
+  $("#agentVoiceBtn").addEventListener("click", toggleAgentVoiceRecording);
+  $("#cancelAgentVoiceBtn").addEventListener("click", cancelAgentVoiceRecording);
   $("#resetAgentBtn").addEventListener("click", resetAgentSession);
   $("#clearAgentChatBtn").addEventListener("click", clearAgentChat);
   $("#agentChatLog").addEventListener("click", handleAgentPendingActionClick);
@@ -155,6 +161,7 @@ function bindEvents() {
   window.addEventListener("blur", () => stopContinuousJog());
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) stopContinuousJog();
+    if (document.hidden && state.agentVoiceRecorder?.state === "recording") cancelAgentVoiceRecording();
   });
 }
 
@@ -191,6 +198,30 @@ function getJson(path, options = {}) {
 
 function postJson(path, body = {}, options = {}) {
   return requestJson(path, { ...options, method: "POST", body });
+}
+
+async function postAudioWav(path, wavBlob, options = {}) {
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), options.timeout ?? 35000);
+  try {
+    const response = await fetch(API_BASE + path, {
+      method: "POST",
+      headers: { "Content-Type": "audio/wav" },
+      body: wavBlob,
+      signal: controller.signal,
+    });
+    const payload = await response.json();
+    if (!payload.ok) {
+      const error = payload.error || { code: "HTTP_ERROR", message: `HTTP ${response.status}` };
+      throw new ApiError(error.code, error.message);
+    }
+    return payload.data;
+  } catch (error) {
+    if (error.name === "AbortError") throw new ApiError("TIMEOUT", "语音识别请求超时。");
+    throw error;
+  } finally {
+    window.clearTimeout(timer);
+  }
 }
 
 function deleteJson(path, options = {}) {
@@ -1054,6 +1085,154 @@ async function sendAgentMessage() {
   } finally {
     $("#sendAgentBtn").disabled = false;
   }
+}
+
+function initializeAgentVoice() {
+  const supported = Boolean(window.isSecureContext && navigator.mediaDevices?.getUserMedia && window.AudioWorkletNode && window.MomoAudio);
+  if (!supported) {
+    $("#agentVoiceBtn").disabled = true;
+    setAgentVoiceStatus(
+      window.isSecureContext ? "当前浏览器不支持网页录音。" : "语音输入需要通过 HTTPS 或 localhost 访问。",
+      true
+    );
+    return;
+  }
+  state.agentVoiceRecorder = new MomoAudio.VoiceRecorder({
+    workletUrl: "/static/audio-recorder-worklet.js?v=20260724-web-cloud-stt",
+    maxDurationMs: 20000,
+    onTick: renderAgentVoiceElapsed,
+    onAutoStop: (wavBlob, error) => {
+      if (error) {
+        finishAgentVoiceWithError(error);
+        return;
+      }
+      rememberAgentVoiceSelection();
+      transcribeAgentAudio(wavBlob);
+    },
+  });
+}
+
+async function toggleAgentVoiceRecording() {
+  if (!state.agentVoiceRecorder || state.agentVoiceBusy) return;
+  if (state.agentVoiceRecorder.state === "recording") {
+    await stopAgentVoiceRecording();
+    return;
+  }
+  state.agentVoiceBusy = true;
+  setAgentVoiceControls("starting");
+  setAgentVoiceStatus("正在请求麦克风权限...");
+  try {
+    await state.agentVoiceRecorder.start();
+    state.agentVoiceBusy = false;
+    setAgentVoiceControls("recording");
+    renderAgentVoiceElapsed(0);
+  } catch (error) {
+    state.agentVoiceBusy = false;
+    finishAgentVoiceWithError(normalizeMicrophoneError(error));
+  }
+}
+
+async function stopAgentVoiceRecording() {
+  if (state.agentVoiceRecorder?.state !== "recording" || state.agentVoiceBusy) return;
+  state.agentVoiceBusy = true;
+  rememberAgentVoiceSelection();
+  setAgentVoiceControls("transcribing");
+  setAgentVoiceStatus("正在处理录音...");
+  try {
+    const wavBlob = await state.agentVoiceRecorder.stop();
+    await transcribeAgentAudio(wavBlob);
+  } catch (error) {
+    finishAgentVoiceWithError(error);
+  }
+}
+
+async function cancelAgentVoiceRecording() {
+  if (!state.agentVoiceRecorder || state.agentVoiceRecorder.state === "idle") return;
+  state.agentVoiceBusy = true;
+  try {
+    await state.agentVoiceRecorder.cancel();
+    setAgentVoiceStatus("录音已取消。");
+  } catch (error) {
+    setAgentVoiceStatus(error.message || String(error), true);
+  } finally {
+    state.agentVoiceBusy = false;
+    setAgentVoiceControls("idle");
+  }
+}
+
+async function transcribeAgentAudio(wavBlob) {
+  if (!wavBlob) return finishAgentVoiceWithError(new Error("录音内容为空。"));
+  state.agentVoiceBusy = true;
+  setAgentVoiceControls("transcribing");
+  setAgentVoiceStatus("正在识别语音...");
+  try {
+    const data = await postAudioWav("/api/v1/agent/transcribe", wavBlob, { timeout: 35000 });
+    const input = $("#agentInput");
+    const selection = state.agentVoiceSelection || {
+      start: input.selectionStart,
+      end: input.selectionEnd,
+    };
+    const inserted = MomoAudio.insertTranscript(input.value, selection.start, selection.end, data.text);
+    input.value = inserted.value;
+    input.focus();
+    input.setSelectionRange(inserted.selectionStart, inserted.selectionStart);
+    setAgentVoiceStatus("识别完成，请确认文字后发送。");
+  } catch (error) {
+    setAgentVoiceStatus(error.message || String(error), true);
+    showError(error);
+  } finally {
+    state.agentVoiceBusy = false;
+    state.agentVoiceSelection = null;
+    setAgentVoiceControls("idle");
+  }
+}
+
+function rememberAgentVoiceSelection() {
+  const input = $("#agentInput");
+  state.agentVoiceSelection = {
+    start: input.selectionStart ?? input.value.length,
+    end: input.selectionEnd ?? input.value.length,
+  };
+}
+
+function renderAgentVoiceElapsed(elapsedMs) {
+  const seconds = Math.min(20, Math.floor(Number(elapsedMs || 0) / 1000));
+  setAgentVoiceStatus(`录音中 ${String(seconds).padStart(2, "0")} / 20 秒`);
+}
+
+function setAgentVoiceControls(mode) {
+  const voiceButton = $("#agentVoiceBtn");
+  const cancelButton = $("#cancelAgentVoiceBtn");
+  const input = $("#agentInput");
+  const sendButton = $("#sendAgentBtn");
+  voiceButton.classList.toggle("recording", mode === "recording");
+  voiceButton.classList.toggle("transcribing", mode === "transcribing" || mode === "starting");
+  voiceButton.disabled = mode === "transcribing" || mode === "starting";
+  voiceButton.setAttribute("aria-label", mode === "recording" ? "停止并识别录音" : "开始语音输入");
+  voiceButton.title = mode === "recording" ? "停止并识别录音" : "开始语音输入";
+  voiceButton.querySelector("span").textContent = mode === "recording" ? "■" : "🎙";
+  cancelButton.classList.toggle("hidden", mode !== "recording");
+  input.disabled = mode === "transcribing";
+  sendButton.disabled = mode === "transcribing";
+}
+
+function setAgentVoiceStatus(message, isError = false) {
+  const status = $("#agentVoiceStatus");
+  status.textContent = message;
+  status.classList.toggle("error", isError);
+}
+
+function finishAgentVoiceWithError(error) {
+  state.agentVoiceBusy = false;
+  state.agentVoiceSelection = null;
+  setAgentVoiceControls("idle");
+  setAgentVoiceStatus(error.message || String(error), true);
+}
+
+function normalizeMicrophoneError(error) {
+  if (error?.name === "NotAllowedError") return new Error("麦克风权限被拒绝，请在浏览器设置中允许后重试。");
+  if (error?.name === "NotFoundError") return new Error("没有找到可用的麦克风。");
+  return error instanceof Error ? error : new Error(String(error));
 }
 
 async function resetAgentSession() {
@@ -2726,6 +2905,7 @@ function renderHardwareCheck() {
 
 function showPage(name) {
   if (name !== "cinematic") stopSubjectLockPolling();
+  if (name !== "agent" && state.agentVoiceRecorder?.state === "recording") cancelAgentVoiceRecording();
   $$(".nav-item").forEach((btn) => btn.classList.toggle("active", btn.dataset.page === name));
   $$(".page").forEach((page) => page.classList.remove("active"));
   $(`#page${capitalize(name)}`).classList.add("active");

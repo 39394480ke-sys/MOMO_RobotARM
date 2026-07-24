@@ -67,6 +67,18 @@ GET  /api/v1/health
 GET  /api/v1/config
 ```
 
+AI 对话：
+
+```text
+GET  /api/v1/agent/status
+POST /api/v1/agent/ask
+POST /api/v1/agent/transcribe
+```
+
+`/api/v1/agent/transcribe` 接受原始 `audio/wav` 请求体，仅支持 16 kHz、单声道、
+16-bit PCM WAV，最长 20 秒、最大 1 MiB。Web 后端把录音转发给配置的 STT 服务，
+不保存音频，也不会把识别结果自动发送给 AI。
+
 会话：
 
 ```text
@@ -139,6 +151,19 @@ GET  /api/v1/vision/frame.jpg
 ```
 
 “视觉跟随”页的画面预览走 Web 后端代理 `/api/v1/vision/frame.jpg`，前端不再直接访问 `127.0.0.1:8000`。预览只读，不会向机械臂发送动作。
+
+## 手机语音输入与 HTTPS
+
+手机浏览器只有在 HTTPS 安全上下文中才能授权网页使用麦克风。本机调试可以直接访问
+`http://localhost:8010/web/`；手机临时验收可以在保持 Web 服务监听
+`127.0.0.1:8010` 时运行：
+
+```bash
+cloudflared tunnel --url http://127.0.0.1:8010
+```
+
+打开命令输出的临时 HTTPS 地址。Quick Tunnel 只用于 `dry_run` 测试，测试完成后立即
+停止；不要通过临时公网地址连接真实机械臂。长期使用必须配置固定入口和身份认证。
 
 ## WebSocket 状态推送
 

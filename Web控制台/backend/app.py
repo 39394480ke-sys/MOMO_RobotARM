@@ -8,10 +8,11 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Callable
 
-from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response
+from starlette.concurrency import run_in_threadpool
 
 from .path_utils import PROJECT_ROOT, WEB_DIR, ensure_project_root_on_path
 from 控制桥接_common import api_error, api_success
@@ -163,6 +164,21 @@ async def agent_tool_check() -> dict[str, Any]:
 @app.post("/api/v1/agent/ask")
 async def agent_ask(request: AgentAskRequest) -> dict[str, Any]:
     return await _call(service.agent_ask, request, broadcast=False)
+
+
+@app.post("/api/v1/agent/transcribe")
+async def agent_transcribe(request: Request) -> dict[str, Any]:
+    content_type = request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+    if content_type not in {"audio/wav", "audio/x-wav", "audio/wave"}:
+        raise WebAPIError("AUDIO_CONTENT_TYPE", "语音转写接口只接受 audio/wav。", status_code=415)
+    audio = bytearray()
+    async for chunk in request.stream():
+        audio.extend(chunk)
+        if len(audio) > 1024 * 1024:
+            raise WebAPIError("AUDIO_TOO_LARGE", "录音文件超过 1 MiB 限制。", status_code=413)
+    wav_bytes = bytes(audio)
+    data = await run_in_threadpool(service.agent_transcribe, wav_bytes)
+    return api_success(data)
 
 
 @app.post("/api/v1/agent/tool/propose")

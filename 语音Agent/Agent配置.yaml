@@ -37,9 +37,9 @@ audio:
 
 stt:
   provider: http
-  url: http://127.0.0.1:9000/v1/audio/transcriptions
-  api_key: ""
-  model: whisper-1
+  url: https://api.siliconflow.cn/v1/audio/transcriptions
+  api_key: ${SILICONFLOW_API_KEY}
+  model: FunAudioLLM/SenseVoiceSmall
   timeout_sec: 30
 
 tts:

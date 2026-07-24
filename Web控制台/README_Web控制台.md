@@ -155,15 +155,12 @@ GET  /api/v1/vision/frame.jpg
 ## 手机语音输入与 HTTPS
 
 手机浏览器只有在 HTTPS 安全上下文中才能授权网页使用麦克风。本机调试可以直接访问
-`http://localhost:8010/web/`；手机临时验收可以在保持 Web 服务监听
-`127.0.0.1:8010` 时运行：
+`http://localhost:8010/web/`。手机验收必须通过带身份认证的私有 HTTPS 入口，例如
+Cloudflare Tunnel 配合 Access，或受控的 Tailscale 网络。
 
-```bash
-cloudflared tunnel --url http://127.0.0.1:8010
-```
-
-打开命令输出的临时 HTTPS 地址。Quick Tunnel 只用于 `dry_run` 测试，测试完成后立即
-停止；不要通过临时公网地址连接真实机械臂。长期使用必须配置固定入口和身份认证。
+当前 Web 控制台的控制 API 本身没有身份认证，因此不要使用无认证的临时公网隧道暴露
+服务，即使当前选择了 `dry_run`。固定 HTTPS 入口、访问身份认证和授权策略属于部署前置
+条件；未完成这些保护时，只允许在本机或受信任的隔离网络中测试。
 
 ## WebSocket 状态推送
 

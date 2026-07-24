@@ -3,7 +3,13 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 
-const { VoiceRecorder, downsampleFloat32, encodePcm16Wav, insertTranscript } = require("../frontend/audio-recorder.js");
+const {
+  VoiceRecorder,
+  capPcmDuration,
+  downsampleFloat32,
+  encodePcm16Wav,
+  insertTranscript,
+} = require("../frontend/audio-recorder.js");
 
 test("downsamples browser PCM to 16 kHz", () => {
   const source = new Float32Array(48000);
@@ -25,6 +31,14 @@ test("encodes mono 16-bit PCM with a valid WAV header", () => {
   assert.equal(view.getUint32(24, true), 16000);
   assert.equal(view.getUint16(34, true), 16);
   assert.equal(view.getUint32(40, true), 6);
+});
+
+test("caps auto-stopped PCM at the backend 20 second limit", () => {
+  const samples = new Float32Array(321000);
+
+  const capped = capPcmDuration(samples, 16000, 20000);
+
+  assert.equal(capped.length, 320000);
 });
 
 test("inserts transcript at the current selection without replacing other text", () => {

@@ -50,6 +50,12 @@
     return buffer;
   }
 
+  function capPcmDuration(samples, sampleRate, maxDurationMs) {
+    const maxSamples = Math.floor((sampleRate * maxDurationMs) / 1000);
+    if (samples.length <= maxSamples) return samples;
+    return samples.slice(0, maxSamples);
+  }
+
   function writeAscii(view, offset, text) {
     for (let index = 0; index < text.length; index += 1) {
       view.setUint8(offset + index, text.charCodeAt(index));
@@ -134,7 +140,11 @@
       const inputRate = this.context.sampleRate;
       const samples = joinChunks(this.chunks);
       await this._cleanup();
-      const pcm16k = downsampleFloat32(samples, inputRate, 16000);
+      const pcm16k = capPcmDuration(
+        downsampleFloat32(samples, inputRate, 16000),
+        16000,
+        this.maxDurationMs
+      );
       return new Blob([encodePcm16Wav(pcm16k, 16000)], { type: "audio/wav" });
     }
 
@@ -172,5 +182,5 @@
     }
   }
 
-  return { VoiceRecorder, downsampleFloat32, encodePcm16Wav, insertTranscript };
+  return { VoiceRecorder, downsampleFloat32, encodePcm16Wav, capPcmDuration, insertTranscript };
 });

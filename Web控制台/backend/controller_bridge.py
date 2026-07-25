@@ -1125,7 +1125,12 @@ class ControllerBridge:
     def start_action_recording(self, name: str, source: str = "web_record") -> dict[str, Any]:
         try:
             action_name = sanitize_action_name(name)
-            self.recording_sequence = build_recording_sequence(action_name, source, self._resolve_config("action_config_path"))
+            self.recording_sequence = build_recording_sequence(
+                action_name,
+                source,
+                self._resolve_config("action_config_path"),
+                real_config_path=self._resolve_config("real_config_path"),
+            )
             self.recording_name = action_name
             self.recording_source = source
             self._ensure_controller()
@@ -1140,7 +1145,11 @@ class ControllerBridge:
             if self.recording_sequence is None:
                 return bridge_fail("没有正在进行的动作录制。")
             self._ensure_controller()
-            recorder = load_action_recorder(self.controller, self._resolve_config("action_config_path"))
+            recorder = load_action_recorder(
+                self.controller,
+                self._resolve_config("action_config_path"),
+                real_config_path=self._resolve_config("real_config_path"),
+            )
             index = len(self.recording_sequence.get("poses", [])) + 1
             pose = recorder.capture_current_pose(index=index, name=f"pose_{index}")
             append_action_pose(self.recording_sequence, pose)
@@ -1300,7 +1309,10 @@ class ControllerBridge:
         try:
             from URDF检查_urdf_inspector import 检查URDF
 
-            report = 检查URDF(self._resolve_config("kinematics_config_path"))
+            report = 检查URDF(
+                self._resolve_config("kinematics_config_path"),
+                real_config_path=self._resolve_config("real_config_path"),
+            )
             model = self._get_kinematics_model()
             model_data: dict[str, Any] = {
                 "available": model is not None,
@@ -1439,18 +1451,28 @@ class ControllerBridge:
 
     def _get_action_library(self) -> Any:
         if self.action_library is None:
-            self.action_library = load_action_library(self._resolve_config("action_config_path"))
+            self.action_library = load_action_library(
+                self._resolve_config("action_config_path"),
+                real_config_path=self._resolve_config("real_config_path"),
+            )
         return self.action_library
 
     def _get_sequence_player(self) -> Any:
         if self.sequence_player is None:
-            self.sequence_player = load_sequence_player(self.controller, self._resolve_config("action_config_path"))
+            self.sequence_player = load_sequence_player(
+                self.controller,
+                self._resolve_config("action_config_path"),
+                real_config_path=self._resolve_config("real_config_path"),
+            )
         return self.sequence_player
 
     def _get_kinematics_model(self) -> Any | None:
         if self.kinematics_model is not None:
             return self.kinematics_model
-        self.kinematics_model, self.last_error = load_kinematics_model(self._resolve_config("kinematics_config_path"))
+        self.kinematics_model, self.last_error = load_kinematics_model(
+            self._resolve_config("kinematics_config_path"),
+            real_config_path=self._resolve_config("real_config_path"),
+        )
         return self.kinematics_model
 
     def _current_visual_q_user(self, model: Any) -> list[float]:

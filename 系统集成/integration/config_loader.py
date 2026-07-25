@@ -43,6 +43,16 @@ class ConfigLoader:
         mode = str(env_value("ARM_DEFAULT_MODE", "", env_paths=env_paths) or "").strip()
         if mode:
             data.setdefault("project", {})["default_mode"] = mode
+
+        hardware = data.setdefault("hardware", {})
+        real_config_path = Path(hardware.get("real_config_path", PROJECT_ROOT / "真实舵机控制" / "真实配置.yaml"))
+        if not real_config_path.is_absolute():
+            real_config_path = self.base_dir / real_config_path
+        from 真实配置加载_real_config_loader import load_real_config
+
+        variant = load_real_config(real_config_path)["robot"]["variant"]
+        data.setdefault("robot", {})["variant"] = variant
+        hardware["robot_variant"] = variant
         ensure_runtime_dirs(data)
         return data
 

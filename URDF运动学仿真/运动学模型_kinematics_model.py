@@ -17,7 +17,12 @@ from typing import Any, Mapping, Sequence
 
 import numpy as np
 
-from 运动学路径工具_kinematics_path_utils import KINEMATICS_ROOT, ensure_project_root_on_path, resolve_kinematics_path
+from 运动学路径工具_kinematics_path_utils import (
+    KINEMATICS_ROOT,
+    PROJECT_ROOT,
+    ensure_project_root_on_path,
+    resolve_kinematics_path,
+)
 
 ensure_project_root_on_path()
 
@@ -25,6 +30,8 @@ from 控制桥接_common import (  # noqa: E402
     JOINT_ORDER as COMMON_JOINT_ORDER,
     URDF_JOINT_NAME_ALIASES as COMMON_URDF_JOINT_NAME_ALIASES,
 )
+from 机器人配置_profile_loader import load_robot_profile  # noqa: E402
+from 真实配置加载_real_config_loader import load_real_config  # noqa: E402
 from 通用_io import deep_merge, read_structured  # noqa: E402
 
 try:
@@ -93,7 +100,10 @@ def yaml缺失提示() -> str:
     return "当前环境没有安装 pyyaml。\n请运行：\npip install pyyaml"
 
 
-def 加载运动学配置(config_path: str | Path | None = None) -> dict[str, Any]:
+def 加载运动学配置(
+    config_path: str | Path | None = None,
+    real_config_path: str | Path | None = None,
+) -> dict[str, Any]:
     """加载阶段五配置。
 
     pyyaml 未安装时返回内置默认配置，让 URDF 检查工具仍可工作；
@@ -104,25 +114,45 @@ def 加载运动学配置(config_path: str | Path | None = None) -> dict[str, An
     path = Path(config_path) if config_path else base_dir / "运动学配置.yaml"
     if not path.is_absolute():
         path = base_dir / path
+    path = path.resolve()
 
     if not path.exists():
-        return deepcopy(DEFAULT_CONFIG)
-
-    if not YAML_AVAILABLE:
+        config = deepcopy(DEFAULT_CONFIG)
+    elif not YAML_AVAILABLE:
         config = deepcopy(DEFAULT_CONFIG)
         config["_warning"] = yaml缺失提示()
-        return config
+    else:
+        payload = read_structured(path)
+        config = deep_merge(DEFAULT_CONFIG, payload)
 
-    payload = read_structured(path)
-    return deep_merge(DEFAULT_CONFIG, payload)
+    if real_config_path is None:
+        effective_real_path = PROJECT_ROOT / "真实舵机控制" / "真实配置.yaml"
+    else:
+        effective_real_path = Path(real_config_path)
+        if not effective_real_path.is_absolute():
+            effective_real_path = path.parent / effective_real_path
+    real_config = load_real_config(effective_real_path)
+    profile = load_robot_profile(real_config["robot"]["variant"])
+    robot = config.setdefault("robot", {})
+    robot["variant"] = profile["robot"]["variant"]
+    robot["name"] = profile["robot"]["name"]
+    robot["urdf_path"] = profile["kinematics"]["urdf_path"]
+    robot["target_frame"] = profile["kinematics"]["target_frame"]
+    robot["joint_scales"] = deepcopy(profile["kinematics"]["joint_scales"])
+    config.setdefault("kinematics", {})["joint_scales"] = deepcopy(profile["kinematics"]["joint_scales"])
+    return config
 
 
 def 解析资源路径(path_text: str | Path, base_dir: str | Path | None = None) -> Path:
     return resolve_kinematics_path(path_text, base_dir)
 
 
-def 创建运动学模型(config_path: str | Path | None = None, use_gui: bool | None = None) -> "KinematicsModel":
-    config = 加载运动学配置(config_path)
+def 创建运动学模型(
+    config_path: str | Path | None = None,
+    use_gui: bool | None = None,
+    real_config_path: str | Path | None = None,
+) -> "KinematicsModel":
+    config = 加载运动学配置(config_path, real_config_path=real_config_path)
     base_dir = KINEMATICS_ROOT
     robot = config.get("robot", {})
     viewer = config.get("viewer", {})
@@ -132,6 +162,7 @@ def 创建运动学模型(config_path: str | Path | None = None, use_gui: bool |
         sdk_joint_names=robot.get("sdk_joint_names", SDK_JOINT_NAMES),
         joint_name_aliases=robot.get("joint_name_aliases", JOINT_NAME_ALIASES),
         model_offsets_deg=robot.get("model_offsets_deg", {}),
+        joint_scales=robot.get("joint_scales", {}),
         target_frame=robot.get("target_frame", "Link_7"),
         use_gui=bool(viewer.get("use_gui", False)) if use_gui is None else bool(use_gui),
     )
@@ -180,7 +211,8 @@ def _rpy_to_matrix(rpy: Sequence[float]) -> np.ndarray:
 class KinematicsModel:
     """URDF-backed FK / IK helper.
 
-    q_user_rad 是上层 SDK 的 5 轴逻辑关节弧度，不包含夹爪。
+    q_user_rad 是上层 SDK 的 6 轴逻辑关节量，不包含夹爪。
+    joint_scales 把用户关节量映射到 URDF 模型关节量。
     model_offsets_deg 只用于 URDF 模型显示/对齐，不写入真实舵机标定。
     """
 
@@ -191,6 +223,7 @@ class KinematicsModel:
         joint_name_aliases: Mapping[str, str],
         model_offsets_deg: Mapping[str, float],
         target_frame: str,
+        joint_scales: Mapping[str, float] | None = None,
         user_joint_limits: Sequence[tuple[float, float]] | None = None,
         use_gui: bool = False,
     ) -> None:
@@ -206,6 +239,12 @@ class KinematicsModel:
             [math.radians(float(dict(model_offsets_deg).get(name, 0.0))) for name in self.sdk_joint_names],
             dtype=float,
         )
+        self.joint_scales = np.asarray(
+            [float(dict(joint_scales or {}).get(name, 1.0)) for name in self.sdk_joint_names],
+            dtype=float,
+        )
+        if not np.all(np.isfinite(self.joint_scales)) or np.any(self.joint_scales == 0.0):
+            raise ValueError("kinematics joint_scales 必须是有限非零数值。")
         self.use_gui = bool(use_gui)
         self._client_id = _pb.connect(_pb.GUI if self.use_gui else _pb.DIRECT)
         if self._client_id < 0:
@@ -286,15 +325,18 @@ class KinematicsModel:
         self.ordered_joint_user_limits: list[tuple[float, float]] = []
         for idx, (lower, upper) in enumerate(list(self.ordered_joint_model_limits)):
             offset = float(self.model_offsets_rad[idx])
-            user_lower = float(lower - offset)
-            user_upper = float(upper - offset)
+            scale = float(self.joint_scales[idx])
+            transformed_limits = sorted(((float(lower) - offset) / scale, (float(upper) - offset) / scale))
+            user_lower, user_upper = transformed_limits
             if idx < len(requested_user_limits):
                 req_lower, req_upper = requested_user_limits[idx]
                 clipped_lower = max(min(float(req_lower), float(req_upper)), user_lower)
                 clipped_upper = min(max(float(req_lower), float(req_upper)), user_upper)
                 if clipped_lower <= clipped_upper:
                     user_lower, user_upper = clipped_lower, clipped_upper
-                    self.ordered_joint_model_limits[idx] = (user_lower + offset, user_upper + offset)
+                    self.ordered_joint_model_limits[idx] = tuple(
+                        sorted((user_lower * scale + offset, user_upper * scale + offset))
+                    )
             self.ordered_joint_user_limits.append((user_lower, user_upper))
 
         self.ee_link_index = self._resolve_end_effector_link_index(self.target_frame)
@@ -532,13 +574,13 @@ class KinematicsModel:
         q_arr = np.asarray(q_user, dtype=float).reshape(-1)
         if q_arr.shape[0] != len(self.sdk_joint_names):
             raise ValueError(f"关节数量不对：需要 {len(self.sdk_joint_names)} 个，实际收到 {q_arr.shape[0]} 个。")
-        return np.asarray(q_arr + self.model_offsets_rad, dtype=float)
+        return np.asarray(q_arr * self.joint_scales + self.model_offsets_rad, dtype=float)
 
     def _model_to_user_q(self, q_model: Sequence[float]) -> np.ndarray:
         q_arr = np.asarray(q_model, dtype=float).reshape(-1)
         if q_arr.shape[0] != len(self.sdk_joint_names):
             raise ValueError(f"关节数量不对：需要 {len(self.sdk_joint_names)} 个，实际收到 {q_arr.shape[0]} 个。")
-        return np.asarray(q_arr - self.model_offsets_rad, dtype=float)
+        return np.asarray((q_arr - self.model_offsets_rad) / self.joint_scales, dtype=float)
 
     def _clip_user_q(self, q_user: Sequence[float]) -> np.ndarray:
         q_arr = np.asarray(q_user, dtype=float).reshape(len(self.sdk_joint_names))

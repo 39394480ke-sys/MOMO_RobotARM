@@ -29,9 +29,20 @@ from 通用_io import atomic_write_json
 
 
 class ActionRecorder:
-    def __init__(self, controller: Any, config: dict[str, Any] | None = None):
+    def __init__(
+        self,
+        controller: Any,
+        config: dict[str, Any] | None = None,
+        real_config_path: str | Path | None = None,
+    ):
         self.controller = controller
         self.config = config or load_config()
+        configured_real_path = real_config_path or self.config.get("hardware", {}).get("real_config_path")
+        self.real_config_path = (
+            Path(configured_real_path).resolve()
+            if configured_real_path is not None
+            else None
+        )
         robot = self.config.get("robot", {})
         self.joint_order = list(robot.get("sdk_joint_names", JOINT_ORDER))
         self.multi_turn_joints = list(robot.get("multi_turn_joints", MULTI_TURN_JOINTS))
@@ -42,7 +53,11 @@ class ActionRecorder:
         raw_present_position = normalize_raw_present_position(state.get("raw_present_position"))
         tcp_pose = state.get("tcp_pose")
         if self.config.get("recording", {}).get("include_tcp_pose", True):
-            tcp_pose = compute_tcp_pose_if_possible(joint_targets, tcp_pose)
+            tcp_pose = compute_tcp_pose_if_possible(
+                joint_targets,
+                tcp_pose,
+                real_config_path=self.real_config_path,
+            )
         else:
             tcp_pose = None
         multi_turn_state = normalize_multi_turn_state(state, self.multi_turn_joints)

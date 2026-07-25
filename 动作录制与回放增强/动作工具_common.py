@@ -27,6 +27,7 @@ from 控制桥接_common import (  # noqa: E402
     make_runtime_real_config,
     targets_to_kinematics_q,
 )
+from 真实配置加载_real_config_loader import load_real_config  # noqa: E402
 from 通用_io import deep_merge, read_structured  # noqa: E402
 
 STAGE3_DIR = PROJECT_ROOT / "仿真控制系统"
@@ -119,14 +120,31 @@ def ensure_stage_paths() -> None:
     ensure_import_paths((STAGE3_DIR, STAGE4_DIR, STAGE5_DIR))
 
 
-def load_config(config_path: str | Path | None = None) -> dict[str, Any]:
+def load_config(
+    config_path: str | Path | None = None,
+    real_config_path: str | Path | None = None,
+) -> dict[str, Any]:
     path = Path(config_path) if config_path else BASE_DIR / "动作配置.yaml"
     if not path.is_absolute():
         path = BASE_DIR / path
+    path = path.resolve()
     if not path.exists():
-        return deepcopy(DEFAULT_CONFIG)
-    data = read_structured(path)
-    return deep_merge(deepcopy(DEFAULT_CONFIG), data)
+        config = deepcopy(DEFAULT_CONFIG)
+    else:
+        data = read_structured(path)
+        config = deep_merge(deepcopy(DEFAULT_CONFIG), data)
+    if real_config_path is None:
+        effective_real_path = STAGE4_DIR / "真实配置.yaml"
+    else:
+        effective_real_path = Path(real_config_path)
+        if not effective_real_path.is_absolute():
+            effective_real_path = path.parent / effective_real_path
+    effective_real_path = effective_real_path.resolve()
+    variant = load_real_config(effective_real_path)["robot"]["variant"]
+    config.setdefault("robot", {})["variant"] = variant
+    config.setdefault("hardware", {})["robot_variant"] = variant
+    config["hardware"]["real_config_path"] = str(effective_real_path)
+    return config
 
 
 def resolve_stage6_path(path_value: str | Path) -> Path:
@@ -262,17 +280,31 @@ def normalize_playback_speed(speed: Any, default: float = 1.0) -> float:
     return common_normalize_playback_speed(speed, default)
 
 
-def compute_tcp_pose_if_possible(joint_targets_deg: Mapping[str, float], explicit_tcp_pose: Any = None) -> Any:
+def compute_tcp_pose_if_possible(
+    joint_targets_deg: Mapping[str, float],
+    explicit_tcp_pose: Any = None,
+    real_config_path: str | Path | None = None,
+) -> Any:
     if explicit_tcp_pose is not None:
         return explicit_tcp_pose
     ensure_stage_paths()
+    model = None
     try:
         from 运动学模型_kinematics_model import 创建运动学模型
 
-        model = 创建运动学模型(use_gui=False)
+        model = 创建运动学模型(
+            use_gui=False,
+            real_config_path=real_config_path,
+        )
         return model.forward(targets_to_kinematics_q(joint_targets_deg))
     except Exception:
         return approximate_tcp_pose(joint_targets_deg)
+    finally:
+        if model is not None:
+            try:
+                model.close()
+            except Exception:
+                pass
 
 
 def is_dry_run_controller(controller: Any) -> bool:

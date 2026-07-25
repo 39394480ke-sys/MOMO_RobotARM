@@ -163,7 +163,10 @@ class MainWindow(QMainWindow):
         self.log_page = LogPage(self.bridge.log_path)
         self.log_page.setObjectName("PersistentLogPanel")
         self.log_page.setMinimumWidth(260)
-        self.persistent_sim_view = InspectorViewSwitcher(self.bridge.project_root)
+        self.persistent_sim_view = InspectorViewSwitcher(
+            self.bridge.project_root,
+            real_config_path=self.bridge._resolve_config("real_config_path"),
+        )
         self.persistent_sim_view.setObjectName("PersistentSimView")
         self.persistent_sim_view.setMinimumHeight(240)
 

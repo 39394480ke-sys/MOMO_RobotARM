@@ -15,9 +15,12 @@ from 运动学模型_kinematics_model import (
 )
 
 
-def 检查URDF(config_path: str | Path | None = None) -> dict[str, Any]:
+def 检查URDF(
+    config_path: str | Path | None = None,
+    real_config_path: str | Path | None = None,
+) -> dict[str, Any]:
     base_dir = Path(__file__).resolve().parent
-    config = 加载运动学配置(config_path)
+    config = 加载运动学配置(config_path, real_config_path=real_config_path)
     robot = config.get("robot", {})
     urdf_path = 解析资源路径(robot.get("urdf_path", "urdf/v2/soarmoce_urdf.urdf"), base_dir)
     sdk_joint_names = list(robot.get("sdk_joint_names", SDK_JOINT_NAMES))
@@ -32,6 +35,7 @@ def 检查URDF(config_path: str | Path | None = None) -> dict[str, Any]:
         "revolute_joints": [],
         "sdk_joint_mapping": {},
         "target_frame": target_frame,
+        "meshes": [],
         "missing_meshes": [],
         "errors": [],
         "warnings": [],
@@ -92,7 +96,9 @@ def 检查URDF(config_path: str | Path | None = None) -> dict[str, Any]:
             continue
         mesh_paths.append((urdf_path.parent / filename).resolve())
 
-    missing_meshes = sorted({str(path) for path in mesh_paths if not path.exists()})
+    unique_meshes = sorted({str(path) for path in mesh_paths})
+    report["meshes"] = unique_meshes
+    missing_meshes = [path for path in unique_meshes if not Path(path).exists()]
     report["missing_meshes"] = missing_meshes
     if missing_meshes:
         report["errors"].append(f"有 {len(missing_meshes)} 个 mesh 文件不存在。")

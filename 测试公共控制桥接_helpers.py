@@ -297,7 +297,10 @@ def test_gripper_state_normalization_helpers() -> None:
 
     with tempfile.TemporaryDirectory() as tmp:
         real_config = Path(tmp) / "真实配置.yaml"
-        real_config.write_text("transport:\n  gripper_available: true\n", encoding="utf-8")
+        real_config.write_text(
+            "transport:\n  gripper_available: true\nrobot:\n  variant: V2\n",
+            encoding="utf-8",
+        )
         payload = normalize_robot_state_payload(
             {"joints_deg": {"j11": 1.0}, "gripper_state": {"open_ratio": 0.25}},
             "dry_run",
@@ -361,7 +364,14 @@ def test_sequence_player_uses_normalized_playback_speed() -> None:
 
 
 def test_sequence_player_default_joint_speed_limits_are_shared() -> None:
-    assert load_action_config()["playback"]["joint_speed_limits"] == DEFAULT_JOINT_SPEED_LIMITS
+    with tempfile.TemporaryDirectory() as tmp:
+        real_config_path = Path(tmp) / "真实配置.yaml"
+        write_json(
+            real_config_path,
+            {"robot": {"variant": "V2"}, "transport": {"port": "", "dry_run": True}},
+        )
+        action_config = load_action_config(real_config_path=real_config_path)
+    assert action_config["playback"]["joint_speed_limits"] == DEFAULT_JOINT_SPEED_LIMITS
     player = SequencePlayer(object(), {"robot": {"sdk_joint_names": ["j10", "j11", "j12", "j13", "j14", "j15"]}, "files": {"runtime_log": "运行日志/test_motion_runtime.log"}, "playback": {"auto_duration_from_distance": True, "joint_speed_limits": {}}})
     assert player._distance_based_duration({"j10": 0.0, "j15": 0.0}, {"j10": 40.0, "j15": 30.0}) == 2.0
 
@@ -654,7 +664,10 @@ def test_calibration_path_resolver_helper() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
         config_path = root / "真实配置.yaml"
-        config_path.write_text("calibration:\n  path: nested/calibration.json\n", encoding="utf-8")
+        config_path.write_text(
+            "robot:\n  variant: V2\ncalibration:\n  path: nested/calibration.json\n",
+            encoding="utf-8",
+        )
         assert resolve_calibration_file_path(config_path) == (root / "nested" / "calibration.json").resolve()
 
         absolute = root / "abs_calibration.json"
@@ -808,12 +821,22 @@ def test_kinematics_path_and_config_helpers() -> None:
     expected_urdf_path = "urdf/v2/soarmoce_urdf.urdf"
     assert resolve_kinematics_path(expected_urdf_path) == (KINEMATICS_ROOT / expected_urdf_path).resolve()
     assert 解析资源路径(expected_urdf_path) == (KINEMATICS_ROOT / expected_urdf_path).resolve()
-    config = 加载运动学配置(KINEMATICS_ROOT / "运动学配置.yaml")
+    with tempfile.TemporaryDirectory() as tmp:
+        real_config_path = Path(tmp) / "真实配置.yaml"
+        write_json(
+            real_config_path,
+            {"robot": {"variant": "V2"}, "transport": {"port": "", "dry_run": True}},
+        )
+        config = 加载运动学配置(
+            KINEMATICS_ROOT / "运动学配置.yaml",
+            real_config_path=real_config_path,
+        )
     assert config["robot"]["sdk_joint_names"] == ["j10", "j11", "j12", "j13", "j14", "j15"]
     assert config["robot"]["name"] == "momo_robot_arm_v2"
     assert config["robot"]["urdf_path"] == expected_urdf_path
     assert config["robot"]["target_frame"] == "Link_7"
-    assert "joint_scales" not in config["robot"]
+    assert config["robot"]["joint_scales"] == {joint: 1.0 for joint in ("j10", "j11", "j12", "j13", "j14", "j15")}
+    assert config["kinematics"]["joint_scales"] == config["robot"]["joint_scales"]
     assert DEFAULT_CONFIG["robot"]["urdf_path"] == expected_urdf_path
     assert DEFAULT_CONFIG["robot"]["target_frame"] == "Link_7"
 

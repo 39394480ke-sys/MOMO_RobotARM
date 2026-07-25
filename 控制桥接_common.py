@@ -1042,36 +1042,58 @@ def load_pose_manager(project_root: str | Path, sim_config_path: str | Path) -> 
     return 姿态管理器(pose_path, sim_config.get("默认姿态", {}))
 
 
-def load_action_library(action_config_path: str | Path) -> Any:
+def load_action_library(
+    action_config_path: str | Path,
+    real_config_path: str | Path | None = None,
+) -> Any:
     from 动作文件管理_action_library import ActionLibrary
     from 动作工具_common import load_config
 
-    return ActionLibrary(load_config(action_config_path))
+    return ActionLibrary(load_config(action_config_path, real_config_path=real_config_path))
 
 
-def load_sequence_player(controller: Any, action_config_path: str | Path, playback_update_hz: float | None = None) -> Any:
+def load_sequence_player(
+    controller: Any,
+    action_config_path: str | Path,
+    playback_update_hz: float | None = None,
+    real_config_path: str | Path | None = None,
+) -> Any:
     from 动作回放器_sequence_player import SequencePlayer
     from 动作工具_common import load_config
 
-    config = load_config(action_config_path)
+    config = load_config(action_config_path, real_config_path=real_config_path)
     config.setdefault("safety", {})["require_confirm_before_real_replay"] = False
     if playback_update_hz is not None:
         config.setdefault("playback", {})["update_hz"] = float(playback_update_hz)
     return SequencePlayer(controller, config)
 
 
-def build_recording_sequence(name: str, source: str, action_config_path: str | Path) -> dict[str, Any]:
+def build_recording_sequence(
+    name: str,
+    source: str,
+    action_config_path: str | Path,
+    real_config_path: str | Path | None = None,
+) -> dict[str, Any]:
     from 动作工具_common import build_empty_sequence, load_config
 
-    config = load_config(action_config_path)
+    config = load_config(action_config_path, real_config_path=real_config_path)
     return build_empty_sequence(name=name, source=source, config=config)
 
 
-def load_action_recorder(controller: Any, action_config_path: str | Path) -> Any:
+def load_action_recorder(
+    controller: Any,
+    action_config_path: str | Path,
+    real_config_path: str | Path | None = None,
+) -> Any:
     from 动作录制器_action_recorder import ActionRecorder
     from 动作工具_common import load_config
 
-    return ActionRecorder(controller, load_config(action_config_path))
+    config = load_config(action_config_path, real_config_path=real_config_path)
+    return ActionRecorder(
+        controller,
+        config,
+        real_config_path=config.get("hardware", {}).get("real_config_path"),
+    )
 
 
 def load_sim_controller(sim_config_path: str | Path) -> Any:
@@ -1100,11 +1122,18 @@ def load_real_controller(
     return RealArmController(runtime_config)
 
 
-def load_kinematics_model(config_path: str | Path) -> tuple[Any | None, str]:
+def load_kinematics_model(
+    config_path: str | Path,
+    real_config_path: str | Path | None = None,
+) -> tuple[Any | None, str]:
     try:
         from 运动学模型_kinematics_model import 创建运动学模型
 
-        return 创建运动学模型(config_path, use_gui=False), ""
+        return 创建运动学模型(
+            config_path,
+            use_gui=False,
+            real_config_path=real_config_path,
+        ), ""
     except Exception as exc:
         return None, str(exc)
 

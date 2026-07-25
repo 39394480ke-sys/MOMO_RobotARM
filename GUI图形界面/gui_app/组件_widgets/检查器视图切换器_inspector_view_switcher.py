@@ -120,9 +120,20 @@ class CameraPreview(QWidget):
 class InspectorViewSwitcher(QWidget):
     """主窗口右下角常驻视图容器。"""
 
-    def __init__(self, project_root: Path, parent=None):
+    def __init__(
+        self,
+        project_root: Path,
+        parent=None,
+        *,
+        real_config_path: str | Path | None = None,
+    ):
         super().__init__(parent)
         self.project_root = Path(project_root)
+        self.real_config_path = (
+            Path(real_config_path).resolve()
+            if real_config_path is not None
+            else None
+        )
         self.sim_view: QWidget | None = None
         self.camera_preview: CameraPreview | None = None
         self._current_view = "sim"
@@ -202,7 +213,7 @@ class InspectorViewSwitcher(QWidget):
         if self.sim_view is None:
             from gui_app.组件_widgets.仿真视图_sim_view import SimView
 
-            self.sim_view = SimView()
+            self.sim_view = SimView(real_config_path=self.real_config_path)
             self.stack.addWidget(self.sim_view)
         return self.sim_view
 

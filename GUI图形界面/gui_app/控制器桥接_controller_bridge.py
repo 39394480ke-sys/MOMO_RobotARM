@@ -805,7 +805,12 @@ class ControllerBridge:
         with self.io_lock:
             try:
                 action_name = sanitize_action_name(name)
-                self.recording_sequence = build_recording_sequence(action_name, source, self._resolve_config("action_config_path"))
+                self.recording_sequence = build_recording_sequence(
+                    action_name,
+                    source,
+                    self._resolve_config("action_config_path"),
+                    real_config_path=self._resolve_config("real_config_path"),
+                )
                 self.recording_name = action_name
                 self.recording_source = source
                 self.action_status = f"录制中：{action_name}"
@@ -839,7 +844,11 @@ class ControllerBridge:
                     return fail("没有正在进行的动作录制。")
                 self._ensure_controller()
 
-                recorder = load_action_recorder(self.controller, self._resolve_config("action_config_path"))
+                recorder = load_action_recorder(
+                    self.controller,
+                    self._resolve_config("action_config_path"),
+                    real_config_path=self._resolve_config("real_config_path"),
+                )
                 index = len(self.recording_sequence.get("poses", [])) + 1
                 pose = recorder.capture_current_pose(index=index, name=f"pose_{index}")
                 append_action_pose(self.recording_sequence, pose)
@@ -1089,7 +1098,10 @@ class ControllerBridge:
 
     def _get_action_library(self) -> Any:
         if self.action_library is None:
-            self.action_library = load_action_library(self._resolve_config("action_config_path"))
+            self.action_library = load_action_library(
+                self._resolve_config("action_config_path"),
+                real_config_path=self._resolve_config("real_config_path"),
+            )
         return self.action_library
 
     def _get_sequence_player(self) -> Any:
@@ -1098,6 +1110,7 @@ class ControllerBridge:
                 self.controller,
                 self._resolve_config("action_config_path"),
                 playback_update_hz=float(self._motion_tuning()["playback_update_hz"]),
+                real_config_path=self._resolve_config("real_config_path"),
             )
             self.sequence_player.progress_callback = self.motion_update_callback
         return self.sequence_player
@@ -1105,7 +1118,10 @@ class ControllerBridge:
     def _get_kinematics_model(self) -> Any | None:
         if self.kinematics_model is not None:
             return self.kinematics_model
-        self.kinematics_model, self.last_error = load_kinematics_model(self._resolve_config("kinematics_config_path"))
+        self.kinematics_model, self.last_error = load_kinematics_model(
+            self._resolve_config("kinematics_config_path"),
+            real_config_path=self._resolve_config("real_config_path"),
+        )
         return self.kinematics_model
 
     def _raw_state_for_tcp(self) -> dict[str, float]:

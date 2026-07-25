@@ -1,0 +1,31 @@
+robot:
+  variant: V1
+  name: soarmmoce_with_linear_rail
+
+kinematics:
+  urdf_path: urdf/v1/soarmoce_urdf.urdf
+  target_frame: Link_6
+  joint_scales:
+    j10: 1.0
+    j11: 5.0
+    j12: -5.3
+    j13: 5.6
+    j14: -1.0
+    j15: 1.0
+
+hardware:
+  joint_scales:
+    j10: 28.8
+    j11: 5.0
+    j12: -5.3
+    j13: 5.6
+    j14: 1.0
+    j15: 1.0
+  joint_limits:
+    j10: [-140.0, 140.0]
+    j11: [-360.0, 360.0]
+    j12: [-45.0, 180.0]
+    j13: [-180.0, 180.0]
+    j14: [-90.0, 90.0]
+    j15: [-180.0, 180.0]
+  raw_reachable_joints: []

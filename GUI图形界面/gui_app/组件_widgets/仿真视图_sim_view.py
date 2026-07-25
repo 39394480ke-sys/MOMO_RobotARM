@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from pathlib import Path
 from typing import Any
 
 from PyQt5.QtCore import QPoint, Qt, QTimer
@@ -49,8 +50,18 @@ class _InteractiveRenderLabel(QLabel):
 
 
 class SimView(QWidget):
-    def __init__(self, parent=None):
+    def __init__(
+        self,
+        parent=None,
+        *,
+        real_config_path: str | Path | None = None,
+    ):
         super().__init__(parent)
+        self.real_config_path = (
+            Path(real_config_path).resolve()
+            if real_config_path is not None
+            else None
+        )
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 8, 8, 8)
         layout.setSpacing(0)
@@ -119,7 +130,10 @@ class SimView(QWidget):
             from 运动学模型_kinematics_model import 创建运动学模型
 
             self.pb = pybullet
-            self.model = 创建运动学模型(use_gui=False)
+            self.model = 创建运动学模型(
+                use_gui=False,
+                real_config_path=self.real_config_path,
+            )
         except Exception as exc:
             self.model = None
             self.pb = None

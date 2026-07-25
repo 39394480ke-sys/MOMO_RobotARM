@@ -31,7 +31,7 @@ class RealConfigLocalOverrideTests(unittest.TestCase):
                 "write_retries": 3,
                 **transport,
             },
-            "robot": {"joint_order": [], "joints": []},
+            "robot": {"variant": "V2", "joint_order": [], "joints": []},
             "files": {"runtime_state": "runtime/state.json"},
         }
         config_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

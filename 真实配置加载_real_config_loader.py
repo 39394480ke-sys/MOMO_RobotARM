@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Mapping
 
+from 机器人配置_profile_loader import apply_hardware_profile, load_robot_profile
 from 通用_io import deep_merge, env_bool, env_value, read_structured, write_structured
 
 
@@ -23,14 +24,22 @@ def local_config_path(config_path: str | Path) -> Path:
 
 
 def load_real_config(config_path: str | Path) -> dict[str, Any]:
-    """按基线、可选 local、环境变量的顺序加载真实配置。"""
+    """按基线、可选 local、profile、环境 transport 的顺序加载真实配置。"""
 
     source = Path(config_path).resolve()
-    config = read_structured(source)
+    base_config = read_structured(source)
+    config = base_config
     override_path = local_config_path(source)
     runtime_mode_locked = bool(config.get("transport", {}).get("runtime_mode_locked", False))
     if not runtime_mode_locked and override_path != source and override_path.is_file():
         config = deep_merge(config, read_structured(override_path))
+
+    variant = config.get("robot", {}).get("variant")
+    config = apply_hardware_profile(
+        config,
+        load_robot_profile(variant),
+        base_config=base_config,
+    )
 
     env_paths = (
         PROJECT_ROOT / ".env",

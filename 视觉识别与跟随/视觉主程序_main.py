@@ -19,8 +19,19 @@ def load_config(path: str | Path | None = None) -> dict[str, Any]:
     config_path = Path(path) if path else BASE_DIR / "视觉配置.yaml"
     config = read_structured(config_path)
     env_paths = (PROJECT_ROOT / ".env", BASE_DIR / "环境变量.env", PROJECT_ROOT / "系统集成" / "环境变量.env")
+    camera = config.setdefault("camera", {})
     service = config.setdefault("service", {})
     follow = config.setdefault("follow", {})
+    camera["source_type"] = env_value(
+        "ARM_VISION_SOURCE_TYPE",
+        camera.get("source_type", "camera"),
+        env_paths=env_paths,
+    )
+    camera["rtsp_url"] = env_value(
+        "ARM_VISION_RTSP_URL",
+        camera.get("rtsp_url", ""),
+        env_paths=env_paths,
+    )
     service["host"] = env_value("ARM_VISION_HOST", service.get("host", "127.0.0.1"), env_paths=env_paths)
     service["port"] = env_int("ARM_VISION_PORT", int(service.get("port", 8000)), env_paths=env_paths)
     web_host = str(env_value("ARM_WEB_HOST", "127.0.0.1", env_paths=env_paths))

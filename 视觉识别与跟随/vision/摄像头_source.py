@@ -27,11 +27,18 @@ class VideoSource:
             return False
 
         self.close()
+        self.last_error = ""
+        self.source_description = {}
         source_type = str(self.config.get("source_type", "camera")).strip().lower()
         source: int | str
+        camera_source = source_type in {"camera", "device", "usb", "usb_camera"}
 
-        if source_type in {"camera", "usb", "usb_camera"}:
-            source = int(self.config.get("camera_index", 0))
+        if camera_source:
+            try:
+                source = int(self.config.get("camera_index", 0))
+            except (TypeError, ValueError):
+                self.last_error = f"摄像头 camera_index 必须是整数：{self.config.get('camera_index')!r}"
+                return False
             self.source_description = {"source_type": "camera", "camera_index": source}
         elif source_type in {"video", "file", "video_file"}:
             video_file = str(self.config.get("video_file", "")).strip()
@@ -57,24 +64,40 @@ class VideoSource:
             self.last_error = f"未知视频源类型：{source_type}"
             return False
 
-        cap = cv2.VideoCapture(source)
-        if source_type in {"camera", "usb", "usb_camera"}:
-            try:
-                cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-            except Exception:
-                pass
-            width = int(self.config.get("width", 640))
-            height = int(self.config.get("height", 480))
-            fps = int(self.config.get("fps", 30))
-            if width > 0:
-                cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
-            if height > 0:
-                cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
-            if fps > 0:
-                cap.set(cv2.CAP_PROP_FPS, fps)
+        try:
+            cap = cv2.VideoCapture(source)
+        except Exception as exc:
+            self.last_error = f"视频源打开异常：{self.source_description}；{exc}"
+            return False
 
-        if not cap.isOpened():
-            self.last_error = f"视频源打开失败：{self.source_description}"
+        if camera_source:
+            self._safe_set(cap, cv2.CAP_PROP_BUFFERSIZE, 1)
+            try:
+                width = int(self.config.get("width", 640))
+                height = int(self.config.get("height", 480))
+                fps = int(self.config.get("fps", 30))
+            except (TypeError, ValueError) as exc:
+                self.last_error = f"摄像头 width/height/fps 必须是整数：{exc}"
+                try:
+                    cap.release()
+                except Exception:
+                    pass
+                return False
+            if width > 0:
+                self._safe_set(cap, cv2.CAP_PROP_FRAME_WIDTH, width)
+            if height > 0:
+                self._safe_set(cap, cv2.CAP_PROP_FRAME_HEIGHT, height)
+            if fps > 0:
+                self._safe_set(cap, cv2.CAP_PROP_FPS, fps)
+
+        try:
+            opened = bool(cap.isOpened())
+        except Exception as exc:
+            opened = False
+            self.last_error = f"检查视频源状态失败：{self.source_description}；{exc}"
+        if not opened:
+            if not self.last_error:
+                self.last_error = f"视频源打开失败：{self.source_description}"
             try:
                 cap.release()
             except Exception:
@@ -90,12 +113,20 @@ class VideoSource:
         if self.cap is None or not self.is_opened():
             message = self.last_error or "视频源未打开。"
             return False, None, message
-        ok, frame = self.cap.read()
+        try:
+            ok, frame = self.cap.read()
+        except Exception as exc:
+            self.last_error = f"读取视频源画面异常：{exc}"
+            return False, None, self.last_error
         if not ok or frame is None:
-            self.last_error = "读取摄像头画面失败，可能是摄像头被占用、断开或视频已结束。"
+            self.last_error = "读取视频源画面失败，可能是源被占用、断开或视频已结束。"
             return False, None, self.last_error
         if bool(self.config.get("rotate_180", False)):
-            frame = cv2.rotate(frame, cv2.ROTATE_180)
+            try:
+                frame = cv2.rotate(frame, cv2.ROTATE_180)
+            except Exception as exc:
+                self.last_error = f"旋转视频源画面异常：{exc}"
+                return False, None, self.last_error
         return True, frame, ""
 
     def close(self) -> None:
@@ -111,3 +142,10 @@ class VideoSource:
             return bool(self.cap is not None and self.cap.isOpened())
         except Exception:
             return False
+
+    @staticmethod
+    def _safe_set(cap: Any, key: Any, value: Any) -> None:
+        try:
+            cap.set(key, value)
+        except Exception:
+            pass

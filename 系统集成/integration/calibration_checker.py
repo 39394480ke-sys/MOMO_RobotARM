@@ -11,6 +11,7 @@ from .path_utils import ensure_project_root_on_path
 ensure_project_root_on_path()
 
 from 通用_io import read_json_object  # noqa: E402
+from 机器人配置_profile_loader import SUPPORTED_VARIANTS  # noqa: E402
 
 
 REQUIRED_FIELDS = {
@@ -18,7 +19,7 @@ REQUIRED_FIELDS = {
     "j11": ["home_present_raw", "phase"],
     "j12": ["home_present_raw", "phase"],
     "j13": ["home_present_raw", "phase"],
-    "j14": ["zero_present_raw", "range_min", "range_max"],
+    "j14": ["home_present_raw", "phase"],
     "j15": ["home_present_raw", "phase"],
     "gripper": ["range_min", "range_max"],
 }
@@ -42,6 +43,7 @@ class CalibrationChecker:
             "joints": {},
             "errors": [],
             "real_mode_allowed": False,
+            "robot_variant": self._active_variant(),
         }
         if not self.path.exists():
             result["errors"].append("标定文件不存在。")
@@ -55,6 +57,7 @@ class CalibrationChecker:
             else:
                 result["errors"].append(f"标定文件无法解析：{exc}")
             return result
+        variant_ok = self._check_variant(data, result)
         required_fields = self._required_fields_for(data)
         all_ok = True
         for joint, fields in required_fields.items():
@@ -69,9 +72,49 @@ class CalibrationChecker:
                 all_ok = False
                 result["errors"].append(f"{joint} 缺少字段：{', '.join(missing)}")
             result["joints"][joint] = {"ok": joint_ok, "missing": missing}
-        result["ok"] = all_ok
-        result["real_mode_allowed"] = all_ok
+        result["ok"] = all_ok and variant_ok
+        result["real_mode_allowed"] = all_ok and variant_ok
         return result
+
+    def _active_variant(self) -> str:
+        robot_variant = self.config.get("robot", {}).get("variant")
+        hardware_variant = self.config.get("hardware", {}).get("robot_variant")
+        return str(robot_variant or hardware_variant or "")
+
+    def _check_variant(self, calibration: dict[str, Any], result: dict[str, Any]) -> bool:
+        robot_variant = self.config.get("robot", {}).get("variant")
+        hardware_variant = self.config.get("hardware", {}).get("robot_variant")
+        expected = self._active_variant()
+        if robot_variant and hardware_variant and robot_variant != hardware_variant:
+            result["errors"].append(
+                f"集成配置机械版本不一致：robot.variant={robot_variant}，"
+                f"hardware.robot_variant={hardware_variant}。"
+            )
+            return False
+        if expected not in SUPPORTED_VARIANTS:
+            result["errors"].append(
+                f"集成配置 robot_variant 必须精确为 V1 或 V2，当前值：{expected!r}。"
+            )
+            return False
+
+        meta = calibration.get("_meta", {})
+        if not isinstance(meta, dict):
+            result["errors"].append("标定文件缺少 _meta 对象和 robot_variant。")
+            return False
+        actual = meta.get("robot_variant")
+        if meta.get("template") is True:
+            result["errors"].append("标定文件是示例模板，不能用于真实模式。")
+            return False
+        if not actual:
+            result["errors"].append(f"标定文件缺少 robot_variant，真实配置要求 {expected}。")
+            return False
+        if actual not in SUPPORTED_VARIANTS:
+            result["errors"].append(f"标定文件包含未知 robot_variant={actual!r}，仅支持 V1/V2。")
+            return False
+        if actual != expected:
+            result["errors"].append(f"标定机械版本不匹配：当前标定为 {actual}，真实配置要求 {expected}。")
+            return False
+        return True
 
     def _required_fields_for(self, calibration: dict[str, Any]) -> dict[str, list[str]]:
         required = dict(REQUIRED_FIELDS)

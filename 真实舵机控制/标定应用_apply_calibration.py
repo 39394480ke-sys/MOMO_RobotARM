@@ -26,7 +26,7 @@ from 标定工具_calibration_utils import (
     load_config,
     single_turn_calibration_joints,
 )
-from 通用_io import read_json_object  # noqa: E402
+from 标定管理_calibration_manager import CalibrationManager  # noqa: E402
 
 
 def main() -> None:
@@ -37,9 +37,13 @@ def main() -> None:
         raise SystemExit("没有串口。请在真实配置.yaml 中设置 transport.port，或传入 --port。")
 
     calibration_path = resolve_real_path(args.calibration)
-    calibration = read_json_object(calibration_path) if calibration_path.exists() else None
-    if not isinstance(calibration, dict):
-        raise SystemExit(f"标定文件不存在或格式错误：{calibration_path}")
+    calibration_manager = CalibrationManager(
+        calibration_path,
+        config,
+        require_real_variant=True,
+    )
+    calibration_manager.require_complete_for_hardware()
+    calibration = calibration_manager.data
 
     print("标定应用程序")
     print(f"串口：{port}")

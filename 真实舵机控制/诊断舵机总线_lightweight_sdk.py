@@ -12,14 +12,23 @@ from typing import Any
 
 from 真实路径工具_real_path_utils import real_config_path, resolve_real_path
 from 标定工具_calibration_utils import JOINTS, available_serial_ports, joint_label, load_config
+from 标定管理_calibration_manager import CalibrationManager
 from 轻量舵机驱动_lightweight_feetech_driver import EXPECTED_STS3215_MODEL, LightweightFeetechBus, build_motor_ids
-from 通用_io import read_json_object_or_default
 
 
 def main() -> None:
     args = parse_args()
     config = load_config(args.config)
-    calibration = read_json_object_or_default(resolve_calibration_path(config, args.config))
+    calibration_path = resolve_calibration_path(config, args.config)
+    calibration = (
+        CalibrationManager(
+            calibration_path,
+            config,
+            require_real_variant=True,
+        ).data
+        if calibration_path.exists()
+        else {}
+    )
     include_gripper = bool(config.get("transport", {}).get("gripper_available", True))
     if args.include_gripper:
         include_gripper = True

@@ -50,6 +50,10 @@ class SafetyChecker:
         if self.is_dry_run():
             return SafetyResult(True, "dry-run 模式允许映射检查，不会真实移动。")
 
+        variant = self.calibration_manager.variant_report()
+        if not variant["匹配"]:
+            return SafetyResult(False, variant["问题"])
+
         if target_joint_keys is not None:
             bad = []
             for joint_key in target_joint_keys:

@@ -6,22 +6,32 @@
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 from typing import Any
 
-from 真实路径工具_real_path_utils import real_config_path
+from 真实路径工具_real_path_utils import real_config_path, resolve_real_path
 from 标定工具_calibration_utils import (
+    ARM_MOTOR_IDS,
     JOINTS,
     available_serial_ports,
-    bus_sync_read_positions,
+    bus_read,
     connect_feetech_bus,
     joint_label,
     load_config,
 )
+from 标定管理_calibration_manager import CalibrationManager
 
 
 def main() -> None:
     args = parse_args()
     config = load_config(args.config)
+    calibration_path = resolve_calibration_path(config, args.config)
+    if calibration_path.exists():
+        CalibrationManager(
+            calibration_path,
+            config,
+            require_real_variant=True,
+        )
     include_gripper = bool(config.get("transport", {}).get("gripper_available", True))
     if args.include_gripper:
         include_gripper = True
@@ -44,7 +54,7 @@ def main() -> None:
 
     if not any_success:
         raise SystemExit("\n诊断结论：所有串口都没有成功连接到期望的 Feetech 舵机。请按上面的提示检查电源、共地、线序、ID 和串口。")
-    print("\n诊断结论：至少一个串口连接成功。请把成功的串口写入 真实配置.yaml 的 transport.port。")
+    print("\n诊断结论：至少一个串口连接成功。请把成功的串口写入 真实配置.local.yaml 的 transport.port。")
 
 
 def parse_args() -> argparse.Namespace:
@@ -70,6 +80,14 @@ def resolve_ports(args: argparse.Namespace, config: dict[str, Any]) -> list[str]
     return sorted(dict.fromkeys(ports))
 
 
+def resolve_calibration_path(config: dict[str, Any], config_path: str | Path) -> Path:
+    value = config.get("calibration", {}).get("path", "标定/current.local.json")
+    path = Path(str(value))
+    if path.is_absolute():
+        return path
+    return resolve_real_path(config_path).parent / path
+
+
 def try_port(port: str, include_gripper: bool) -> bool:
     bus = None
     try:
@@ -78,10 +96,16 @@ def try_port(port: str, include_gripper: bool) -> bool:
         joint_names = list(JOINTS)
         if include_gripper:
             joint_names.append("gripper")
-        positions = bus_sync_read_positions(bus, joint_names)
-        print("当前位置：")
+        health = read_joint_health(bus, joint_names)
+        print("只读状态：")
         for joint_name in joint_names:
-            print(f"  {joint_label(joint_name)} ({joint_name}) Present_Position={positions.get(joint_name)}")
+            item = health[joint_name]
+            print(
+                f"  {joint_label(joint_name)} ({joint_name}) ID={item['id']} "
+                f"Present_Position={item['present_position_raw']} "
+                f"Voltage={item['voltage_v']:.1f}V "
+                f"Temperature={item['temperature_c']}C"
+            )
         return True
     except Exception as error:
         print("连接失败：")
@@ -90,13 +114,27 @@ def try_port(port: str, include_gripper: bool) -> bool:
     finally:
         if bus is not None:
             try:
-                bus.disable_torque()
-            except Exception:
-                pass
-            try:
                 bus.disconnect()
             except Exception:
                 pass
+
+
+def read_joint_health(bus: Any, joint_names: list[str]) -> dict[str, dict[str, int | float]]:
+    """Read position, voltage, and temperature without writing any register."""
+
+    health: dict[str, dict[str, int | float]] = {}
+    for joint_name in joint_names:
+        present_position_raw = bus_read(bus, "Present_Position", joint_name)
+        voltage_raw = bus_read(bus, "Present_Voltage", joint_name)
+        temperature_c = bus_read(bus, "Present_Temperature", joint_name)
+        health[joint_name] = {
+            "id": int(ARM_MOTOR_IDS[joint_name]),
+            "present_position_raw": present_position_raw,
+            "voltage_raw": voltage_raw,
+            "voltage_v": float(voltage_raw) / 10.0,
+            "temperature_c": temperature_c,
+        }
+    return health
 
 
 if __name__ == "__main__":

@@ -15,6 +15,7 @@ import argparse
 import select
 import sys
 import time
+from datetime import datetime, timezone
 from typing import Any
 
 from 真实路径工具_real_path_utils import real_config_path, resolve_real_path
@@ -40,6 +41,8 @@ from 标定工具_calibration_utils import (
     single_turn_calibration_joints,
 )
 from 通用_io import atomic_write_json, read_json_object_or_default  # noqa: E402
+from 标定管理_calibration_manager import CALIBRATION_FORMAT_VERSION, CalibrationManager  # noqa: E402
+from 机器人配置_profile_loader import validate_robot_variant  # noqa: E402
 
 
 def main() -> None:
@@ -54,7 +57,14 @@ def main() -> None:
         output_name = "标定文件_dry_run预览.json" if args.dry_run else "标定/current.local.json"
 
     output_path = resolve_real_path(output_name)
-    old_calibration = read_json_object_or_default(output_path)
+    if args.dry_run or not output_path.exists():
+        old_calibration = read_json_object_or_default(output_path)
+    else:
+        old_calibration = CalibrationManager(
+            output_path,
+            config,
+            require_real_variant=True,
+        ).data
 
     print("真实舵机标定程序")
     print(f"串口：{port}")
@@ -65,6 +75,7 @@ def main() -> None:
         print("当前为 --dry-run：不会连接舵机，也不会写寄存器，只生成基于旧标定的预览。")
         payload = build_dry_run_preview(
             old_calibration,
+            config,
             include_gripper=bool(config.get("transport", {}).get("gripper_available", True)),
         )
         atomic_write_json(output_path, payload)
@@ -102,7 +113,7 @@ def main() -> None:
         else:
             print("未传入 --apply-registers：不会写入多圈标定寄存器，只读取当前位置生成标定文件。")
 
-        payload: dict[str, Any] = {"_meta": build_meta(include_gripper)}
+        payload: dict[str, Any] = {"_meta": build_meta(config, include_gripper)}
         payload.update(build_multi_turn_entries(bus))
         payload.update(
             build_single_turn_entries(
@@ -461,27 +472,54 @@ def normalize_recorded_ranges(result: Any) -> dict[str, tuple[int, int]]:
     return ranges
 
 
-def build_meta(include_gripper: bool = True) -> dict[str, Any]:
+def build_meta(config: dict[str, Any], include_gripper: bool = True) -> dict[str, Any]:
     """生成标定文件 _meta。"""
 
+    variant = validate_robot_variant(config.get("robot", {}).get("variant"))
+    scales = config.get("robot", {}).get("joint_scales", {})
+    j12_ratio = abs(float(scales.get("j12", 1.0)))
+    j13_ratio = abs(float(scales.get("j13", 1.0)))
     return {
+        "format_version": CALIBRATION_FORMAT_VERSION,
+        "robot_variant": variant,
         "generated_at_unix_s": time.time(),
+        "generated_at_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "script": "标定程序_calibrate.py",
         "gripper_available": bool(include_gripper),
         "bounded_single_turn_joints": single_turn_calibration_joints(include_gripper),
         "absolute_raw_joints": list(MULTI_TURN_JOINTS),
         "notes": {
             "bounded_single_turn": "夹爪使用有限位单圈标定。" if include_gripper else "夹爪未安装，已禁用；J14 已统一为多圈软件限位。",
-            "absolute_raw": "J10/J11/J12/J13/J14/J15 使用 mode 0 + Phase 28 + 0/0 限位的多圈绝对 raw 模式；J11 为 1:5 减速底盘旋转，J14 为直连 1:1。",
+            "absolute_raw": (
+                "J10/J11/J12/J13/J14/J15 使用 mode 0 + Phase 28 + 0/0 限位的多圈绝对 raw 模式；"
+                f"J12 为 1:{j12_ratio:g}，J13 为 1:{j13_ratio:g}，J14 为直连 1:1。"
+            ),
             "home": "home() 回到由 home_present_raw 定义的相对 0 度；夹爪仍使用 zero_present_raw/range。",
         },
     }
 
 
-def build_dry_run_preview(old_calibration: dict[str, Any], include_gripper: bool = True) -> dict[str, Any]:
+def build_dry_run_preview(
+    old_calibration: dict[str, Any],
+    config: dict[str, Any],
+    include_gripper: bool = True,
+) -> dict[str, Any]:
     """生成 dry-run 预览文件。没有旧标定时使用安全模板值。"""
 
-    payload: dict[str, Any] = {"_meta": build_meta(include_gripper)}
+    meta = build_meta(config, include_gripper)
+    active_variant = meta["robot_variant"]
+    old_meta = old_calibration.get("_meta", {})
+    source_variant = old_meta.get("robot_variant") if isinstance(old_meta, dict) else None
+    meta.update(
+        {
+            "robot_variant": source_variant or active_variant,
+            "preview_for_robot_variant": active_variant,
+            "template": True,
+            "purpose": "dry_run_preview",
+            "source_robot_variant": source_variant,
+        }
+    )
+    payload: dict[str, Any] = {"_meta": meta}
     joint_names = JOINTS + (["gripper"] if include_gripper else [])
     for joint_name in joint_names:
         entry = old_calibration.get(joint_name)

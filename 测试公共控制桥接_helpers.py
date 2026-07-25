@@ -782,22 +782,21 @@ def test_real_control_path_mapping_and_calibration_helpers() -> None:
                     "j11": {"id": 11, "模式": "多圈", "home_present_raw": 0, "phase": 28, "direction": 1},
                     "j12": {"id": 12, "模式": "多圈", "home_present_raw": 0, "phase": 28, "direction": 1},
                     "j13": {"id": 13, "模式": "多圈", "home_present_raw": 0, "phase": 28, "direction": 1},
-                    "j14": {
-                        "id": 14,
-                        "模式": "单圈",
-                        "zero_present_raw": 2048,
-                        "range_min": 1000,
-                        "range_max": 3000,
-                        "direction": 1,
-                    },
+                    "j14": {"id": 14, "模式": "多圈", "home_present_raw": 0, "phase": 28, "direction": 1},
                     "j15": {"id": 15, "模式": "多圈", "home_present_raw": 0, "phase": 28, "direction": 1},
-                    "_meta": {"gripper_available": False},
+                    "_meta": {"robot_variant": "V2", "gripper_available": False},
                 },
                 ensure_ascii=False,
             ),
             encoding="utf-8",
         )
-        manager = CalibrationManager(path, {"transport": {"gripper_available": False}})
+        manager = CalibrationManager(
+            path,
+            {
+                "robot": {"variant": "V2"},
+                "transport": {"dry_run": False, "gripper_available": False},
+            },
+        )
         report = manager.calibration_report()
         assert report["允许真机移动"] is True
         assert manager.get("j11")["id"] == 11

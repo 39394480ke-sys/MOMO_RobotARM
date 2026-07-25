@@ -20,6 +20,7 @@ from typing import Any
 
 from 真实路径工具_real_path_utils import real_config_path, resolve_real_path
 from 标定工具_calibration_utils import MULTI_TURN_JOINTS, joint_label, load_config
+from 标定管理_calibration_manager import CalibrationManager
 from 轻量舵机驱动_lightweight_feetech_driver import LightweightFeetechBus, build_motor_ids
 from 角度映射_angle_mapper import (
     RAW_COUNTS_PER_REV,
@@ -28,7 +29,7 @@ from 角度映射_angle_mapper import (
     获取关节比例,
     获取方向,
 )
-from 通用_io import atomic_write_json, read_json_object_or_default, timestamped_json_path
+from 通用_io import timestamped_json_path
 
 
 def main() -> None:
@@ -39,8 +40,14 @@ def main() -> None:
         raise SystemExit("没有串口。请传入 --port，或设置真实配置 transport.port / ARM_ROBOT_PORT。")
 
     calibration_path = resolve_calibration_path(config, args.config)
-    calibration = read_json_object_or_default(calibration_path)
+    calibration_manager = CalibrationManager(
+        calibration_path,
+        config,
+        require_real_variant=True,
+    )
+    calibration = calibration_manager.data
     assignments = parse_angle_assignments(args)
+    calibration_manager.require_complete_for_hardware(list(assignments))
     baudrate = int(args.baudrate or config.get("transport", {}).get("baudrate", 1_000_000))
     present_raw_by_joint = read_present_raws(config, calibration, str(port), list(assignments), baudrate)
     updates = build_updates(config, calibration, assignments, present_raw_by_joint)
@@ -86,7 +93,7 @@ def main() -> None:
         for item in updates
     ]
     calibration["_meta"] = meta
-    atomic_write_json(calibration_path, calibration)
+    calibration_manager.save()
     print(f"已备份：{backup_path}")
     print(f"已写入：{calibration_path}")
     for item in updates:

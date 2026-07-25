@@ -1,8 +1,10 @@
 {
   "_meta": {
     "template": true,
+    "format_version": "momo-calibration-v1",
     "robot_variant": "V1",
     "generated_at_unix_s": null,
+    "generated_at_utc": null,
     "gripper_available": null
   },
   "j10": {

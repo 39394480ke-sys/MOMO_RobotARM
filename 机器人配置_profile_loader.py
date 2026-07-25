@@ -173,6 +173,7 @@ def apply_hardware_profile(
         lower, upper = hardware["joint_limits"][key]
         joint["最小角度"] = lower
         joint["最大角度"] = upper
+        joint["raw_reachable"] = key in hardware["raw_reachable_joints"]
         canonical_joints.append(joint)
     robot["joints"] = canonical_joints
     return result

@@ -241,7 +241,11 @@ class RealArmController:
                 self.runtime_state,
             )
             goal_raw = int(detail["goal_raw"])
-            raw_check = self.safety_checker.check_goal_raws({joint_key: goal_raw}, {joint_key: entry})
+            raw_check = self.safety_checker.check_goal_raws(
+                {joint_key: goal_raw},
+                {joint_key: entry},
+                self.joint_config_by_key,
+            )
             if not raw_check.成功:
                 return 流写入结果(False, raw_check.消息, False, goal_raw)
 
@@ -290,7 +294,11 @@ class RealArmController:
                     joint, target, self.joint_config_by_key[joint], entries[joint], self.runtime_state
                 )
                 goals[joint] = int(detail["goal_raw"])
-            raw_check = self.safety_checker.check_goal_raws(goals, entries)
+            raw_check = self.safety_checker.check_goal_raws(
+                goals,
+                entries,
+                self.joint_config_by_key,
+            )
             if not raw_check.成功:
                 return 批量流写入结果(False, raw_check.消息, (), goals)
 
@@ -340,7 +348,11 @@ class RealArmController:
                 )
                 for joint, target in targets.items()
             }
-            raw_check = self.safety_checker.check_goal_raws(goals, entries)
+            raw_check = self.safety_checker.check_goal_raws(
+                goals,
+                entries,
+                self.joint_config_by_key,
+            )
             if not raw_check.成功:
                 return 批量流写入结果(False, raw_check.消息, (), goals)
             return 批量流写入结果(True, "连续批量目标安全检查通过。", (), goals)
@@ -392,7 +404,11 @@ class RealArmController:
                 detail_by_joint[joint_key] = detail
                 goal_raw_by_joint[joint_key] = int(detail["goal_raw"])
 
-            raw_check = self.safety_checker.check_goal_raws(goal_raw_by_joint, calibration_by_joint)
+            raw_check = self.safety_checker.check_goal_raws(
+                goal_raw_by_joint,
+                calibration_by_joint,
+                self.joint_config_by_key,
+            )
             if not raw_check.成功:
                 return 操作结果(False, raw_check.消息)
 

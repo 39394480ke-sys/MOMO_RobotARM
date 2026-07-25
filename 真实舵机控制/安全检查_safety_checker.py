@@ -6,10 +6,11 @@ from dataclasses import dataclass
 from typing import Any
 
 from 角度映射_angle_mapper import (
-    MULTI_TURN_ABSOLUTE_RAW_LIMIT,
     MULTI_TURN_JOINTS,
     SINGLE_TURN_JOINTS,
+    effective_joint_limits,
     joint_label,
+    multi_turn_absolute_raw_bounds,
     wrap_single_turn_raw,
 )
 from 标定管理_calibration_manager import CalibrationManager
@@ -73,12 +74,22 @@ class SafetyChecker:
     def check_joint_angle(self, joint_key: str, target_deg: float, joint_config: dict[str, Any]) -> SafetyResult:
         """检查逻辑关节角度是否在配置范围内。"""
 
-        min_deg = float(joint_config.get("最小角度", -180))
-        max_deg = float(joint_config.get("最大角度", 180))
+        calibration_entry = (
+            self.calibration_manager.get(joint_key)
+            if self.calibration_manager.has(joint_key)
+            else None
+        )
+        min_deg, max_deg = effective_joint_limits(joint_key, joint_config, calibration_entry)
         if target_deg < min_deg or target_deg > max_deg:
+            qualifier = (
+                "标定后有效范围"
+                if joint_config.get("raw_reachable") and calibration_entry
+                else "范围"
+            )
             return SafetyResult(
                 False,
-                f"{joint_label(joint_key)} 目标角度 {target_deg:.2f} 超出范围 [{min_deg:.2f}, {max_deg:.2f}]。",
+                f"{joint_label(joint_key)} 目标角度 {target_deg:.2f} 超出{qualifier} "
+                f"[{min_deg:.2f}, {max_deg:.2f}]。",
             )
         return SafetyResult(True, f"{joint_label(joint_key)} 角度合法。")
 
@@ -97,15 +108,22 @@ class SafetyChecker:
                 return result
         return SafetyResult(True, "所有逻辑角度合法。")
 
-    def check_goal_raw(self, joint_key: str, goal_raw: int, calibration_entry: dict[str, Any]) -> SafetyResult:
+    def check_goal_raw(
+        self,
+        joint_key: str,
+        goal_raw: int,
+        calibration_entry: dict[str, Any],
+        joint_config: dict[str, Any] | None = None,
+    ) -> SafetyResult:
         """检查目标 raw 是否安全。"""
 
         if joint_key in MULTI_TURN_JOINTS:
-            if abs(int(goal_raw)) > MULTI_TURN_ABSOLUTE_RAW_LIMIT:
+            raw_lower, raw_upper = multi_turn_absolute_raw_bounds(joint_config)
+            if int(goal_raw) < raw_lower or int(goal_raw) > raw_upper:
                 return SafetyResult(
                     False,
                     f"{joint_label(joint_key)} 多圈目标 raw={goal_raw} 超出 "
-                    f"[-{MULTI_TURN_ABSOLUTE_RAW_LIMIT}, {MULTI_TURN_ABSOLUTE_RAW_LIMIT}]。",
+                    f"[{raw_lower}, {raw_upper}]。",
                 )
 
             range_min = int(calibration_entry.get("range_min", 0))
@@ -135,13 +153,19 @@ class SafetyChecker:
         self,
         goal_raw_by_joint: dict[str, int],
         calibration_by_joint: dict[str, dict[str, Any]],
+        joint_config_by_key: dict[str, dict[str, Any]] | None = None,
     ) -> SafetyResult:
         """检查一组目标 raw。"""
 
         for joint_key, goal_raw in goal_raw_by_joint.items():
             if joint_key not in calibration_by_joint:
                 return SafetyResult(False, f"{joint_label(joint_key)} 缺少标定，禁止移动。")
-            result = self.check_goal_raw(joint_key, int(goal_raw), calibration_by_joint[joint_key])
+            result = self.check_goal_raw(
+                joint_key,
+                int(goal_raw),
+                calibration_by_joint[joint_key],
+                joint_config=(joint_config_by_key or {}).get(joint_key),
+            )
             if not result.成功:
                 return result
         return SafetyResult(True, "所有目标 raw 合法。")

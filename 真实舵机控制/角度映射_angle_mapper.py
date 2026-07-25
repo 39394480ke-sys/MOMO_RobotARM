@@ -111,20 +111,111 @@ def relative_raw_to_joint_deg(
     return motor_deg / (float(joint_scale) * float(direction))
 
 
+def raw_reachable_joint_limits(
+    joint_scale: float,
+    direction: int | float,
+    reference_raw: int | float,
+    raw_bounds: tuple[int, int] | list[int] | None = None,
+) -> tuple[float, float]:
+    """Return output-side limits imposed by the signed absolute raw range."""
+
+    signed_scale = float(joint_scale) * float(direction)
+    if signed_scale == 0:
+        raise ValueError("joint_scale * direction 不能为 0。")
+    raw_lower, raw_upper = multi_turn_absolute_raw_bounds(
+        {"raw_absolute_bounds": raw_bounds}
+        if raw_bounds is not None
+        else None
+    )
+    endpoints = [
+        (float(raw) - float(reference_raw)) * RAW_DEGREES_PER_REV / RAW_COUNTS_PER_REV / signed_scale
+        for raw in (raw_lower, raw_upper)
+    ]
+    return min(endpoints), max(endpoints)
+
+
+def multi_turn_absolute_raw_bounds(
+    joint_config: dict[str, Any] | None = None,
+) -> tuple[int, int]:
+    """Return configured raw bounds clamped to the servo's absolute safe range."""
+
+    safe_lower = -MULTI_TURN_ABSOLUTE_RAW_LIMIT
+    safe_upper = MULTI_TURN_ABSOLUTE_RAW_LIMIT
+    configured = (joint_config or {}).get("raw_absolute_bounds")
+    if configured is None:
+        return safe_lower, safe_upper
+    if not isinstance(configured, (list, tuple)) or len(configured) != 2:
+        raise ValueError("raw_absolute_bounds 必须是 [min, max]。")
+    try:
+        configured_lower = int(configured[0])
+        configured_upper = int(configured[1])
+    except (TypeError, ValueError) as exc:
+        raise ValueError("raw_absolute_bounds 必须包含整数。") from exc
+    if configured_lower >= configured_upper:
+        raise ValueError("raw_absolute_bounds 下限必须小于上限。")
+    lower = max(safe_lower, configured_lower)
+    upper = min(safe_upper, configured_upper)
+    if lower >= upper:
+        raise ValueError(
+            "raw_absolute_bounds 与舵机 signed absolute raw 安全范围没有交集。"
+        )
+    return lower, upper
+
+
+def effective_joint_limits(
+    joint_key: str,
+    joint_config: dict[str, Any],
+    calibration_entry: dict[str, Any] | None,
+) -> tuple[float, float]:
+    """Intersect mechanical limits with profile-selected raw reachability."""
+
+    mechanical_lower = float(joint_config.get("最小角度", -180))
+    mechanical_upper = float(joint_config.get("最大角度", 180))
+    lower, upper = sorted((mechanical_lower, mechanical_upper))
+    if not bool(joint_config.get("raw_reachable", False)) or not calibration_entry:
+        return lower, upper
+
+    reference_raw = 获取参考raw(
+        joint_key,
+        获取关节模式(joint_key, joint_config, calibration_entry),
+        calibration_entry,
+    )
+    raw_lower, raw_upper = raw_reachable_joint_limits(
+        获取关节比例(joint_key, joint_config),
+        获取方向(calibration_entry),
+        reference_raw,
+        raw_bounds=multi_turn_absolute_raw_bounds(joint_config),
+    )
+    effective_lower = max(lower, raw_lower)
+    effective_upper = min(upper, raw_upper)
+    if effective_lower > effective_upper:
+        raise ValueError(f"{joint_label(joint_key)} 机械范围与 raw 可达范围没有交集。")
+    return effective_lower, effective_upper
+
+
 def single_turn_relative_to_goal_raw(startup_raw: float | int, relative_raw: float | int) -> int:
     """单圈目标 raw：参考 raw + 相对 raw，然后包裹到 0-4095。"""
 
     return wrap_single_turn_raw(float(startup_raw) + float(relative_raw))
 
 
-def multi_turn_relative_to_goal_raw(startup_raw: float | int, relative_raw: float | int) -> int:
+def multi_turn_relative_to_goal_raw(
+    startup_raw: float | int,
+    relative_raw: float | int,
+    raw_bounds: tuple[int, int] | list[int] | None = None,
+) -> int:
     """多圈目标 raw：参考 raw + 相对 raw，不做 4096 包裹。"""
 
     goal_raw = int(round(float(startup_raw) + float(relative_raw)))
-    if abs(goal_raw) > MULTI_TURN_ABSOLUTE_RAW_LIMIT:
+    raw_lower, raw_upper = multi_turn_absolute_raw_bounds(
+        {"raw_absolute_bounds": raw_bounds}
+        if raw_bounds is not None
+        else None
+    )
+    if goal_raw < raw_lower or goal_raw > raw_upper:
         raise ValueError(
             f"多圈目标 raw={goal_raw} 超出 signed absolute raw 安全范围 "
-            f"[-{MULTI_TURN_ABSOLUTE_RAW_LIMIT}, {MULTI_TURN_ABSOLUTE_RAW_LIMIT}]。"
+            f"[{raw_lower}, {raw_upper}]。"
         )
     return goal_raw
 
@@ -184,7 +275,11 @@ def joint_deg_to_goal_detail(
     if 模式 == "单圈":
         goal_raw = single_turn_relative_to_goal_raw(reference_raw, relative_raw)
     elif 模式 == "多圈":
-        goal_raw = multi_turn_relative_to_goal_raw(reference_raw, relative_raw)
+        goal_raw = multi_turn_relative_to_goal_raw(
+            reference_raw,
+            relative_raw,
+            raw_bounds=multi_turn_absolute_raw_bounds(joint_config),
+        )
     else:
         raise ValueError(f"{joint_label(joint_key)} 的模式不支持：{模式}")
 

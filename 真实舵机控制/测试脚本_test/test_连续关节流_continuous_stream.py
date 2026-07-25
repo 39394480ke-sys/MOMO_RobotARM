@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 import io
+import json
+import tempfile
 import unittest
 from contextlib import redirect_stdout
+from pathlib import Path
 
 import 真实测试路径_test_paths  # noqa: F401
 from 控制桥接_common import DEFAULT_MOTION_TUNING, normalize_motion_tuning
 from 连续关节流_continuous_joint_stream import run_continuous_joint_stream
-from 真实路径工具_real_path_utils import real_config_path
 from 真实机械臂控制器_real_arm_controller import RealArmController
 
 
@@ -146,7 +148,58 @@ class SpyDriver:
 
 class RealControllerStreamTest(unittest.TestCase):
     def setUp(self) -> None:
-        self.controller = RealArmController(real_config_path())
+        self.temp_dir = tempfile.TemporaryDirectory()
+        root = Path(self.temp_dir.name)
+        calibration_path = root / "calibration.json"
+        calibration = {
+            **{
+                f"j{index}": {
+                    "id": index,
+                    "模式": "多圈",
+                    "home_present_raw": 0,
+                    "phase": 28,
+                    "direction": 1,
+                    "range_min": 0,
+                    "range_max": 0,
+                }
+                for index in range(10, 16)
+            },
+        }
+        calibration_path.write_text(
+            json.dumps(calibration, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        config_path = root / "real.yaml"
+        config_path.write_text(
+            json.dumps(
+                {
+                    "transport": {
+                        "port": "",
+                        "driver_backend": "sdk",
+                        "dry_run": True,
+                        "gripper_available": False,
+                    },
+                    "robot": {
+                        "variant": "V2",
+                        "joint_order": [f"j{index}" for index in range(10, 16)],
+                        "joints": [
+                            {
+                                "key": f"j{index}",
+                                "舵机ID": index,
+                                "模式": "多圈",
+                                "默认角度": 0,
+                            }
+                            for index in range(10, 16)
+                        ],
+                    },
+                    "calibration": {"path": str(calibration_path)},
+                    "files": {"runtime_state": str(root / "runtime.json")},
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        self.controller = RealArmController(config_path)
         self.controller.set_dry_run(True, persist=False)
         self.assertTrue(self.controller.connect().成功)
         self.spy = SpyDriver(self.controller.driver)
@@ -160,6 +213,7 @@ class RealControllerStreamTest(unittest.TestCase):
 
     def tearDown(self) -> None:
         self.controller.disconnect()
+        self.temp_dir.cleanup()
 
     def test_stream_frame_only_writes_changed_joint_goal(self) -> None:
         first = self.controller.stream_joint_target("j14", 1.0)

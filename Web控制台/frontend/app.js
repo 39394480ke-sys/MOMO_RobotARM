@@ -121,7 +121,6 @@ function bindEvents() {
   $("#resetAgentBtn").addEventListener("click", resetAgentSession);
   $("#clearAgentChatBtn").addEventListener("click", clearAgentChat);
   $("#agentChatLog").addEventListener("click", handleAgentPendingActionClick);
-  $$(".agent-quick-btn").forEach((btn) => btn.addEventListener("click", () => useAgentPrompt(btn.dataset.agentPrompt || "")));
   $("#refreshSubjectLockBtn").addEventListener("click", loadSubjectLockStatus);
   $("#refreshSubjectLockPreviewBtn").addEventListener("click", refreshSubjectLockPreview);
   $("#startSubjectLockCalibrationBtn").addEventListener("click", startSubjectLockCalibration);

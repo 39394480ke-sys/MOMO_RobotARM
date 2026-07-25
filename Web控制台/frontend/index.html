@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>机械臂 Web 控制台</title>
-    <link rel="stylesheet" href="/static/styles.css?v=20260717-mobile-joint-hold-subject-lock-web-cloud-stt" />
+    <link rel="stylesheet" href="/static/styles.css?v=20260725-agent-layout" />
   </head>
   <body>
     <div id="app">
@@ -343,19 +343,13 @@
                 <button id="resetAgentBtn">重置会话</button>
               </div>
             </div>
-            <div class="settings-grid">
+            <div class="settings-grid agent-layout">
               <section class="panel agent-chat-panel">
                 <div class="panel-head">
                   <h3>对话</h3>
                   <span id="agentStatusState" class="status-pill warn">未检查</span>
                 </div>
                 <div id="agentChatLog" class="agent-chat-log"></div>
-                <div class="agent-quick-row">
-                  <button class="agent-quick-btn" data-agent-prompt="帮我生成一个环绕主体运镜的轨迹">环绕运镜</button>
-                  <button class="agent-quick-btn" data-agent-prompt="帮我生成一张海报">生成海报</button>
-                  <button class="agent-quick-btn" data-agent-prompt="请查询机械臂当前状态">查状态</button>
-                  <button class="agent-quick-btn" data-agent-prompt="请说明当前 Web 控制台可以安全做哪些操作">安全说明</button>
-                </div>
                 <div class="agent-input-row">
                   <button
                     id="agentVoiceBtn"
@@ -710,6 +704,6 @@
     </div>
 
     <script src="/static/audio-recorder.js?v=20260724-web-cloud-stt"></script>
-    <script src="/static/app.js?v=20260716-continuous-follow-j10-mm-ai-confirm-mobile-joint-hold-continuous-follow-subject-lock-fix1-web-cloud-stt"></script>
+    <script src="/static/app.js?v=20260725-continuous-follow-j10-mm-ai-confirm-agent-layout"></script>
   </body>
 </html>

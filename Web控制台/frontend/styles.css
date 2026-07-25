@@ -931,6 +931,27 @@ th {
   background: #111827;
 }
 
+.agent-layout {
+  grid-template-columns: minmax(420px, 1.35fr) minmax(320px, 0.85fr);
+  align-items: stretch;
+}
+
+.agent-layout > .agent-chat-panel,
+.agent-layout > .agent-config-panel {
+  grid-column: auto;
+  min-width: 0;
+}
+
+.agent-config-panel .kv.wide {
+  grid-template-columns: 96px minmax(0, 1fr);
+}
+
+.agent-config-panel .kv dd {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
 .agent-message {
   display: grid;
   grid-template-columns: 72px 1fr;
@@ -1093,13 +1114,6 @@ th {
   margin-top: 6px;
   color: #9ca3af;
   font-size: 12px;
-}
-
-.agent-quick-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 10px;
 }
 
 .agent-input-row {
@@ -1389,6 +1403,15 @@ th {
   .agent-pending-card {
     width: 100%;
     max-width: none;
+  }
+
+  .agent-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .agent-layout > .agent-chat-panel,
+  .agent-layout > .agent-config-panel {
+    grid-column: auto;
   }
 
   .agent-config-panel .kv.wide {

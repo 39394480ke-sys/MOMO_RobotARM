@@ -147,7 +147,13 @@ class SettingsPage(QWidget):
             if label in self.path_fields:
                 self.path_fields[label].setText(str(path))
                 self.path_fields[label].setCursorPosition(0)
-        urdf_path = (self.bridge.project_root / "URDF运动学仿真" / "urdf" / "soarmoce_urdf.urdf").resolve()
+        urdf_path = (
+            self.bridge.project_root
+            / "URDF运动学仿真"
+            / "urdf"
+            / "v2"
+            / "soarmoce_urdf.urdf"
+        ).resolve()
         self.path_fields["URDF 路径"].setText(str(urdf_path))
         self.path_fields["URDF 路径"].setCursorPosition(0)
 

@@ -131,7 +131,7 @@ from 动作路径工具_motion_path_utils import (
     ensure_project_root_on_path as ensure_action_project_root_on_path,
     resolve_action_path,
 )
-from 运动学模型_kinematics_model import 加载运动学配置, 解析资源路径
+from 运动学模型_kinematics_model import DEFAULT_CONFIG, 加载运动学配置, 解析资源路径
 from 运动学路径工具_kinematics_path_utils import (
     KINEMATICS_ROOT as RESOLVED_KINEMATICS_ROOT,
     ensure_project_root_on_path as ensure_kinematics_project_root_on_path,
@@ -805,11 +805,17 @@ def test_action_path_and_logger_helpers() -> None:
 def test_kinematics_path_and_config_helpers() -> None:
     assert RESOLVED_KINEMATICS_ROOT == KINEMATICS_ROOT
     assert ensure_kinematics_project_root_on_path() == PROJECT_ROOT
-    assert resolve_kinematics_path("urdf/soarmoce_urdf.urdf") == (KINEMATICS_ROOT / "urdf/soarmoce_urdf.urdf").resolve()
-    assert 解析资源路径("urdf/soarmoce_urdf.urdf") == (KINEMATICS_ROOT / "urdf/soarmoce_urdf.urdf").resolve()
+    expected_urdf_path = "urdf/v2/soarmoce_urdf.urdf"
+    assert resolve_kinematics_path(expected_urdf_path) == (KINEMATICS_ROOT / expected_urdf_path).resolve()
+    assert 解析资源路径(expected_urdf_path) == (KINEMATICS_ROOT / expected_urdf_path).resolve()
     config = 加载运动学配置(KINEMATICS_ROOT / "运动学配置.yaml")
     assert config["robot"]["sdk_joint_names"] == ["j10", "j11", "j12", "j13", "j14", "j15"]
-    assert config["robot"]["target_frame"] == "Link_6"
+    assert config["robot"]["name"] == "momo_robot_arm_v2"
+    assert config["robot"]["urdf_path"] == expected_urdf_path
+    assert config["robot"]["target_frame"] == "Link_7"
+    assert "joint_scales" not in config["robot"]
+    assert DEFAULT_CONFIG["robot"]["urdf_path"] == expected_urdf_path
+    assert DEFAULT_CONFIG["robot"]["target_frame"] == "Link_7"
 
 
 def test_sim_path_pose_and_action_helpers() -> None:

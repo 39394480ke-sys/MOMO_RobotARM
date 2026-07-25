@@ -1,7 +1,7 @@
 robot:
-  name: soarmmoce_with_linear_rail
-  urdf_path: urdf/soarmoce_urdf.urdf
-  target_frame: Link_6
+  name: momo_robot_arm_v2
+  urdf_path: urdf/v2/soarmoce_urdf.urdf
+  target_frame: Link_7
 
   sdk_joint_names:
     - j10
@@ -31,14 +31,6 @@ robot:
     j13: deg
     j14: deg
     j15: deg
-
-  joint_scales:
-    j10: 1.0
-    j11: 5.0
-    j12: -5.3
-    j13: 5.6
-    j14: -1.0
-    j15: 1.0
 
   model_offsets_deg:
     j10: 0.0

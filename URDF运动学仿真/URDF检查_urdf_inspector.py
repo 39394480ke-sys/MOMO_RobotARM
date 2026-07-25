@@ -19,10 +19,10 @@ def 检查URDF(config_path: str | Path | None = None) -> dict[str, Any]:
     base_dir = Path(__file__).resolve().parent
     config = 加载运动学配置(config_path)
     robot = config.get("robot", {})
-    urdf_path = 解析资源路径(robot.get("urdf_path", "urdf/soarmoce_urdf.urdf"), base_dir)
+    urdf_path = 解析资源路径(robot.get("urdf_path", "urdf/v2/soarmoce_urdf.urdf"), base_dir)
     sdk_joint_names = list(robot.get("sdk_joint_names", SDK_JOINT_NAMES))
     joint_name_aliases = dict(robot.get("joint_name_aliases", JOINT_NAME_ALIASES))
-    target_frame = str(robot.get("target_frame", "wrist_roll"))
+    target_frame = str(robot.get("target_frame", "Link_7"))
 
     report: dict[str, Any] = {
         "ok": False,

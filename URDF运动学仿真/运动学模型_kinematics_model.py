@@ -49,9 +49,9 @@ JOINT_NAME_ALIASES = dict(COMMON_URDF_JOINT_NAME_ALIASES)
 
 DEFAULT_CONFIG: dict[str, Any] = {
     "robot": {
-        "name": "soarmmoce_with_linear_rail",
-        "urdf_path": "urdf/soarmoce_urdf.urdf",
-        "target_frame": "Link_6",
+        "name": "momo_robot_arm_v2",
+        "urdf_path": "urdf/v2/soarmoce_urdf.urdf",
+        "target_frame": "Link_7",
         "sdk_joint_names": list(SDK_JOINT_NAMES),
         "joint_name_aliases": dict(JOINT_NAME_ALIASES),
         "joint_user_units": {
@@ -61,14 +61,6 @@ DEFAULT_CONFIG: dict[str, Any] = {
             "j13": "deg",
             "j14": "deg",
             "j15": "deg",
-        },
-        "joint_scales": {
-            "j10": 1.0,
-            "j11": 5.0,
-            "j12": -5.3,
-            "j13": 5.6,
-            "j14": -1.0,
-            "j15": 1.0,
         },
         "model_offsets_deg": {joint_name: 0.0 for joint_name in SDK_JOINT_NAMES},
     },
@@ -134,13 +126,13 @@ def 创建运动学模型(config_path: str | Path | None = None, use_gui: bool |
     base_dir = KINEMATICS_ROOT
     robot = config.get("robot", {})
     viewer = config.get("viewer", {})
-    urdf_path = 解析资源路径(robot.get("urdf_path", "urdf/soarmoce_urdf.urdf"), base_dir)
+    urdf_path = 解析资源路径(robot.get("urdf_path", "urdf/v2/soarmoce_urdf.urdf"), base_dir)
     return KinematicsModel(
         urdf_path=urdf_path,
         sdk_joint_names=robot.get("sdk_joint_names", SDK_JOINT_NAMES),
         joint_name_aliases=robot.get("joint_name_aliases", JOINT_NAME_ALIASES),
         model_offsets_deg=robot.get("model_offsets_deg", {}),
-        target_frame=robot.get("target_frame", "j15"),
+        target_frame=robot.get("target_frame", "Link_7"),
         use_gui=bool(viewer.get("use_gui", False)) if use_gui is None else bool(use_gui),
     )
 
@@ -209,7 +201,7 @@ class KinematicsModel:
 
         self.sdk_joint_names = [str(name) for name in sdk_joint_names]
         self.joint_name_aliases = {str(key): str(value) for key, value in dict(joint_name_aliases).items()}
-        self.target_frame = str(target_frame or "j15").strip() or "j15"
+        self.target_frame = str(target_frame or "Link_7").strip() or "Link_7"
         self.model_offsets_rad = np.asarray(
             [math.radians(float(dict(model_offsets_deg).get(name, 0.0))) for name in self.sdk_joint_names],
             dtype=float,

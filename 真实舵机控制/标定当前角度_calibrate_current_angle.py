@@ -145,7 +145,7 @@ def normalize_joint(value: str) -> str:
 
 
 def resolve_calibration_path(config: dict[str, Any], config_path: str | Path) -> Path:
-    value = config.get("calibration", {}).get("path", "标定文件.json")
+    value = config.get("calibration", {}).get("path", "标定/current.local.json")
     path = Path(str(value))
     if path.is_absolute():
         return path

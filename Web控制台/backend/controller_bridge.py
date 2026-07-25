@@ -490,7 +490,7 @@ class ControllerBridge:
         from 真实路径工具_real_path_utils import resolve_real_path
 
         config = 读取配置(config_path)
-        calibration_value = config.get("calibration", {}).get("path", "标定文件.json")
+        calibration_value = config.get("calibration", {}).get("path", "标定/current.local.json")
         calibration_path = resolve_real_path(calibration_value, Path(config_path).parent)
         calibration = read_json_object_or_default(calibration_path)
         return config, calibration, calibration_path
@@ -577,7 +577,7 @@ class ControllerBridge:
 
             config_path = self._resolve_config("real_config_path")
             config = 读取配置(config_path)
-            calibration_value = config.get("calibration", {}).get("path", "标定文件.json")
+            calibration_value = config.get("calibration", {}).get("path", "标定/current.local.json")
             calibration_path = resolve_real_path(calibration_value, Path(config_path).parent)
             calibration = read_json_object_or_default(calibration_path)
             joint_keys = list(JOINTS)

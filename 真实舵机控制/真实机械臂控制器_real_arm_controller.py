@@ -11,14 +11,19 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from 真实路径工具_real_path_utils import PROJECT_ROOT, REAL_CONTROL_DIR, ensure_project_root_on_path, resolve_real_path
+from 真实路径工具_real_path_utils import ensure_project_root_on_path, resolve_real_path
 
 ensure_project_root_on_path()
 
-from 通用_io import atomic_write_json, env_bool, env_value, read_json_object_or_default, read_structured, resolve_path, write_json  # noqa: E402
+from 通用_io import atomic_write_json, read_json_object_or_default, resolve_path  # noqa: E402
 
 from 安全检查_safety_checker import SafetyChecker
 from 标定管理_calibration_manager import CalibrationManager
+from 真实配置加载_real_config_loader import (  # noqa: E402
+    DEFAULT_CALIBRATION_PATH,
+    load_real_config,
+    persist_real_config_override,
+)
 from 舵机驱动_servo_driver import BaseServoDriver, RealServoDriver, MockServoDriver, LightweightFeetechServoDriver
 from 角度映射_angle_mapper import (
     JOINT_ORDER,
@@ -61,15 +66,17 @@ class RealArmController:
     """真实机械臂控制器。"""
 
     def __init__(self, config_path: str | Path | None = None):
-        self.base_dir = REAL_CONTROL_DIR
         self.config_path = resolve_real_path(config_path or "真实配置.yaml")
+        self.base_dir = self.config_path.parent
 
         self.config = 读取配置(self.config_path)
         self._dry_run_override: bool | None = None
         self.joint_order = list(self.config.get("robot", {}).get("joint_order", JOINT_ORDER))
         self.joint_config_by_key = self._build_joint_config_by_key()
 
-        calibration_path = self._resolve_path(self.config.get("calibration", {}).get("path", "标定文件.json"))
+        calibration_path = self._resolve_path(
+            self.config.get("calibration", {}).get("path", DEFAULT_CALIBRATION_PATH)
+        )
         self.calibration_manager = CalibrationManager(calibration_path, self.config)
         self.safety_checker = SafetyChecker(self.config, self.calibration_manager)
 
@@ -152,16 +159,21 @@ class RealArmController:
             self.connected = False
             self._torque_enabled_joints.clear()
 
-        self.config.setdefault("transport", {})["dry_run"] = bool(enabled)
-        self._dry_run_override = bool(enabled) if not persist else None
+        transport = self.config.setdefault("transport", {})
+        runtime_mode_locked = bool(transport.get("runtime_mode_locked", False))
+        transport["dry_run"] = bool(enabled)
+        self._dry_run_override = bool(enabled) if runtime_mode_locked or not persist else None
         self.safety_checker = SafetyChecker(self.config, self.calibration_manager)
         self.driver = self._create_driver()
         self.runtime_state["dry_run"] = bool(enabled)
         self.runtime_state["connected"] = False
         self._save_runtime_state()
 
-        if persist:
-            write_json(self.config_path, self.config)
+        if persist and not runtime_mode_locked:
+            persist_real_config_override(
+                self.config_path,
+                {"transport": {"dry_run": bool(enabled)}},
+            )
 
         模式 = "dry-run" if enabled else "真实模式"
         suffix = "，请重新执行“连接”。" if was_connected else ""
@@ -616,7 +628,9 @@ class RealArmController:
             self.config.setdefault("transport", {})["dry_run"] = bool(self._dry_run_override)
         self.joint_order = list(self.config.get("robot", {}).get("joint_order", JOINT_ORDER))
         self.joint_config_by_key = self._build_joint_config_by_key()
-        calibration_path = self._resolve_path(self.config.get("calibration", {}).get("path", "标定文件.json"))
+        calibration_path = self._resolve_path(
+            self.config.get("calibration", {}).get("path", DEFAULT_CALIBRATION_PATH)
+        )
         self.calibration_manager = CalibrationManager(calibration_path, self.config)
         self.safety_checker = SafetyChecker(self.config, self.calibration_manager)
         self.driver = self._create_driver()
@@ -818,20 +832,9 @@ class RealArmController:
 
 
 def 读取配置(path: str | Path) -> dict[str, Any]:
-    """读取 JSON 兼容 YAML。没有 PyYAML 时也能运行。"""
+    """读取安全基线、同目录 local 覆盖和环境运行参数。"""
 
-    config = read_structured(path)
-    env_paths = (PROJECT_ROOT / ".env", REAL_CONTROL_DIR / "环境变量.env", PROJECT_ROOT / "系统集成" / "环境变量.env")
-    transport = config.setdefault("transport", {})
-    port = str(env_value("ARM_ROBOT_PORT", "", env_paths=env_paths) or "").strip()
-    if port:
-        transport["port"] = port
-    backend = str(env_value("ARM_SERVO_BACKEND", "", env_paths=env_paths) or "").strip()
-    if backend:
-        transport["driver_backend"] = backend
-    if not bool(transport.get("runtime_mode_locked", False)):
-        transport["dry_run"] = env_bool("ARM_REAL_DRY_RUN", bool(transport.get("dry_run", True)), env_paths=env_paths)
-    return config
+    return load_real_config(path)
 
 
 真实机械臂控制器 = RealArmController

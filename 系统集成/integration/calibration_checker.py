@@ -28,7 +28,10 @@ class CalibrationChecker:
     def __init__(self, config: dict[str, Any]):
         self.config = config
         self.base_dir = Path(config.get("_base_dir", INTEGRATION_DIR)).resolve()
-        path = config.get("hardware", {}).get("calibration_path", "../真实舵机控制/标定文件.json")
+        path = config.get("hardware", {}).get(
+            "calibration_path",
+            "../真实舵机控制/标定/current.local.json",
+        )
         self.path = resolve_path(path, self.base_dir)
 
     def check(self) -> dict[str, Any]:

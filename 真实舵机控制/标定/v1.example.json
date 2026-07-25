@@ -1,0 +1,64 @@
+{
+  "_meta": {
+    "template": true,
+    "robot_variant": "V1",
+    "generated_at_unix_s": null,
+    "gripper_available": null
+  },
+  "j10": {
+    "id": null,
+    "模式": "多圈",
+    "direction": null,
+    "phase": null,
+    "home_present_raw": null,
+    "home_present_wrapped_raw": null
+  },
+  "j11": {
+    "id": null,
+    "模式": "多圈",
+    "direction": null,
+    "phase": null,
+    "home_present_raw": null,
+    "home_present_wrapped_raw": null
+  },
+  "j12": {
+    "id": null,
+    "模式": "多圈",
+    "direction": null,
+    "phase": null,
+    "home_present_raw": null,
+    "home_present_wrapped_raw": null
+  },
+  "j13": {
+    "id": null,
+    "模式": "多圈",
+    "direction": null,
+    "phase": null,
+    "home_present_raw": null,
+    "home_present_wrapped_raw": null
+  },
+  "j14": {
+    "id": null,
+    "模式": "多圈",
+    "direction": null,
+    "phase": null,
+    "home_present_raw": null,
+    "home_present_wrapped_raw": null
+  },
+  "j15": {
+    "id": null,
+    "模式": "多圈",
+    "direction": null,
+    "phase": null,
+    "home_present_raw": null,
+    "home_present_wrapped_raw": null
+  },
+  "gripper": {
+    "id": null,
+    "模式": "单圈",
+    "direction": null,
+    "zero_present_raw": null,
+    "range_min": null,
+    "range_max": null
+  }
+}

@@ -19,7 +19,7 @@ class MacPullBackupTest(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
         self.project = Path(self.tmp.name) / "project"
-        calibration = self.project / "真实舵机控制" / "标定文件.json"
+        calibration = self.project / "真实舵机控制" / "标定" / "current.local.json"
         calibration.parent.mkdir(parents=True)
         calibration.write_text(json.dumps({f"j{i}": {} for i in range(10, 16)}), encoding="utf-8")
         self.local = Path(self.tmp.name) / "local"
@@ -41,7 +41,7 @@ class MacPullBackupTest(unittest.TestCase):
 
     def test_checksum_failure_is_reported(self) -> None:
         snapshot = create_snapshot(self.project, self.local, datetime.now(timezone.utc))
-        calibration = snapshot / "真实舵机控制" / "标定文件.json"
+        calibration = snapshot / "真实舵机控制" / "标定" / "current.local.json"
         calibration.write_text("changed", encoding="utf-8")
         with patch("scripts.pull_board_backups_to_mac.subprocess.run"):
             with self.assertRaisesRegex(ValueError, "mismatch"):

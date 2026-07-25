@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import tempfile
 import time
 from copy import deepcopy
 from pathlib import Path
@@ -25,9 +24,10 @@ from 控制桥接_common import (  # noqa: E402
     normalize_multi_turn_state as common_normalize_multi_turn_state,
     normalize_playback_speed as common_normalize_playback_speed,
     normalize_raw_present_position as common_normalize_raw_present_position,
+    make_runtime_real_config,
     targets_to_kinematics_q,
 )
-from 通用_io import atomic_write_json, deep_merge, read_structured  # noqa: E402
+from 通用_io import deep_merge, read_structured  # noqa: E402
 
 STAGE3_DIR = PROJECT_ROOT / "仿真控制系统"
 STAGE4_DIR = PROJECT_ROOT / "真实舵机控制"
@@ -435,15 +435,15 @@ class SimulatedStage6Controller:
 
 def create_stage4_controller(dry_run: bool = True) -> Any:
     ensure_stage_paths()
-    from copy import deepcopy
     from 真实机械臂控制器_real_arm_controller import RealArmController
 
-    original_config = read_structured(STAGE4_DIR / "真实配置.yaml")
-    config = deepcopy(original_config)
-    config.setdefault("transport", {})["dry_run"] = bool(dry_run)
     mode_name = "dry_run" if dry_run else "real"
-    runtime_config = Path(tempfile.gettempdir()) / f"arm_stage6_{mode_name}_真实配置_runtime.yaml"
-    atomic_write_json(runtime_config, config)
+    runtime_config = make_runtime_real_config(
+        STAGE4_DIR / "真实配置.yaml",
+        dry_run=bool(dry_run),
+        runtime_state_path=STAGE4_DIR / "runtime" / f"stage6_{mode_name}_state.json",
+        temp_dir_name="arm_stage6",
+    )
     controller = RealArmController(runtime_config)
     return controller
 

@@ -74,7 +74,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="把已有 标定文件.json 应用到真实舵机")
     parser.add_argument("--config", default=str(real_config_path()), help="真实配置文件路径")
     parser.add_argument("--port", default=None, help="串口，例如 /dev/tty.usbmodemXXXX")
-    parser.add_argument("--calibration", default="标定文件.json", help="已有标定文件")
+    parser.add_argument("--calibration", default="标定/current.local.json", help="已有标定文件")
     parser.add_argument("--yes", action="store_true", help="跳过固定文本确认，适合自动化但不推荐真机首次使用")
     return parser.parse_args()
 

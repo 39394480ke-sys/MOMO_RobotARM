@@ -747,7 +747,9 @@ def gripper_available_from_config(mode: str, real_config_path: str | Path) -> bo
     if str(mode) not in {"dry_run", "real"}:
         return True
     try:
-        real_config = read_structured(real_config_path)
+        from 真实配置加载_real_config_loader import load_real_config
+
+        real_config = load_real_config(real_config_path)
         return bool(real_config.get("transport", {}).get("gripper_available", True))
     except Exception:
         return True
@@ -1135,8 +1137,13 @@ def compute_ik_payload(
 
 def resolve_calibration_file_path(real_config_path: str | Path, real_config: Mapping[str, Any] | None = None) -> Path:
     config_path = Path(real_config_path).resolve()
-    config = real_config or read_structured(config_path)
-    cal_path = Path(config.get("calibration", {}).get("path", "标定文件.json"))
+    if real_config is None:
+        from 真实配置加载_real_config_loader import load_real_config
+
+        config = load_real_config(config_path)
+    else:
+        config = real_config
+    cal_path = Path(config.get("calibration", {}).get("path", "标定/current.local.json"))
     if not cal_path.is_absolute():
         cal_path = config_path.parent / cal_path
     return cal_path
@@ -1153,8 +1160,10 @@ def load_calibration_report(real_config_path: str | Path) -> dict[str, Any]:
 
 
 def load_calibration_raw_items(real_config_path: str | Path) -> dict[str, Any]:
+    from 真实配置加载_real_config_loader import load_real_config
+
     config_path = Path(real_config_path).resolve()
-    real_config = read_structured(config_path)
+    real_config = load_real_config(config_path)
     cal_path = resolve_calibration_file_path(config_path, real_config)
     if not cal_path.exists():
         return {}
@@ -1265,7 +1274,9 @@ def make_runtime_real_config(
     """
 
     source = Path(real_config_path).resolve()
-    data = read_structured(source)
+    from 真实配置加载_real_config_loader import load_real_config
+
+    data = load_real_config(source)
     transport = data.setdefault("transport", {})
     transport["dry_run"] = bool(dry_run)
     transport["runtime_mode_locked"] = True
@@ -1273,7 +1284,7 @@ def make_runtime_real_config(
         transport["port"] = serial_port
 
     calibration = data.setdefault("calibration", {})
-    calibration_path = Path(calibration.get("path", "标定文件.json"))
+    calibration_path = Path(calibration.get("path", "标定/current.local.json"))
     if not calibration_path.is_absolute():
         calibration["path"] = str((source.parent / calibration_path).resolve())
 

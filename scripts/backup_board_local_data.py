@@ -16,6 +16,7 @@ BACKUP_PATHS = (
     "GUI图形界面/GUI配置.local.yaml",
     "Web控制台/Web配置.local.yaml",
     "真实舵机控制/真实配置.local.yaml",
+    "真实舵机控制/标定/current.local.json",
     "真实舵机控制/标定文件.json",
     "真实舵机控制/标定备份_backups",
     "视觉识别与跟随/视觉配置.local.yaml",
@@ -44,7 +45,9 @@ def _sha256(path: Path) -> str:
 
 
 def _validate_calibration(project_root: Path) -> None:
-    path = project_root / "真实舵机控制" / "标定文件.json"
+    new_path = project_root / "真实舵机控制" / "标定" / "current.local.json"
+    legacy_path = project_root / "真实舵机控制" / "标定文件.json"
+    path = new_path if new_path.is_file() else legacy_path
     if not path.is_file():
         return
     data = json.loads(path.read_text(encoding="utf-8"))

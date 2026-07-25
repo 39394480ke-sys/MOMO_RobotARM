@@ -48,6 +48,27 @@ class BoardBackupTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "j11"):
             create_snapshot(self.root, self.backups, datetime.now(timezone.utc))
 
+    def test_snapshot_supports_new_and_legacy_calibration_paths(self) -> None:
+        new_path = self.root / "真实舵机控制" / "标定" / "current.local.json"
+        new_path.parent.mkdir()
+        new_path.write_text(
+            json.dumps({f"j{i}": {} for i in range(10, 16)}),
+            encoding="utf-8",
+        )
+
+        snapshot = create_snapshot(self.root, self.backups, datetime.now(timezone.utc))
+
+        self.assertTrue((snapshot / "真实舵机控制" / "标定" / "current.local.json").is_file())
+        self.assertTrue((snapshot / "真实舵机控制" / "标定文件.json").is_file())
+
+    def test_new_calibration_path_has_validation_priority(self) -> None:
+        new_path = self.root / "真实舵机控制" / "标定" / "current.local.json"
+        new_path.parent.mkdir()
+        new_path.write_text(json.dumps({"j10": {}}), encoding="utf-8")
+
+        with self.assertRaisesRegex(ValueError, "j11"):
+            create_snapshot(self.root, self.backups, datetime.now(timezone.utc))
+
     def test_prune_ignores_partial_and_keeps_newest_successful_snapshot(self) -> None:
         now = datetime(2026, 7, 17, tzinfo=timezone.utc)
         old = create_snapshot(self.root, self.backups, now - timedelta(days=40))

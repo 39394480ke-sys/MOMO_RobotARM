@@ -9,7 +9,7 @@ import glob
 from pathlib import Path
 from typing import Any
 
-from 真实路径工具_real_path_utils import PROJECT_ROOT, REAL_CONTROL_DIR, ensure_project_root_on_path
+from 真实路径工具_real_path_utils import ensure_project_root_on_path
 
 ensure_project_root_on_path()
 
@@ -20,7 +20,7 @@ from 控制桥接_common import (  # noqa: E402
     MULTI_TURN_JOINTS as COMMON_MULTI_TURN_JOINTS,
     joint_label as common_joint_label,
 )
-from 通用_io import env_value, read_structured  # noqa: E402
+from 真实配置加载_real_config_loader import load_real_config  # noqa: E402
 
 
 JOINTS = list(COMMON_JOINT_ORDER)
@@ -49,15 +49,7 @@ def joint_label(joint_name: str) -> str:
 def load_config(config_path: str | Path) -> dict[str, Any]:
     """读取真实配置。"""
 
-    config = read_structured(config_path)
-    env_paths = (PROJECT_ROOT / ".env", REAL_CONTROL_DIR / "环境变量.env", PROJECT_ROOT / "系统集成" / "环境变量.env")
-    port = str(env_value("ARM_ROBOT_PORT", "", env_paths=env_paths) or "").strip()
-    if port:
-        config.setdefault("transport", {})["port"] = port
-    backend = str(env_value("ARM_SERVO_BACKEND", "", env_paths=env_paths) or "").strip()
-    if backend:
-        config.setdefault("transport", {})["driver_backend"] = backend
-    return config
+    return load_real_config(config_path)
 
 
 def import_feetech_classes():

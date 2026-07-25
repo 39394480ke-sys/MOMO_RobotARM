@@ -51,7 +51,7 @@ def main() -> None:
 
     output_name = args.output
     if output_name is None:
-        output_name = "标定文件_dry_run预览.json" if args.dry_run else "标定文件.json"
+        output_name = "标定文件_dry_run预览.json" if args.dry_run else "标定/current.local.json"
 
     output_path = resolve_real_path(output_name)
     old_calibration = read_json_object_or_default(output_path)

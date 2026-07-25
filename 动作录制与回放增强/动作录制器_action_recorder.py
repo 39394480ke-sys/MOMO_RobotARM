@@ -12,6 +12,7 @@ from typing import Any
 from 动作工具_common import (
     JOINT_ORDER,
     MULTI_TURN_JOINTS,
+    active_robot_variant,
     append_sequence_pose,
     build_empty_sequence,
     compute_tcp_pose_if_possible,
@@ -23,6 +24,7 @@ from 动作工具_common import (
     normalize_raw_present_position,
     now_text,
     refresh_sequence_pose_count,
+    stamp_action_variant_for_save,
     state_joint_targets,
 )
 from 通用_io import atomic_write_json
@@ -37,6 +39,7 @@ class ActionRecorder:
     ):
         self.controller = controller
         self.config = config or load_config()
+        self.robot_variant = active_robot_variant(self.config)
         configured_real_path = real_config_path or self.config.get("hardware", {}).get("real_config_path")
         self.real_config_path = (
             Path(configured_real_path).resolve()
@@ -91,8 +94,9 @@ class ActionRecorder:
         return sequence
 
     def save_sequence(self, action_payload: dict[str, Any], output_path: str | Path) -> None:
-        refresh_sequence_pose_count(action_payload)
-        atomic_write_json(output_path, action_payload)
+        prepared = stamp_action_variant_for_save(action_payload, self.config)
+        refresh_sequence_pose_count(prepared)
+        atomic_write_json(output_path, prepared)
 
     def build_replay_metadata(self, pose: dict[str, Any]) -> dict[str, Any]:
         joint_targets = normalize_joint_targets(pose.get("joint_targets_deg", {}), self.joint_order)

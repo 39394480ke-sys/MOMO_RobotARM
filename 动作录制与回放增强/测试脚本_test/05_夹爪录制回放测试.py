@@ -22,7 +22,8 @@ sequence = build_empty_sequence("夹爪测试", source="test", config=config)
 for index, value in enumerate([10, 80], start=1):
     controller.set_gripper(value)
     append_sequence_pose(sequence, recorder.capture_current_pose(index=index))
+controller.gripper_calls.clear()
 player = SequencePlayer(controller, config)
 player.play(sequence, speed=5.0)
 print(f"set_gripper 调用：{controller.gripper_calls}")
-assert controller.gripper_calls[-2:] == [10.0, 80.0]
+assert controller.gripper_calls == [10.0, 80.0]

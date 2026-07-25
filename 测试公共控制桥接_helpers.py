@@ -357,8 +357,13 @@ def test_motion_progress_payload_helper() -> None:
     }
 
 
+class _ExplicitDryRunController:
+    def is_dry_run(self) -> bool:
+        return True
+
+
 def test_sequence_player_uses_normalized_playback_speed() -> None:
-    player = SequencePlayer(object(), {"robot": {"sdk_joint_names": ["j10", "j11", "j12", "j13", "j14", "j15"]}, "files": {"runtime_log": "运行日志/test_motion_runtime.log"}, "playback": {"auto_duration_from_distance": False}})
+    player = SequencePlayer(_ExplicitDryRunController(), {"robot": {"sdk_joint_names": ["j10", "j11", "j12", "j13", "j14", "j15"]}, "files": {"runtime_log": "运行日志/test_motion_runtime.log"}, "playback": {"auto_duration_from_distance": False}})
     assert player._duration({"duration_sec": 3.0}, 99.0, current={}, targets={}) == 1.0
     assert player._hold_duration({"hold_sec": 0.9}, {}, 99.0) == 0.3
 

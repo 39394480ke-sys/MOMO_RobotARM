@@ -27,6 +27,8 @@ class 操作结果:
 class 机械臂模型:
     """保存和更新仿真机械臂的当前状态。"""
 
+    is_simulation = True
+
     def __init__(self, 配置: dict[str, Any]):
         self.配置 = 配置
         self.关节配置 = 配置.get("关节", [])

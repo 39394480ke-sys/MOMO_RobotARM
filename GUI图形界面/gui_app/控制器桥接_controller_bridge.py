@@ -1048,8 +1048,8 @@ class ControllerBridge:
                 return fail("关键帧缺少同步关节状态，不能生成可执行动作。")
             trajectory = director.build_trajectory(keyframes)
             name = sanitize_action_name(action_name or f"AI运镜_{time.strftime('%H%M%S')}")
-            payload = director.build_action_payload(name, project, trajectory)
             library = self._get_action_library()
+            payload = director.build_action_payload(name, project, trajectory, config=library.config)
             saved_path = library.save_action(name, payload)
             project["trajectory_plan"] = trajectory
             project["generated_action"] = {"name": name, "path": str(saved_path), "pose_count": payload.get("pose_count", 0)}
@@ -1241,6 +1241,7 @@ class ControllerBridge:
             "active": self.recording_sequence is not None,
             "name": self.recording_name,
             "source": self.recording_source,
+            "robot_variant": sequence.get("robot_variant") if isinstance(sequence, dict) else None,
             "pose_count": len(sequence.get("poses", [])) if isinstance(sequence, dict) else 0,
         }
 

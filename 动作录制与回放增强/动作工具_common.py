@@ -28,6 +28,7 @@ from 控制桥接_common import (  # noqa: E402
     targets_to_kinematics_q,
 )
 from 真实配置加载_real_config_loader import load_real_config  # noqa: E402
+from 机器人配置_profile_loader import SUPPORTED_VARIANTS, validate_robot_variant  # noqa: E402
 from 通用_io import deep_merge, read_structured  # noqa: E402
 
 STAGE3_DIR = PROJECT_ROOT / "仿真控制系统"
@@ -58,6 +59,7 @@ DEFAULT_JOINT_SPEED_LIMITS = {
 
 DEFAULT_CONFIG: dict[str, Any] = {
     "robot": {
+        "variant": "V2",
         "sdk_joint_names": list(JOINT_ORDER),
         "中文关节名": dict(CHINESE_JOINT_NAMES),
         "multi_turn_joints": list(MULTI_TURN_JOINTS),
@@ -161,10 +163,12 @@ def build_empty_sequence(
     config: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     cfg = dict(config or DEFAULT_CONFIG)
+    robot_variant = active_robot_variant(cfg)
     playback = cfg.get("playback", {})
     joint_order = list(cfg.get("robot", {}).get("sdk_joint_names", JOINT_ORDER))
     return {
         "schema_version": SCHEMA_VERSION,
+        "robot_variant": robot_variant,
         "name": name,
         "description": description,
         "created_at": now_text(),
@@ -177,6 +181,59 @@ def build_empty_sequence(
         },
         "poses": [],
     }
+
+
+def active_robot_variant(config: Mapping[str, Any]) -> str:
+    """返回 action 调用链使用的 canonical active profile。"""
+
+    return validate_robot_variant(config.get("robot", {}).get("variant"))
+
+
+def action_variant_report(
+    sequence: Mapping[str, Any],
+    config: Mapping[str, Any],
+) -> dict[str, Any]:
+    """报告动作来源版本；预览可查看问题，但只有 exact 可进入真实回放。"""
+
+    expected = active_robot_variant(config)
+    actual_value = sequence.get("robot_variant")
+    actual = actual_value if isinstance(actual_value, str) else ""
+    if not actual:
+        status = "missing"
+        problem = f"动作缺少 robot_variant，真实控制要求 {expected}。"
+    elif actual not in SUPPORTED_VARIANTS:
+        status = "unknown"
+        problem = f"动作包含未知 robot_variant={actual!r}，仅支持 V1/V2。"
+    elif actual != expected:
+        status = "mismatch"
+        problem = f"动作机械版本不匹配：当前动作为 {actual}，真实控制要求 {expected}。"
+    else:
+        status = "exact"
+        problem = ""
+    exact = status == "exact"
+    return {
+        "配置版本": expected,
+        "来源版本": actual or None,
+        "状态": status,
+        "匹配": exact,
+        "仅可预览": not exact,
+        "问题": problem,
+    }
+
+
+def stamp_action_variant_for_save(
+    sequence: Mapping[str, Any],
+    config: Mapping[str, Any],
+) -> dict[str, Any]:
+    """保存新动作时补全 active variant，并拒绝把异构动作伪装成当前版本。"""
+
+    prepared = deepcopy(dict(sequence))
+    report = action_variant_report(prepared, config)
+    if report["状态"] in {"mismatch", "unknown"}:
+        raise ValueError(report["问题"])
+    prepared["robot_variant"] = report["配置版本"]
+    prepared.pop("_robot_variant_preview", None)
+    return prepared
 
 
 def refresh_sequence_pose_count(sequence: dict[str, Any]) -> dict[str, Any]:
@@ -211,6 +268,8 @@ def summarize_sequence_payload(sequence: Mapping[str, Any]) -> dict[str, Any]:
     ]
     return {
         "动作名称": sequence.get("name") if isinstance(sequence, Mapping) else None,
+        "robot_variant": sequence.get("robot_variant") if isinstance(sequence, Mapping) else None,
+        "robot_variant_preview": sequence.get("_robot_variant_preview") if isinstance(sequence, Mapping) else None,
         "pose_count": len(poses),
         "创建时间": sequence.get("created_at") if isinstance(sequence, Mapping) else None,
         "总时长": round(total, 3),
@@ -308,15 +367,33 @@ def compute_tcp_pose_if_possible(
 
 
 def is_dry_run_controller(controller: Any) -> bool:
-    if hasattr(controller, "is_dry_run"):
+    """仅在控制器明确声明 dry-run / simulation 时返回 True。"""
+
+    try:
+        mode_probe = getattr(controller, "is_dry_run", None)
+    except Exception:
+        return False
+    if mode_probe is not None:
+        if not callable(mode_probe):
+            return False
         try:
-            return bool(controller.is_dry_run())
+            return mode_probe() is True
         except Exception:
-            return True
-    mode = getattr(controller, "mode", None) or getattr(controller, "模式", None)
-    if mode:
-        return "dry" in str(mode).lower() or "仿真" in str(mode)
-    return True
+            return False
+
+    for marker_name in ("is_simulation", "simulation"):
+        try:
+            if getattr(controller, marker_name, None) is True:
+                return True
+        except Exception:
+            return False
+
+    try:
+        mode = getattr(controller, "mode", None) or getattr(controller, "模式", None)
+    except Exception:
+        return False
+    normalized = str(mode or "").strip().lower().replace("-", "_")
+    return normalized in {"dry", "dry_run", "sim", "simulation", "模拟", "仿真"}
 
 
 def is_real_mode_controller(controller: Any) -> bool:
@@ -403,6 +480,7 @@ class SimulatedStage6Controller:
             self.current = {joint: 0.0 for joint in JOINT_ORDER}
             self.gripper = 50.0
         self.mode = "仿真"
+        self.is_simulation = True
         self.joint_order = list(JOINT_ORDER)
 
     def connect(self) -> SimpleResult:

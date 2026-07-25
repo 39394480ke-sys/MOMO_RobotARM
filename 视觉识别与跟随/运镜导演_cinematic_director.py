@@ -178,11 +178,19 @@ class CinematicDirector:
             },
         }
 
-    def build_action_payload(self, name: str, project: Mapping[str, Any], trajectory: Mapping[str, Any]) -> dict[str, Any]:
+    def build_action_payload(
+        self,
+        name: str,
+        project: Mapping[str, Any],
+        trajectory: Mapping[str, Any],
+        *,
+        config: Mapping[str, Any] | None = None,
+    ) -> dict[str, Any]:
         sequence = build_empty_sequence(
             name=name,
             description="AI 摄影导演从试拍语义重建的平滑运镜动作",
             source="ai_cinematic_director",
+            config=config,
         )
         poses = []
         points = [item for item in trajectory.get("key_points", trajectory.get("points", [])) if isinstance(item, dict)]

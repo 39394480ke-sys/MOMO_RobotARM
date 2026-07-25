@@ -1030,7 +1030,19 @@ def refresh_action_pose_count(sequence: dict[str, Any]) -> dict[str, Any]:
 
 
 def play_action_from_library(library: Any, player: Any, name: str, speed: float = 1.0, loop: bool = False) -> bool:
+    sequence = load_action_for_replay(library, player, name)
+    return play_loaded_action(player, sequence, speed=speed, loop=loop)
+
+
+def load_action_for_replay(library: Any, player: Any, name: str) -> dict[str, Any]:
+    """加载并在任何桥接层运动/I/O 前完成动作版本门禁。"""
+
     sequence = library.load_action(name)
+    player.validate_variant_for_replay(sequence)
+    return sequence
+
+
+def play_loaded_action(player: Any, sequence: Mapping[str, Any], speed: float = 1.0, loop: bool = False) -> bool:
     return bool(player.play(sequence, loop=bool(loop), speed=float(speed)))
 
 
@@ -1097,9 +1109,11 @@ def load_action_recorder(
 
 
 def load_sim_controller(sim_config_path: str | Path) -> Any:
+    config_path = Path(sim_config_path).resolve()
+    ensure_import_paths((config_path.parent,))
     from 机械臂模型_robot_arm import 机械臂模型
 
-    return 机械臂模型(read_structured(sim_config_path))
+    return 机械臂模型(read_structured(config_path))
 
 
 def load_real_controller(

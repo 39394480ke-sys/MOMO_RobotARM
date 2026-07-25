@@ -40,6 +40,7 @@ from 控制桥接_common import (  # noqa: E402
     delete_pose_from_manager,
     install_stage_paths,
     load_action_library,
+    load_action_for_replay,
     load_action_recorder,
     load_calibration_raw_items,
     load_calibration_report,
@@ -58,7 +59,7 @@ from 控制桥接_common import (  # noqa: E402
     normalize_joint_targets,
     normalize_playback_speed,
     normalize_robot_state_payload,
-    play_action_from_library,
+    play_loaded_action,
     read_controller_state,
     refresh_action_pose_count,
     resolve_base_path,
@@ -1088,12 +1089,13 @@ class ControllerBridge:
 
         try:
             playback_speed = normalize_playback_speed(speed)
-            self._ensure_connected_for_motion()
             self._ensure_controller()
             library = self._get_action_library()
             player = self._get_sequence_player()
+            sequence = load_action_for_replay(library, player, name)
+            self._ensure_connected_for_motion()
             self._set_action_status("playing", name, f"播放中：{name}")
-            ok = play_action_from_library(library, player, name, speed=playback_speed, loop=loop)
+            ok = play_loaded_action(player, sequence, speed=playback_speed, loop=loop)
             message = f"动作播放完成：{name}" if ok else f"动作播放未完成：{name}"
             self._set_action_status("idle" if ok else "stopped", name, message)
             self._log("info" if ok else "warning", "play_action", message, name=name, speed=playback_speed, loop=loop)
@@ -1254,8 +1256,8 @@ class ControllerBridge:
                 return bridge_fail("关键帧缺少同步关节状态，不能生成可执行动作。")
             trajectory = director.build_trajectory(keyframes)
             name = sanitize_action_name(action_name or f"AI运镜_{time.strftime('%H%M%S')}")
-            payload = director.build_action_payload(name, project, trajectory)
             library = self._get_action_library()
+            payload = director.build_action_payload(name, project, trajectory, config=library.config)
             saved_path = library.save_action(name, payload)
             project["trajectory_plan"] = trajectory
             project["generated_action"] = {"name": name, "path": str(saved_path), "pose_count": payload.get("pose_count", 0)}
@@ -1528,6 +1530,7 @@ class ControllerBridge:
             "active": self.recording_sequence is not None,
             "name": self.recording_name,
             "source": self.recording_source,
+            "robot_variant": sequence.get("robot_variant") if isinstance(sequence, dict) else None,
             "pose_count": len(sequence.get("poses", [])) if isinstance(sequence, dict) else 0,
         }
 

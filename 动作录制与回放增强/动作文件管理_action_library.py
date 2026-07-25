@@ -5,7 +5,14 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from 动作工具_common import SCHEMA_VERSION, load_config, refresh_sequence_pose_count, resolve_stage6_path, summarize_sequence_payload
+from 动作工具_common import (
+    SCHEMA_VERSION,
+    action_variant_report,
+    load_config,
+    refresh_sequence_pose_count,
+    resolve_stage6_path,
+    summarize_sequence_payload,
+)
 from 通用_io import atomic_write_json, list_json_stems, read_json_object, resolve_named_json_path
 
 
@@ -26,7 +33,9 @@ class ActionLibrary:
         if not path.exists():
             raise FileNotFoundError(f"动作不存在：{name}")
         payload = read_json_object(path)
-        return self._prepare_action_payload(payload)
+        prepared = self._prepare_action_payload(payload)
+        prepared["_robot_variant_preview"] = action_variant_report(prepared, self.config)
+        return prepared
 
     def save_action(self, name: str, payload: dict[str, Any]) -> Path:
         path = self.action_path(name)
@@ -75,9 +84,11 @@ class ActionLibrary:
         return self._write_action_payload(target, payload)
 
     def _prepare_action_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
-        refresh_sequence_pose_count(payload)
-        self.validate_action(payload)
-        return payload
+        prepared = dict(payload)
+        prepared.pop("_robot_variant_preview", None)
+        refresh_sequence_pose_count(prepared)
+        self.validate_action(prepared)
+        return prepared
 
     def _write_action_payload(self, path: Path, payload: dict[str, Any]) -> Path:
         prepared = self._prepare_action_payload(payload)

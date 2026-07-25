@@ -13,6 +13,7 @@ from 动作工具_common import (
     JOINT_ORDER,
     MULTI_TURN_JOINTS,
     SCHEMA_VERSION,
+    action_variant_report,
     call_move_joints,
     call_set_gripper,
     call_stop,
@@ -44,11 +45,14 @@ class SequencePlayer:
         self.logger = MotionLogger(Path(__file__).resolve().parent / self.config["files"]["runtime_log"])
         self._warned_multi_turn_fallback = False
         self.progress_callback = None
+        self.last_variant_report: dict[str, Any] = {}
 
     def load_sequence(self, path: str | Path) -> dict[str, Any]:
         sequence = read_json_object(path)
         refresh_sequence_pose_count(sequence)
         self.validate_sequence(sequence)
+        self.validate_variant_for_replay(sequence)
+        sequence["_robot_variant_preview"] = dict(self.last_variant_report)
         return sequence
 
     def validate_sequence(self, sequence: Mapping[str, Any]) -> bool:
@@ -88,9 +92,19 @@ class SequencePlayer:
                 pose["replay_multi_turn_continuous_raw"] = {}
         return prepared
 
+    def validate_variant_for_replay(self, sequence: Mapping[str, Any]) -> bool:
+        """Allow legacy actions for simulation, but require an exact variant match for real motion."""
+
+        report = action_variant_report(sequence, self.config)
+        self.last_variant_report = report
+        if is_real_mode_controller(self.controller) and not report["匹配"]:
+            raise ValueError(report["问题"] + " 该动作只能用于仿真或 dry-run 预览。")
+        return True
+
     def play(self, sequence: Mapping[str, Any], loop: bool = False, speed: float = 1.0) -> bool:
         speed = normalize_playback_speed(speed)
         self.validate_sequence(sequence)
+        self.validate_variant_for_replay(sequence)
         sequence = self.prepare_sequence_for_replay(sequence)
         self.current_sequence_name = str(sequence.get("name", "未命名动作"))
         self.stopped = False
@@ -233,15 +247,19 @@ class SequencePlayer:
             self._emit_progress(frame, "action_playback", pose=pose, frame_index=frame_index, frame_count=len(frames))
             self._sleep_with_controls(per_frame_sleep)
 
-        gripper = pose.get("gripper")
-        if isinstance(gripper, Mapping) and gripper.get("available") is True:
-            ok, message = call_set_gripper(self.controller, gripper)
-            self.logger.log("gripper", pose_index=pose.get("index"), gripper_target=dict(gripper), ok=ok, message=message)
-            if not ok:
-                print(f"夹爪回放警告：{message}")
+        self._play_gripper(pose)
         if wait_until_reached and not self._wait_until_pose_reached(targets, pose):
             return False
         return True
+
+    def _play_gripper(self, pose: Mapping[str, Any]) -> None:
+        gripper = pose.get("gripper")
+        if not isinstance(gripper, Mapping) or gripper.get("available") is not True:
+            return
+        ok, message = call_set_gripper(self.controller, gripper)
+        self.logger.log("gripper", pose_index=pose.get("index"), gripper_target=dict(gripper), ok=ok, message=message)
+        if not ok:
+            print(f"夹爪回放警告：{message}")
 
     def _play_synchronized_pass_through(
         self,
@@ -336,6 +354,8 @@ class SequencePlayer:
                     self.logger.log("limit_or_move_error", pose_index=waypoints[segment_index + 1].get("index"), error=message)
                     print(f"动作停止：{message}")
                     return False
+                if step == steps:
+                    self._play_gripper(waypoints[segment_index + 1])
                 last_frame = frame
                 self._emit_progress(
                     frame,
@@ -356,12 +376,6 @@ class SequencePlayer:
         if last_frame is not None and is_real_mode_controller(self.controller):
             if not self._wait_until_pose_reached(final_targets, final_pose):
                 return False
-        gripper = final_pose.get("gripper")
-        if isinstance(gripper, Mapping) and gripper.get("available") is True:
-            ok, message = call_set_gripper(self.controller, gripper)
-            self.logger.log("gripper", pose_index=final_pose.get("index"), gripper_target=dict(gripper), ok=ok, message=message)
-            if not ok:
-                print(f"夹爪回放警告：{message}")
         return True
 
     def _play_cinematic_pass_through(self, poses: list[Mapping[str, Any]], start_index: int, speed: float) -> bool:
@@ -455,6 +469,8 @@ class SequencePlayer:
                     self.logger.log("limit_or_move_error", pose_index=waypoints[segment_index + 1].get("index"), error=message)
                     print(f"动作停止：{message}")
                     return False
+                if step == steps:
+                    self._play_gripper(waypoints[segment_index + 1])
                 last_frame = frame
                 self._emit_progress(frame, "cinematic_pass_through", pose=waypoints[segment_index + 1], frame_index=frame_index, frame_count=frame_total)
                 if frame_index < frame_total and per_frame_sleep > 0:
@@ -465,12 +481,6 @@ class SequencePlayer:
         if last_frame is not None and is_real_mode_controller(self.controller):
             if not self._wait_until_pose_reached(final_targets, final_pose):
                 return False
-        gripper = final_pose.get("gripper")
-        if isinstance(gripper, Mapping) and gripper.get("available") is True:
-            ok, message = call_set_gripper(self.controller, gripper)
-            self.logger.log("gripper", pose_index=final_pose.get("index"), gripper_target=dict(gripper), ok=ok, message=message)
-            if not ok:
-                print(f"夹爪回放警告：{message}")
         return True
 
     def print_summary(self, sequence: Mapping[str, Any]) -> None:

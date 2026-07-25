@@ -8,8 +8,9 @@
 
 - 关节命名、舵机 ID、单圈/多圈关节约定。
 - `joint_scales`、多圈关节处理和部分标定字段的资料来源说明。
-- `URDF运动学仿真/urdf/soarmoce_urdf.urdf`。
-- `URDF运动学仿真/meshes/*.STL`。
+- `URDF运动学仿真/urdf/v1/soarmoce_urdf.urdf` 与
+  `URDF运动学仿真/urdf/v2/soarmoce_urdf.urdf`。
+- `URDF运动学仿真/meshes/v1/` 与 `URDF运动学仿真/meshes/v2/` 下的 STL。
 
 这些内容属于硬件兼容和模型资源层面的第三方来源信息，不应包装成本项目原创资料。发布前需要确认原始资料的许可证、署名方式、再分发限制和模型文件使用范围。
 

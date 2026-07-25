@@ -1,33 +1,30 @@
 # STEP / STL / URDF 对应关系
 
-三类文件用途不同：
+STEP 用于可编辑 CAD，STL 用于网格显示或打印参考，URDF 用于结构、仿真和运动学。
+仓库未确认可编辑 STEP，因此不要把 STL 当作 CAD 源文件。
 
-```text
-STEP：工程 CAD 模型，适合修改结构
-STL：网格模型，适合 3D 显示和打印
-URDF：机器人结构描述，适合仿真和运动学
-```
+## 型号资源
 
-当前仓库已确认存在 `URDF运动学仿真/meshes/*.STL` 和 `URDF运动学仿真/urdf/soarmoce_urdf.urdf`。未确认 STEP 文件，因此 STEP 一列写“待确认”。
+| 型号 | URDF | STL 目录 | 主链末端 |
+|---|---|---|---|
+| V1 | `URDF运动学仿真/urdf/v1/soarmoce_urdf.urdf` | `URDF运动学仿真/meshes/v1/` | `Link_6` |
+| V2 | `URDF运动学仿真/urdf/v2/soarmoce_urdf.urdf` | `URDF运动学仿真/meshes/v2/` | `Link_7` |
 
-| 部件 | STEP 文件 | STL / mesh 文件 | URDF link 名称 | 备注 |
-|---|---|---|---|---|
-| 底座 | 待确认 | `URDF运动学仿真/meshes/base.STL` | `base` | 已在 URDF 中引用 |
-| 肩部 | 待确认 | `URDF运动学仿真/meshes/shoulder.STL` | `shoulder` | J1 child link |
-| 肩抬升/大臂 | 待确认 | `URDF运动学仿真/meshes/shoulder_lift.STL` | `shoulder_lift` | J2 child link |
-| 肘部 | 待确认 | `URDF运动学仿真/meshes/elbow.STL` | `elbow` | J3 child link |
-| 腕部俯仰 | 待确认 | `URDF运动学仿真/meshes/wrist.STL` | `wrist` | J4 child link |
-| 腕部旋转 | 待确认 | `URDF运动学仿真/meshes/wrist_roll.STL` | `wrist_roll` | J5 child link，也是当前 end_link |
-| 夹爪 | 待确认 | `URDF运动学仿真/meshes/gripper.STL` | `gripper` | J6/夹爪 link |
+V1 和 V2 的模型文件不能交叉引用。具体文件以对应 URDF 中的 `<mesh filename>`
+为准；新增或替换结构件时，应同时检查 URDF 引用、模型单位、坐标原点和关节方向。
 
-URDF 关节名称和阶段四内部 key 的对应：
+## V2 link / mesh
 
-| 阶段四内部 key | URDF joint 名称 | URDF child link |
-|---|---|---|
-| shoulder_pan | `shoulder` | `shoulder` |
-| shoulder_lift | `shoulder_lift` | `shoulder_lift` |
-| elbow_flex | `elbow` | `elbow` |
-| wrist_flex | `wrist` | `wrist` |
-| wrist_roll | `wrist_roll` | `wrist_roll` |
-| gripper | `gripper` | `gripper` |
+| URDF link | mesh |
+|---|---|
+| `base_link` | `URDF运动学仿真/meshes/v2/base_link.stl` |
+| `Link_2` | `URDF运动学仿真/meshes/v2/Link_2.stl` |
+| `Link_3` | `URDF运动学仿真/meshes/v2/Link_3.stl` |
+| `Link_4` | `URDF运动学仿真/meshes/v2/Link_4.stl` |
+| `Link_5` | `URDF运动学仿真/meshes/v2/Link_5.stl` |
+| `Link_6` | `URDF运动学仿真/meshes/v2/Link_6.stl` |
+| `Link_7` | `URDF运动学仿真/meshes/v2/Link_7.stl` |
 
+主关节名称统一为 `j10` 到 `j15`。型号配置
+`配置/robot_v1.yaml` 与 `配置/robot_v2.yaml` 是 URDF、关节映射和 target frame 的
+权威来源。

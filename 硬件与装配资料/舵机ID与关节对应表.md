@@ -1,32 +1,20 @@
 # 舵机 ID 与关节对应表
 
-本表必须与阶段四 `真实舵机控制/真实配置.yaml`、`真实舵机控制/标定工具_calibration_utils.py` 和 `真实舵机控制/角度映射_angle_mapper.py` 保持一致。
+当前 V2 主链使用 J10-J15，默认型号配置为 `配置/robot_v2.yaml`。
 
-| 关节编号 | 内部 key | 中文名称 | 舵机 ID | 模式 | 是否多圈 | joint_scale | 标定零点字段 | 备注 |
-|---|---|---|---:|---|---|---:|---|---|
-| J1 | shoulder_pan | 底座旋转 | 1 | 单圈 | 否 | 1.0 | zero_present_raw | 单圈目标 raw 会包裹到 0-4095，并受 range_min/range_max 约束 |
-| J2 | shoulder_lift | 肩部抬升 | 2 | 多圈 | 是 | -5.3 | home_present_raw | 多圈 absolute raw，phase=28 |
-| J3 | elbow_flex | 肘部弯曲 | 3 | 多圈 | 是 | 5.6 | home_present_raw | 多圈 absolute raw，phase=28 |
-| J4 | wrist_flex | 腕部俯仰 | 4 | 单圈 | 否 | -1.0 | zero_present_raw | 单圈目标 raw 会包裹到 0-4095，并受 range_min/range_max 约束 |
-| J5 | wrist_roll | 腕部旋转 | 5 | 多圈 | 是 | 1.0 | home_present_raw | 多圈 absolute raw，phase=28 |
-| J6 | gripper | 夹爪 | 6 | 夹爪 | 否 | - | range_min/range_max | 夹爪不进入 5 轴 IK，按开合范围控制 |
+| 显示名 | key | 舵机 ID | 机构 | 单位 | V2 joint scale | 模式 |
+|---|---|---:|---|---|---:|---|
+| J10 底盘导轨 | `j10` | 10 | 线性导轨 | mm | 28.8 | 多圈 |
+| J11 底座旋转 | `j11` | 11 | 1:5 | deg | 5.0 | 多圈 |
+| J12 肩部抬升 | `j12` | 12 | 反向 1:28 | deg | -28.0 | 多圈、动态 raw 可达 |
+| J13 肘部弯曲 | `j13` | 13 | 1:13 | deg | 13.0 | 多圈、动态 raw 可达 |
+| J14 腕部俯仰 | `j14` | 14 | 直连 1:1 | deg | 1.0 | 多圈 |
+| J15 腕部旋转 | `j15` | 15 | 直连 1:1 | deg | 1.0 | 多圈 |
+| J16 夹爪 | `gripper` | 16 | 可选 | % | - | 单圈预留 |
 
-固定多圈关节：
+V2 的 J12/J13 是 `raw_reachable_joints`。有效逻辑范围必须根据当前 Home、上表传动
+映射和绝对 raw 上限 `±30719` 动态计算，不能只看静态配置，也不能绕过。
 
-```text
-J2 shoulder_lift
-J3 elbow_flex
-J5 wrist_roll
-```
-
-固定协议参数：
-
-```text
-RAW_COUNTS_PER_REV = 4096
-MULTI_TURN_PHASE_VALUE = 28
-MULTI_TURN_ABSOLUTE_RAW_LIMIT = 30719
-POSITION_MODE_VALUE = 0
-```
-
-CSV 版本见 `表格/舵机ID表.csv`。
-
+V1 的映射和模型只以 `配置/robot_v1.yaml` 为准。标定必须携带准确的
+`_meta.robot_variant`，动作必须携带准确的顶层 `robot_variant`；相应字段缺失、未知或
+与当前型号不匹配时，只允许仿真或 `dry_run` 预览。

@@ -5,7 +5,7 @@
 ## 基本原则
 
 - 系统 Python 不跑项目；进入 `momo_rebot` 环境后再执行命令。
-- 标定工具只读取 `Present_Position` 并更新 `标定文件.json`。
+- 标定工具只读取 `Present_Position` 并更新被忽略的 `标定/current.local.json`。
 - 当前角度标定不写 `Goal_Position`，不移动舵机。
 - 断电重接不会自动把当前姿态当零位；只有你明确运行标定工具时，才会更新逻辑角度与 raw 的对应关系。
 
@@ -45,7 +45,7 @@ python 真实舵机控制/标定当前角度_calibrate_current_angle.py \
 - 读取每个关节当前 `Present_Position`。
 - 你告诉程序“当前物理姿态应该是多少逻辑角度”。
 - 程序反算并更新对应关节的 `home_present_raw`。
-- 保存前自动备份旧 `标定文件.json`。
+- 保存前自动备份旧 `标定/current.local.json`。
 
 当前角度标定适合 J10-J15。J14 已统一为多圈软件限位，但它仍然是直连关节，`joint_scale=1.0`，没有减速。
 

@@ -9,6 +9,19 @@
 - 支持一个简单的 PyBullet 3D 查看窗口。
 - 不直接控制真实舵机。
 
+## V1 / V2 模型
+
+默认型号为 V2。型号配置是模型路径和末端坐标系的权威来源：
+
+| 型号 | 配置 | URDF | mesh | target frame |
+|---|---|---|---|---|
+| V1 | `配置/robot_v1.yaml` | `urdf/v1/soarmoce_urdf.urdf` | `meshes/v1/` | `Link_6` |
+| V2 | `配置/robot_v2.yaml` | `urdf/v2/soarmoce_urdf.urdf` | `meshes/v2/` | `Link_7` |
+
+表中的 URDF 和 mesh 路径均相对于本目录。默认 V2 由受版本控制的真实配置安全基线
+选择；临时选择 V1 时，在被忽略的 `真实舵机控制/真实配置.local.yaml` 中设置
+`robot.variant: V1`。环境变量不提供型号选择接口。不要跨型号混用 URDF 与 mesh。
+
 ## 为什么前面阶段没用 URDF
 
 阶段三只做“逻辑角度仿真”，重点是姿态、动作库和安全范围。
@@ -59,17 +72,17 @@ python3 逆运动学_ik.py --xyz 0.20 0.05 0.18 --rpy 0 0 0
 
 如果误差超过 `运动学配置.yaml` 里的 `max_ee_pos_err_m`，脚本会返回失败，不会假装成功。
 
-## target_frame / Link_6 是什么
+## target_frame 是什么
 
 `target_frame` 是 FK/IK 计算时使用的末端坐标系。
 
 本项目基于通用运动学流程，使用：
 
 ```yaml
-target_frame: Link_6
+target_frame: Link_7
 ```
 
-也就是说，阶段五把新 URDF 里的 `Link_6` 当作主要末端，不把 gripper 放进 6 关节 IK 主链路。
+V2 把 `Link_7` 当作主要末端；V1 使用 `Link_6`。两者都不把 gripper 放进 6 关节 IK 主链路。
 
 ## 为什么 SDK 关节名和 URDF 关节名要映射
 
@@ -107,10 +120,11 @@ joint_name_aliases:
 如果只是检查 URDF 外观、旋转视角、缩放模型，推荐直接用 VS Code 的 `URDF Visualizer: 预览 URDF/Xacro` 打开：
 
 ```text
-URDF运动学仿真/urdf/soarmoce_urdf.urdf
+URDF运动学仿真/urdf/v2/soarmoce_urdf.urdf
 ```
 
-这个 URDF 里的 STL 路径是 `../meshes/*.STL`，从 `urdf/` 目录下打开时可以正确找到模型文件。
+V2 URDF 引用 `meshes/v2/` 下的 STL；V1 URDF 引用 `meshes/v1/`。从各自型号目录
+打开时可正确找到模型文件。
 
 PyBullet 查看器更适合做 FK / IK 和动作播放验证：
 
@@ -212,7 +226,7 @@ pip install numpy pybullet pyyaml
 检查 `运动学配置.yaml`：
 
 ```yaml
-urdf_path: urdf/soarmoce_urdf.urdf
+urdf_path: urdf/v2/soarmoce_urdf.urdf
 ```
 
 并确认文件存在。
@@ -225,7 +239,7 @@ urdf_path: urdf/soarmoce_urdf.urdf
 python3 URDF检查_urdf_inspector.py
 ```
 
-看 `missing_meshes` 字段。URDF 里 STL 路径是相对 `urdf/` 目录的 `../meshes/...`。
+看 `missing_meshes` 字段，并确认 URDF 与 `meshes/v1/` 或 `meshes/v2/` 属于同一型号。
 
 ### IK 无解
 
@@ -259,7 +273,7 @@ python3 测试脚本_test/07_真实移动前检查与执行.py --xyz -0.01829269
 
 ```bash
 mamba activate momo_rebot
-cd "/Users/ke/Library/Mobile Documents/com~apple~CloudDocs/Code/机械臂"
+cd <repository-root>
 ```
 
 运行：

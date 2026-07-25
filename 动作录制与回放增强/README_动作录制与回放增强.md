@@ -8,7 +8,7 @@
 
 ```bash
 mamba activate momo_rebot
-cd "/Users/ke/Library/Mobile Documents/com~apple~CloudDocs/Code/机械臂/动作录制与回放增强"
+cd <repository-root>/动作录制与回放增强
 python -V
 ```
 
@@ -30,9 +30,11 @@ python -V
 
 `raw_present_position` 是舵机直接读到的原始位置。它用于排查标定、角度映射和硬件状态问题。角度看起来一样时，raw 可以帮助判断舵机实际在哪个位置。
 
-## 为什么 J10/J12/J13/J15 要保存 multi_turn_state
+## 为什么 J10-J15 要保存 multi_turn_state
 
-J10 底盘导轨、J12 肩部抬升、J13 肘部弯曲、J15 腕部旋转是多圈关节。多圈关节不能简单把 raw 对 4096 取模，否则可能回放到错误圈数。阶段六保存 continuous_raw，让支持该能力的阶段四控制器可以按原圈数回放。
+V2 的 J10-J15 都是多圈关节。多圈关节不能简单把 raw 对 4096 取模，否则可能
+回放到错误圈数。阶段六保存 continuous_raw，让支持该能力的阶段四控制器可以按原
+圈数回放。
 
 ## 为什么不能简单播放角度
 
@@ -72,7 +74,8 @@ python 动作主程序_main.py --mode dry-run
 python 动作主程序_main.py --mode 真实
 ```
 
-真实模式播放动作前仍会要求输入 `我确认机械臂周围安全`。
+真实模式播放动作前仍会要求输入 `我确认机械臂周围安全`，但该确认不能代替
+`docs/V2真机验收.md` 中每个硬件阶段的单独明确批准。
 
 输入：
 
@@ -131,13 +134,16 @@ python 示教模式_teach_mode.py --pose-count 3 --output 动作库/我的动作
 - `gripper`：夹爪状态，不可用时写 `{"available": false}`。
 - `replay_joint_targets_deg`：安全处理后的回放角度。
 - `replay_multi_turn_continuous_raw`：多圈关节回放所需 continuous raw，不做 4096 取模。
+- 顶层 `robot_variant`：录制动作的准确型号。只有与当前型号完全匹配才允许真机回放；
+  标定使用的则是 `_meta.robot_variant`，两者不要混淆。
 
 JSON 写入时使用 `ensure_ascii=False`，中文会正常显示。
 
 ## 常见错误
 
 - 动作不存在：先输入 `动作列表` 确认名称。
-- 动作格式不对：确认 `schema_version`、`joint_order` 和 `poses` 是否完整。
+- 动作格式不对：确认 `schema_version`、`joint_order`、顶层 `robot_variant` 和 `poses` 是否完整。
+- 型号缺失、未知或不匹配：只允许仿真或 `dry_run` 预览，不得通过改写旧文件绕过。
 - 控制器不支持 continuous_raw：系统会降级为角度回放并打印警告。
 - 夹爪不可用：系统跳过夹爪，不中断关节动作。
 - 限位错误：停止播放，检查动作文件里的角度是否超出配置范围。
@@ -150,3 +156,4 @@ JSON 写入时使用 `ensure_ascii=False`，中文会正常显示。
 4. 真实模式必须输入 `我确认机械臂周围安全`。
 5. 手放在急停或电源附近，发现异常立刻停止或断电。
 6. 阶段六不会直接写 Feetech 舵机，真实动作必须通过阶段四控制器执行。
+7. V2 J12/J13 还必须通过依据当前 Home 与 `±30719` 计算的动态 raw 可达范围。

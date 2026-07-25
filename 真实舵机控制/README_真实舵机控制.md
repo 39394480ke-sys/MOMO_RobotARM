@@ -23,8 +23,8 @@
 阶段四新增真实控制器，但姿态数组顺序仍然固定为：
 
 ```text
-j11, j12, j13, j14, j15
-J11_底座旋转, J12_肩部抬升, J13_肘部弯曲, J14_腕部俯仰, J15_腕部旋转
+j10, j11, j12, j13, j14, j15
+J10_底盘导轨, J11_底座旋转, J12_肩部抬升, J13_肘部弯曲, J14_腕部俯仰, J15_腕部旋转
 ```
 
 `真实主程序_main.py` 会复用阶段三的：
@@ -66,7 +66,12 @@ dry-run 主程序不需要这些依赖。标定程序和真实控制需要这些
 
 安全原则：没有完整标定，不允许真实移动。
 
-`connect()` 每次只读取 `标定文件.json`，不会重新标定，不会要求用户移动机械臂，也不会覆盖 `home_present_raw / zero_present_raw`。如果零点不对，请退出主程序后运行 `标定程序_calibrate.py`。
+`connect()` 只读取被忽略的 `标定/current.local.json`，不会重新标定，不会要求用户
+移动机械臂，也不会覆盖 `home_present_raw / zero_present_raw`。仓库中的
+`标定/v1.example.json` 和 `标定/v2.example.json` 只是结构模板，绝不能用于真机。
+
+标定必须在 `_meta.robot_variant` 携带准确型号。只有该字段与当前型号完全匹配的
+标定才能进入真机路径；字段缺失、未知值或型号不匹配时，只允许仿真或 `dry_run` 预览。
 
 ## 5. 什么是 raw 值
 
@@ -100,9 +105,9 @@ J10=0mm, J11=0deg, J12=20deg, J13=30deg, J14=10deg, J15=0deg
 
 ```text
 j11: 5.0
-j12: -5.3
-j13: 5.6
-j14: -1.0
+j12: -28.0
+j13: 13.0
+j14: 1.0
 j15: 1.0
 ```
 
@@ -123,6 +128,10 @@ goal_raw = home_present_raw + relative_raw
 
 并检查是否在 `-30719 到 30719`。
 
+V2 还把 J12/J13 声明为 `raw_reachable_joints`。它们的有效逻辑范围根据当前 Home、
+传动映射和绝对 raw 上限 `±30719` 动态计算；静态关节配置不能放宽该范围，调用方也
+不得绕过。
+
 ## 8. 为什么 J10-J15 要特殊处理
 
 SOARM MOCE 中固定多圈关节是：
@@ -142,8 +151,24 @@ J15 j15 = 腕部旋转
 
 ## 9. 启动步骤
 
+### 配置与型号
+
+默认型号是 V2。`配置/robot_v1.yaml` 对应 V1，`配置/robot_v2.yaml` 对应 V2。
+配置按以下顺序加载：
+
+1. 受版本控制的 `真实配置.yaml`
+2. 被 Git 忽略的 `真实配置.local.yaml`
+3. 由合并后 `robot.variant` 选中的权威型号 profile
+4. 运行参数环境变量
+
+默认 V2 由受控基线选择。临时选择 V1/V2 时，在被忽略的 `真实配置.local.yaml`
+设置 `robot.variant`；环境变量不提供型号选择，只能通过 `ARM_ROBOT_PORT`、
+`ARM_SERVO_BACKEND` 和 `ARM_REAL_DRY_RUN` 覆盖运行参数。受控默认保持
+`transport.port: ""` 和 `dry_run: true`。profile 中的关节、传动、限位和 raw 可达
+关节等硬件字段具有更高优先级，不能被本地文件覆盖。
+
 ```bash
-cd 机械臂/真实舵机控制
+cd <repository-root>/真实舵机控制
 python 真实主程序_main.py
 ```
 
@@ -191,7 +216,7 @@ python 真实主程序_main.py
 - 标定文件中的零点正确。
 - 单圈关节 `range_min/range_max` 正确。
 - 多圈关节 `home_present_raw` 正确。
-- `joint_scales` 没有改错，特别是 `j12=-5.3` 和 `j14=-1.0`。
+- `joint_scales` 没有改错，特别是 `j12=-28.0`、`j13=13.0`；J14 的反向保留在标定 `direction=-1`。
 - 机械臂周围没有人和障碍物。
 - 电源稳定，随时可以断电。
 
@@ -233,49 +258,38 @@ lerobot / feetech-servo-sdk
 = 用来和飞特 Feetech 舵机通信的驱动库
 
 标定程序_calibrate.py
-= 使用这些驱动库连接舵机，读取/写入寄存器，生成 标定文件.json
+= 经现场批准后使用驱动库连接舵机，并生成本地标定
 
 真实控制器
-= 每次连接时读取 标定文件.json，然后控制机械臂
+= 每次连接时读取 标定/current.local.json，然后控制机械臂
 ```
 
-重新标定：
+以下标定和寄存器命令会接触真实硬件，只有在 `docs/V2真机验收.md` 对应阶段获得
+单独明确批准后才可执行；本轮文档更新没有执行它们。先用 `--dry-run` 验证参数：
 
 ```bash
 mamba activate momo_rebot
-cd 机械臂/真实舵机控制
-python 标定程序_calibrate.py
-```
-
-常用参数：
-
-```bash
+cd <repository-root>/真实舵机控制
 python 标定程序_calibrate.py --dry-run
-python 标定程序_calibrate.py --apply-registers
-python 标定程序_calibrate.py --output 标定文件.json
-python 标定程序_calibrate.py --port /dev/tty.usbmodemXXXX
 ```
 
-只应用已有标定，不重新生成标定文件：
+已批准真实阶段中的输出路径必须是被忽略的本地文件：
 
 ```bash
-mamba activate momo_rebot
-cd 机械臂/真实舵机控制
-python 标定应用_apply_calibration.py
-python 标定应用_apply_calibration.py --port /dev/tty.usbmodemXXXX
-python 标定应用_apply_calibration.py --calibration 标定文件.json
+python 标定程序_calibrate.py --output 标定/current.local.json
 ```
 
-`标定应用_apply_calibration.py` 只把已有标定文件中的寄存器配置写入舵机，不重新读取 `home_present_raw`，不重新计算 `zero_present_raw`，不重新记录 `range_min/range_max`，不修改标定文件内容。
+`标定应用_apply_calibration.py` 会写舵机寄存器，也必须单独批准。它只应用已有标定，
+不重新读取 Home，不重新计算零点或范围，也不修改标定文件。
 
 ## 13. 标定文件说明
 
-`标定文件.json` 是当前机械臂标定文件的初始模板。
+`标定/current.local.json` 是当前机械臂的实际标定文件，默认被 Git 忽略。
 
 重要说明：
 
-- 这些值来自当前硬件标定记录。
-- 不保证适合每一台机械臂。
+- example 文件仅说明结构，不包含可用于真机的现场事实。
+- 每台机械臂必须建立自己的本地标定。
 - 真机移动前仍然要确认自己的机械臂零点、方向、限位。
 - `dry_run: true` 时不会真的写舵机。
 - 把 `dry_run` 改成 `false` 前，必须确认串口、ID、零点、方向、限位都正确。
@@ -314,7 +328,8 @@ Max_Position_Limit = 0
 gripper
 ```
 
-J11 已改为 1:5 减速多圈底座旋转，J14 已改为直连 1:1 多圈腕部俯仰。旧标定文件里如果仍有 J11/J14 单圈记录，真实移动前请重新运行或修正标定，生成新的 `home_present_raw`。
+J11 为 1:5，J12 为 -1:28，J13 为 1:13，J14/J15 为直连 1:1。旧标定不能
+通过手工改型号继续使用；只允许在仿真或 `dry_run` 中预览，再按现场审批流程重新标定。
 
 夹爪单圈标定才会使用 `zero_present_raw / range_min / range_max`。
 
@@ -332,4 +347,5 @@ J11 已改为 1:5 减速多圈底座旋转，J14 已改为直连 1:1 多圈腕�
 
 `真实模式需要安装 lerobot 和 feetech-servo-sdk`：默认 dry-run 不需要这两个依赖；真实连接硬件时需要在 `momo_rebot` 环境中安装。
 
-`缺少标定文件或标定不完整，请先运行 标定程序_calibrate.py`：真实模式 connect 前会检查标定完整性；dry-run 可以继续做映射检查。
+`缺少标定文件或标定不完整`：真实模式 connect 前会检查
+`标定/current.local.json` 的完整性和型号；dry-run 可以继续做映射检查。

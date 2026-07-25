@@ -1,158 +1,102 @@
 # 机械臂导轨版使用教程（URDF / GUI / Web）
 
-本文档对应当前“导轨 + 机械臂”版本。新的 URDF 已集成到 `URDF运动学仿真/urdf/soarmoce_urdf.urdf`，mesh 已放入 `URDF运动学仿真/meshes/`。
+本文档对应当前双型号结构。默认型号是 V2；V1 仅用于兼容已有模型、标定和动作。
 
-## 1. 当前关节和舵机编号
+## 1. 选择机器人型号
 
-为了避开 Feetech 舵机出厂常见 ID 1、2，本项目从 10 开始编号。
+型号配置是硬件映射和模型路径的权威来源：
 
-| 逻辑 key | 显示名 | 舵机 ID | 机构 | GUI/Web 单位 | URDF joint |
-|---|---:|---:|---|---|---|
-| `j10` | J10 底盘导轨 | 10 | 16mm 外径、5mm 导程滚珠丝杠，舵机直连 | mm | prismatic |
-| `j11` | J11 底座旋转 | 11 | 旋转关节 | deg | revolute |
-| `j12` | J12 肩部抬升 | 12 | 旋转关节 | deg | revolute |
-| `j13` | J13 肘部弯曲 | 13 | 旋转关节 | deg | revolute |
-| `j14` | J14 腕部俯仰 | 14 | 旋转关节 | deg | revolute |
-| `j15` | J15 腕部旋转 | 15 | 旋转关节 | deg | revolute |
-| `gripper` | J16 夹爪预留 | 16 | 夹爪 | % | 不参与主 IK |
+| 型号 | 配置 | URDF | TCP |
+|---|---|---|---|
+| V1 | `配置/robot_v1.yaml` | `URDF运动学仿真/urdf/v1/soarmoce_urdf.urdf` | `Link_6` |
+| V2（默认） | `配置/robot_v2.yaml` | `URDF运动学仿真/urdf/v2/soarmoce_urdf.urdf` | `Link_7` |
 
-兼容说明：Web/GUI 桥接层仍能识别旧 key，例如 `shoulder_pan` 会自动映射到 `j11`，但新动作、新姿态和新配置建议统一使用 `j10` 到 `j15`。
+V1 mesh 位于 `URDF运动学仿真/meshes/v1/`，V2 mesh 位于
+`URDF运动学仿真/meshes/v2/`。不要把两个型号的 URDF、mesh、标定或动作混用。
 
-## 2. 导轨换算
-
-导轨是舵机直连滚珠丝杠，导程 5mm/rev。
-
-```text
-1 圈舵机 = 5 mm
-1 mm = 360 / 5 = 72 deg 舵机转角
-Feetech 4096 raw = 1 圈 = 5 mm
-1 mm = 4096 / 5 = 819.2 raw
-```
-
-所以 `真实舵机控制/真实配置.yaml` 里：
+默认 V2 由受版本控制的安全基线选择。临时切换型号时，在被 Git 忽略的
+`真实舵机控制/真实配置.local.yaml` 中写：
 
 ```yaml
-j10: 72.0
+robot:
+  variant: V1
 ```
 
-当前真实安全行程先设为 `-35mm` 到 `35mm`。原因是现有多圈 raw 安全上限是 `30719`，按 5mm/rev 约等于 37.5mm。URDF 仿真仍保留 `-100mm` 到 `100mm` 的导轨范围。
+只允许精确的 `V1` 或 `V2`。环境变量不提供型号选择接口。
 
-## 3. URDF 是否可用
+配置按下列顺序合并，后者优先：
 
-已通过项目自带静态检查：
+1. 受版本控制的 `真实舵机控制/真实配置.yaml`
+2. 被 Git 忽略的 `真实舵机控制/真实配置.local.yaml`
+3. 由 `robot.variant` 选中的 `配置/robot_v1.yaml` 或 `配置/robot_v2.yaml`
+4. 运行参数环境变量：`ARM_ROBOT_PORT`、`ARM_SERVO_BACKEND`、`ARM_REAL_DRY_RUN`
+
+profile 会强制写回关节、传动、限位和 raw 可达关节等硬件权威字段，因此本地覆盖
+不能修改这些字段。受版本控制的默认配置保持串口为空且 `dry_run: true`。实际串口、
+现场标定和其他机器相关值只能写入被忽略的本地配置或运行参数环境变量，不能提交。
+
+## 2. V2 关节
+
+| key | 舵机 ID | 机构 | GUI/Web 单位 |
+|---|---:|---|---|
+| `j10` | 10 | 线性导轨 | mm |
+| `j11` | 11 | 底座旋转，1:5 | deg |
+| `j12` | 12 | 肩部抬升，1:28 | deg |
+| `j13` | 13 | 肘部弯曲，1:13 | deg |
+| `j14` | 14 | 腕部俯仰，1:1 | deg |
+| `j15` | 15 | 腕部旋转，1:1 | deg |
+| `gripper` | 16 | 可选夹爪 | % |
+
+主关节顺序固定为 `j10, j11, j12, j13, j14, j15`。V2 的 J12/J13 属于
+`raw_reachable_joints`：有效逻辑范围必须由当前 Home、传动映射和绝对 raw 上限
+`±30719` 动态计算，不能只采用静态配置限位，也不能绕过此检查。
+
+## 3. 仿真、GUI 与 Web
+
+先在仓库根目录检查当前型号的 URDF：
 
 ```bash
-cd /Users/ke/Library/Mobile\ Documents/com~apple~CloudDocs/Code/机械臂
-python3 URDF运动学仿真/URDF检查_urdf_inspector.py
+mamba run -n momo_rebot python URDF运动学仿真/URDF检查_urdf_inspector.py
 ```
 
-检查结果包括：
-
-- 7 个 link：`base_link` 到 `Link_6`
-- 6 个可动 joint：`j10` 到 `j15`
-- `j10` 是 prismatic 导轨
-- `j11` 到 `j15` 是 revolute 旋转关节
-- mesh 文件全部存在
-- target frame 是 `Link_6`
-
-注意：当前本机 `pybullet` 安装失败，所以还不能在这个 Python 环境里跑真实 PyBullet FK/IK 加载测试。静态 URDF/XML/mesh/映射检查已经通过。
-
-## 4. GUI 控制端怎么用
-
-启动：
+启动 GUI：
 
 ```bash
 cd GUI图形界面
-python3 GUI主程序_main.py
+mamba run -n momo_rebot python GUI主程序_main.py
 ```
 
-推荐流程：
-
-1. 先保持 `dry_run` 模式。
-2. 打开“设置”页，确认模式、串口、依赖状态。
-3. 打开“快速控制”页。
-4. 点连接。
-5. 用 J10-J15 行测试小步移动。
-
-快速控制页单位：
-
-- `j10` 显示和输入是 `mm`
-- `j11-j15` 显示和输入是 `deg`
-- 步进下拉里显示 `deg/mm`，意思是同一个数值：对 J10 是毫米，对旋转轴是角度
-
-真实模式前必须做：
-
-1. 把 `真实舵机控制/真实配置.yaml` 中串口改成当前设备。
-2. 确认导轨舵机 ID 是 10，往上依次是 11 到 15。
-3. 重新跑标定，至少要补齐 `j10` 标定。
-4. 在 GUI 中先用 0.5 或 1 的小步测试。
-
-## 5. Web 控制端怎么用
-
-启动：
+启动 Web 控制台：
 
 ```bash
 cd Web控制台
-python3 启动Web服务.py
+mamba run -n momo_rebot python 启动Web服务.py
 ```
 
-默认地址：
+浏览器打开 `http://127.0.0.1:8010/web/`。GUI 和 Web 首次操作均保持
+`dry_run`；J10 的数值单位为毫米，J11-J15 为输出端角度。
 
-```text
-http://127.0.0.1:8010
-```
+## 4. 标定和动作兼容门
 
-Web 页面会显示 J10-J15。操作建议：
+真实标定只使用被忽略的 `真实舵机控制/标定/current.local.json`。仓库中的
+`标定/v1.example.json` 和 `标定/v2.example.json` 只是结构模板，绝不能用于真机。
 
-1. 先点连接，使用默认 dry-run。
-2. 在关节控制区测试 `j10` 小步，例如 1mm。
-3. 在 FK/IK 区输入 6 个值，顺序是 `j10, j11, j12, j13, j14, j15`。
-4. 末端笛卡尔 jog 会调用 IK，再输出目标关节。
-5. 真实模式下需要确认文本：`我确认机械臂周围安全`。
+标定文件必须在 `_meta.robot_variant` 写准确型号；动作文件必须在顶层
+`robot_variant` 写准确型号。只有相应字段与当前型号完全匹配的文件才能进入真机路径；
+字段缺失、未知值或型号不匹配时，只允许仿真或 `dry_run` 预览。不要为了通过检查而
+改写旧文件的型号。
 
-Web API 常用接口：
+## 5. 真机验收边界
 
-```text
-POST /api/v1/session/connect
-POST /api/v1/motion/joint-step
-POST /api/v1/motion/joints
-POST /api/v1/kinematics/fk
-POST /api/v1/kinematics/ik
-POST /api/v1/session/stop
-```
+本教程不授权任何硬件动作。每一个实际硬件阶段都必须单独、明确批准，并严格按以下
+顺序进行：
 
-`joint-step` 字段名仍叫 `delta_deg`，这是历史接口名；对 `j10` 实际解释为 mm。
+1. ping
+2. 只读 raw
+3. 建立并核对机械零位
+4. 单关节微小运动
+5. 停止并关闭扭矩
+6. 低速多关节运动
 
-## 6. 标定和真实运行
-
-现在标定文件已经迁移到 `j11-j15`，ID 已改为 11-15。`j10` 没有写入假标定项，真实模式下只要移动导轨就会被安全检查拦住，直到你完成导轨标定。
-
-建议顺序：
-
-```bash
-cd 真实舵机控制
-python3 诊断舵机总线_diagnose_bus.py
-python3 标定程序_calibrate.py
-python3 标定应用_apply_calibration.py
-```
-
-标定后检查：
-
-```bash
-cd 系统集成
-python3 标定检查.py
-```
-
-真实测试建议：
-
-1. 先 dry-run 移动 `j10 = 5mm`，应对应 `relative_raw = 4096`。
-2. 再真实模式移动 `j10 = 1mm`。
-3. 确认方向正确后再扩大到 5mm。
-4. 不要一开始直接跑 ±35mm。
-
-## 7. 维护注意
-
-- 新动作文件的 `joint_order` 必须是 `j10-j15`。
-- 旧动作文件仍是 5 轴，播放时会提示 joint_order 不匹配，这是为了防止错位播放。
-- `j16` 目前只是夹爪预留 ID，夹爪在配置中仍使用 `gripper` key。
-- 如果后续确认 Feetech 多圈 raw 可安全超过 30719，再扩大 `j10` 的真实行程范围。
+任何阶段失败都应停止，不得跳级。详细清单见
+[`docs/V2真机验收.md`](docs/V2真机验收.md)。本轮文档更新没有连接、读取或驱动真实硬件。

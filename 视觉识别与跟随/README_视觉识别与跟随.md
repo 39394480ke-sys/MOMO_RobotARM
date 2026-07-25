@@ -182,6 +182,18 @@ curl -X POST http://127.0.0.1:8010/api/v1/follow/start \
 
 摄像头打不开：检查摄像头是否被其他软件占用，或修改 `视觉配置.yaml` 里的 `camera_index`。
 
+与独立的 `momo-camera-hub` 同时运行时，应由 Camera Hub 独占物理摄像头，并让视觉服务读取它提供的 RTSP：
+
+```bash
+export ARM_VISION_SOURCE_TYPE=rtsp
+export ARM_VISION_RTSP_URL=rtsp://127.0.0.1:8554/armcam
+```
+
+RTSP 模式不会回退去抢占本地摄像头。URL 缺失、源配置错误、打开失败、读帧失败或
+旋转配置无效时，接口会返回清晰错误而不是让进程崩溃。读帧失败后，引擎会关闭当前
+源；下一次 `process` 调用会尝试重新打开/重连 RTSP，从而走 Camera Hub 的重连路径。
+这些错误不会触发机械臂动作。
+
 YuNet 权重缺失：把 `face_detection_yunet_2023mar.onnx` 放进 `weights/`。缺失时服务仍可启动，但人脸检测不可用。
 
 OpenCV 没有 `FaceDetectorYN`：安装 `opencv-contrib-python`，不要只安装 `opencv-python`。

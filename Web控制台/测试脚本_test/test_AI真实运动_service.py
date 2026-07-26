@@ -254,6 +254,31 @@ class AgentRealMotionServiceTest(unittest.TestCase):
         self.assertEqual(arguments["mode"], "absolute")
         self.assertEqual(arguments["value"], 50.0)
 
+    def test_direct_joint_command_accepts_positive_chinese_numeral(self) -> None:
+        service, _bridge = make_service()
+
+        result = service._handle_agent_direct_command("让j11转动正三度")
+
+        arguments = result["pending_action"]["arguments"]
+        self.assertEqual(arguments["joint_name"], "j11")
+        self.assertEqual(arguments["mode"], "relative")
+        self.assertEqual(arguments["value"], 3.0)
+
+    def test_agent_ask_uses_direct_joint_parser_before_model_fallback(self) -> None:
+        service, _bridge = make_service()
+        service._handle_agent_demo_message = lambda _content: None
+        service._handle_poster_demo_message = lambda _content: None
+        service._get_agent_app = lambda **_kwargs: self.fail("明确的关节指令不应进入模型语义解析")
+
+        result = service.agent_ask(
+            types.SimpleNamespace(text="让j11转动正三度", speak=False, force_new_session=True)
+        )
+
+        arguments = result["pending_action"]["arguments"]
+        self.assertEqual(arguments["joint_name"], "j11")
+        self.assertEqual(arguments["mode"], "relative")
+        self.assertEqual(arguments["value"], 3.0)
+
     def test_direct_stop_follow_is_immediate_and_never_creates_pending_action(self) -> None:
         service, _bridge = make_service()
         service.stop_follow = lambda: {"message": "视觉跟随已停止。"}

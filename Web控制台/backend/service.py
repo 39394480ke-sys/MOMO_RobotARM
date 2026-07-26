@@ -80,6 +80,25 @@ from .state_manager import SessionStateManager
 from .websocket_manager import WebSocketManager
 
 
+def _parse_agent_motion_number(token: str) -> float | None:
+    text = str(token or "").strip()
+    sign = -1.0 if text.startswith(("负", "-")) else 1.0
+    text = text.lstrip("正负+-")
+    try:
+        return sign * float(text)
+    except ValueError:
+        pass
+    digits = {"零": 0, "〇": 0, "一": 1, "二": 2, "两": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9}
+    if text in digits:
+        return sign * float(digits[text])
+    match = re.fullmatch(r"([一二两三四五六七八九]?)(十)([一二三四五六七八九]?)", text)
+    if match:
+        tens = digits.get(match.group(1), 1)
+        ones = digits.get(match.group(3), 0)
+        return sign * float(tens * 10 + ones)
+    return None
+
+
 class WebControlService:
     """Web/API 统一业务入口。"""
 
@@ -322,6 +341,9 @@ class WebControlService:
         poster_reply = self._handle_poster_demo_message(content)
         if poster_reply is not None:
             return poster_reply
+        direct_reply = self._handle_agent_direct_command(content)
+        if direct_reply is not None:
+            return direct_reply
         try:
             app = self._get_agent_app(force_new_session=bool(request.force_new_session))
             semantic_intent = app.interpret_text(content)
@@ -638,10 +660,16 @@ class WebControlService:
         if joint_match is None or not re.search(r"(旋转|转动|移动|运动|调整|增加|减少|升高|降低|设为)", content):
             return None
         joint_name = f"j{joint_match.group(1)}"
-        value_match = re.search(r"([-+]?\d+(?:\.\d+)?)\s*(毫米|mm|度|°)", content, re.IGNORECASE)
+        value_match = re.search(
+            r"([正负+-]?(?:\d+(?:\.\d+)?|[零〇一二两三四五六七八九十]+))\s*(毫米|mm|度|°)",
+            content,
+            re.IGNORECASE,
+        )
         if value_match is None:
             return None
-        value = float(value_match.group(1))
+        value = _parse_agent_motion_number(value_match.group(1))
+        if value is None:
+            return None
         unit = value_match.group(2).lower()
         if joint_name == "j10" and unit not in {"毫米", "mm"}:
             raise WebAPIError("AGENT_MOTION_REJECTED", "J10 请使用毫米。")
@@ -652,12 +680,12 @@ class WebControlService:
             return {"joint_name": joint_name, "mode": "absolute", "value": value}
         negative = bool(re.search(r"(反向|负向|逆时针|减少|降低)", content))
         positive = bool(re.search(r"(正向|顺时针|增加|升高)", content))
-        explicit_sign = value_match.group(1).startswith(("+", "-"))
+        explicit_sign = value_match.group(1).startswith(("正", "负", "+", "-"))
         if not (negative or positive or explicit_sign):
             return None
-        if negative:
+        if negative or value_match.group(1).startswith(("负", "-")):
             value = -abs(value)
-        elif positive:
+        elif positive or value_match.group(1).startswith(("正", "+")):
             value = abs(value)
         return {"joint_name": joint_name, "mode": "relative", "value": value}
 

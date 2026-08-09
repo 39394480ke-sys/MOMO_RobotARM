@@ -16,7 +16,13 @@ ensure_project_root_on_path()
 from 通用_http import HTTPJsonError, request_json_object  # noqa: E402
 
 
-ALWAYS_ALLOWED = {"get_robot_state", "stop_robot"}
+ALWAYS_ALLOWED = {
+    "get_robot_state",
+    "stop_robot",
+    "list_actions",
+    "list_poses",
+    "list_subject_lock_profiles",
+}
 
 JOINT_RULES: dict[str, dict[str, Any]] = {
     "j10": {"unit": "mm", "modes": {"relative", "absolute"}, "minimum": -50.0, "maximum": 50.0},
@@ -65,6 +71,18 @@ class SafetyPolicy:
                 return self._check_behavior(arguments)
             case "play_action":
                 return self._check_play_action(arguments)
+            case "goto_pose":
+                return self._check_named_item(arguments, "goto_pose")
+            case "run_subject_lock_profile":
+                safe = self._check_named_item(arguments, "run_subject_lock_profile")
+                operation = str(arguments.get("operation", "")).strip()
+                if operation not in {"move_to_start", "play"}:
+                    raise ValueError("run_subject_lock_profile.operation 必须是 move_to_start 或 play。")
+                safe["operation"] = operation
+                profile_id = str(arguments.get("profile_id", "")).strip()
+                if profile_id:
+                    safe["profile_id"] = profile_id
+                return safe
             case "start_face_follow" | "stop_face_follow":
                 return {}
             case _:
@@ -181,6 +199,13 @@ class SafetyPolicy:
             "speed": float(arguments.get("speed", 1.0)),
             "loop": bool(arguments.get("loop", False)),
         }
+
+    @staticmethod
+    def _check_named_item(arguments: dict[str, Any], tool_name: str) -> dict[str, Any]:
+        name = str(arguments.get("name", "")).strip()
+        if not name:
+            raise ValueError(f"{tool_name} 需要名称。")
+        return {"name": name}
 
     def _contains_forbidden_raw(self, value: Any) -> bool:
         if isinstance(value, dict):

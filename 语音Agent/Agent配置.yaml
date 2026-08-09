@@ -64,5 +64,10 @@ safety:
     - rotate_joint
     - run_robot_behavior
     - play_action
+    - goto_pose
+    - run_subject_lock_profile
+    - list_actions
+    - list_poses
+    - list_subject_lock_profiles
     - start_face_follow
     - stop_face_follow

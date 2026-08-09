@@ -1414,6 +1414,18 @@ function renderAgentPendingAction(action) {
   if (summary.speed_percent != null) values.push(["速度", `${summary.speed_percent}%`]);
   if (summary.speed != null) values.push(["播放速度", `${formatNum(summary.speed, 1)}x`]);
   if (summary.frame_count != null) values.push(["动作帧", String(summary.frame_count)]);
+  if (summary.duration_sec != null) values.push(["总时长", `${formatNum(summary.duration_sec, 2)} 秒`]);
+  if (summary.pose_name) values.push(["姿态", summary.pose_name]);
+  if (summary.description) values.push(["说明", summary.description]);
+  if (summary.profile_name) values.push(["轨迹", summary.profile_name]);
+  if (summary.operation) {
+    values.push(["操作", summary.operation === "move_to_start" ? "回到起点" : "正式播放"]);
+  }
+  if (summary.rail_start_mm != null && summary.rail_end_mm != null) {
+    values.push(["导轨范围", `${formatNum(summary.rail_start_mm, 1)} → ${formatNum(summary.rail_end_mm, 1)} mm`]);
+  }
+  if (summary.rail_speed_mm_s != null) values.push(["轨迹速度", `${formatNum(summary.rail_speed_mm_s, 2)} mm/s`]);
+  if (summary.calibration_point_count != null) values.push(["标定点", String(summary.calibration_point_count)]);
   if (Array.isArray(summary.joints) && summary.joints.length) {
     values.push(["跟随关节", summary.joints.map((joint) => String(joint).toUpperCase()).join(" / ")]);
   }
@@ -1466,7 +1478,14 @@ async function confirmAgentPendingAction(actionId) {
     const data = await postJson("/api/v1/agent/pending/confirm", { action_id: actionId }, { timeout: 70000 });
     setAgentPendingActionState(actionId, "executed", data.message || "动作已执行");
     appendAgentMessage("SYSTEM", data.message || "动作已执行。", "system");
-    await Promise.allSettled([refreshSession(), refreshState(), loadActions(), refreshFollow()]);
+    await Promise.allSettled([
+      refreshSession(),
+      refreshState(),
+      loadActions(),
+      loadPoses(),
+      loadSubjectLockStatus({ quiet: true }),
+      refreshFollow(),
+    ]);
   } catch (error) {
     setAgentPendingActionState(actionId, "invalidated", error.message || String(error));
     showError(error);

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import threading
-import types
 import unittest
 
 from Web测试路径_test_paths import ensure_web_test_paths
@@ -33,6 +32,7 @@ class FakeBridge:
         self.home_precheck_count = 0
         self.home_count = 0
         self.play_calls: list[dict] = []
+        self.pose_calls: list[str] = []
         self.stop_count = 0
         self.action_status = {"state": "idle", "name": ""}
         self.gripper_available = True
@@ -79,16 +79,52 @@ class FakeBridge:
         return {"ok": True, "message": "已回 Home", "data": {}}
 
     def get_action(self, name: str) -> dict:
-        if name != "挥手":
+        if name not in {"挥手", "0726 演示"}:
             return {"ok": False, "message": "动作不存在", "data": {}}
         return {"ok": True, "message": "动作", "data": {"name": name, "frames": [{}, {}, {}], "duration_sec": 2.0}}
 
     def list_actions(self) -> dict:
-        return {"ok": True, "message": "动作列表", "data": {"actions": [{"name": "挥手"}]}}
+        return {
+            "ok": True,
+            "message": "动作列表",
+            "data": {"actions": [{"name": "挥手"}, {"name": "0726 演示"}]},
+        }
 
     def play_action(self, name: str, speed: float, loop: bool) -> dict:
         self.play_calls.append({"name": name, "speed": speed, "loop": loop})
         return {"ok": True, "message": "播放完成", "data": {"name": name}}
+
+    def list_poses(self) -> dict:
+        return {
+            "ok": True,
+            "message": "姿态列表",
+            "data": {
+                "poses": [
+                    {
+                        "name": "展示位",
+                        "description": "面向观众",
+                        "pose": {"关节角度": [5.0, 10.0, 1.0, 2.0, 3.0, 4.0]},
+                    }
+                ]
+            },
+        }
+
+    def get_pose(self, name: str) -> dict:
+        if name != "展示位":
+            return {"ok": False, "message": "姿态不存在", "data": {}}
+        return {
+            "ok": True,
+            "message": "姿态详情",
+            "data": {
+                "name": name,
+                "description": "面向观众",
+                "pose": {"关节角度": [5.0, 10.0, 1.0, 2.0, 3.0, 4.0]},
+            },
+        }
+
+    def goto_pose(self, name: str) -> dict:
+        self.pose_calls.append(name)
+        return {"ok": True, "message": "姿态已执行", "data": {"name": name}}
 
     def stop_action(self) -> dict:
         self.action_status = {"state": "idle", "name": ""}
@@ -116,13 +152,38 @@ def make_service() -> tuple[WebControlService, FakeBridge]:
     service.recent_error = None
     service._agent_app = None
     service._agent_demo_pending_action = None
+    service._subject_lock_controller = None
+    service.subject_lock_profiles = lambda: [
+        {
+            "profile_id": "环绕_001",
+            "name": "环绕主体",
+            "rail": {"start_mm": -20.0, "end_mm": 20.0, "requested_speed_mm_s": 2.0},
+            "validation": {"valid": True},
+            "calibration_point_count": 11,
+        }
+    ]
+    service.subject_lock_profile = lambda profile_id: {
+        "profile_id": profile_id,
+        "name": "环绕主体",
+        "rail": {"start_mm": -20.0, "end_mm": 20.0, "requested_speed_mm_s": 2.0},
+        "validation": {"valid": True},
+        "calibration_points": [{}] * 11,
+    }
+    service.subject_lock_calls = []
+    service.subject_lock_move_to_start = lambda profile_id, _request: service.subject_lock_calls.append(
+        ("move_to_start", profile_id)
+    ) or {"message": "正在回到轨迹起点。"}
+    service.subject_lock_play = lambda profile_id, _request: service.subject_lock_calls.append(
+        ("play", profile_id)
+    ) or {"message": "主体锁定轨迹已启动。"}
     service._load_agent_config = lambda: {
         "robot_api": {"default_mode": "real"},
         "safety": {
             "allow_real_robot_tools": True,
             "allowed_tools": [
                 "get_robot_state", "stop_robot", "stop_face_follow", "set_gripper", "move_joint",
-                "rotate_joint", "run_robot_behavior", "play_action", "start_face_follow",
+                "rotate_joint", "run_robot_behavior", "play_action", "goto_pose",
+                "run_subject_lock_profile", "start_face_follow",
             ],
         },
     }
@@ -226,58 +287,136 @@ class AgentRealMotionServiceTest(unittest.TestCase):
         self.assertEqual(result["pending_action"]["arguments"], {"name": "挥手", "speed": 1.25, "loop": False})
         self.assertEqual(bridge.play_calls, [])
 
-    def test_direct_chinese_joint_command_creates_confirmation_without_model(self) -> None:
-        service, bridge = make_service()
-
-        result = service._handle_agent_direct_command("请将 J12 正向旋转 1 度")
-
-        self.assertEqual(result["pending_action"]["arguments"]["joint_name"], "j12")
-        self.assertEqual(result["pending_action"]["arguments"]["value"], 1.0)
-        self.assertEqual(bridge.moves, [])
-
-    def test_direct_absolute_rail_command_uses_mm_target(self) -> None:
+    def test_home_remains_a_deterministic_safety_command(self) -> None:
         service, _bridge = make_service()
 
-        result = service._handle_agent_direct_command("请把 J10 移动到 -30 毫米")
+        result = service._handle_agent_direct_command("请回 home")
 
-        arguments = result["pending_action"]["arguments"]
-        self.assertEqual(arguments["mode"], "absolute")
-        self.assertEqual(arguments["value"], -30.0)
+        self.assertEqual(result["pending_action"]["tool_name"], "run_robot_behavior")
+        self.assertEqual(result["pending_action"]["arguments"]["name"], "home")
 
-    def test_direct_rail_question_with_motion_to_is_a_command(self) -> None:
-        service, _bridge = make_service()
-
-        result = service._handle_agent_direct_command("能否控制 j10 运动到 50mm 的位置")
-
-        arguments = result["pending_action"]["arguments"]
-        self.assertEqual(arguments["joint_name"], "j10")
-        self.assertEqual(arguments["mode"], "absolute")
-        self.assertEqual(arguments["value"], 50.0)
-
-    def test_direct_joint_command_accepts_positive_chinese_numeral(self) -> None:
+    def test_joint_motion_falls_through_to_model_semantics(self) -> None:
         service, _bridge = make_service()
 
         result = service._handle_agent_direct_command("让j11转动正三度")
 
-        arguments = result["pending_action"]["arguments"]
-        self.assertEqual(arguments["joint_name"], "j11")
-        self.assertEqual(arguments["mode"], "relative")
-        self.assertEqual(arguments["value"], 3.0)
+        self.assertIsNone(result)
 
-    def test_agent_ask_uses_direct_joint_parser_before_model_fallback(self) -> None:
+    def test_action_playback_falls_through_to_model_semantics(self) -> None:
         service, _bridge = make_service()
-        service._handle_agent_demo_message = lambda _content: None
-        service._handle_poster_demo_message = lambda _content: None
-        service._get_agent_app = lambda **_kwargs: self.fail("明确的关节指令不应进入模型语义解析")
 
-        result = service.agent_ask(
-            types.SimpleNamespace(text="让j11转动正三度", speak=False, force_new_session=True)
+        result = service._handle_agent_direct_command("执行动作：0726 演示")
+
+        self.assertIsNone(result)
+
+    def test_semantic_action_name_resolves_against_library_after_model_understands_request(self) -> None:
+        service, _bridge = make_service()
+
+        result = service._handle_agent_semantic_intent(
+            {
+                "kind": "command",
+                "tool_name": "play_action",
+                "arguments": {"name": "0726演示"},
+                "missing": [],
+                "confidence": 0.98,
+                "source_text": "能不能执行那个动作？0726演示。",
+                "evidence": {"action": "0726演示"},
+            }
         )
 
-        arguments = result["pending_action"]["arguments"]
-        self.assertEqual(arguments["joint_name"], "j11")
-        self.assertEqual(arguments["mode"], "relative")
-        self.assertEqual(arguments["value"], 3.0)
+        self.assertEqual(result["pending_action"]["tool_name"], "play_action")
+        self.assertEqual(result["pending_action"]["arguments"]["name"], "0726 演示")
+
+    def test_semantic_action_misclassified_as_behavior_is_grounded_to_action_library(self) -> None:
+        service, _bridge = make_service()
+
+        result = service._handle_agent_semantic_intent(
+            {
+                "kind": "command",
+                "tool_name": "run_robot_behavior",
+                "arguments": {"name": "0726演示"},
+                "missing": [],
+                "confidence": 0.98,
+                "source_text": "能不能执行那个动作0726演示。",
+                "evidence": {"action": "0726演示"},
+            }
+        )
+
+        self.assertEqual(result["pending_action"]["tool_name"], "play_action")
+        self.assertEqual(result["pending_action"]["arguments"]["name"], "0726 演示")
+
+    def test_semantic_read_tools_return_real_libraries_without_confirmation(self) -> None:
+        service, _bridge = make_service()
+        cases = [
+            ("list_actions", "0726 演示", "actions", 0.99),
+            ("list_poses", "展示位", "poses", 0.0),
+            ("list_subject_lock_profiles", "环绕主体", "subject_lock_profiles", 0.99),
+        ]
+
+        for tool_name, expected_text, payload_key, confidence in cases:
+            result = service._handle_agent_semantic_intent(
+                {
+                    "kind": "command",
+                    "tool_name": tool_name,
+                    "arguments": {},
+                    "missing": [],
+                    "confidence": confidence,
+                    "source_text": "读取库内容",
+                    "evidence": {},
+                }
+            )
+
+            self.assertIn(expected_text, result["reply"])
+            self.assertIn(payload_key, result["raw_payload"])
+            self.assertNotIn("pending_action", result)
+
+    def test_semantic_pose_execution_creates_card_and_runs_only_after_confirmation(self) -> None:
+        service, bridge = make_service()
+
+        result = service._handle_agent_semantic_intent(
+            {
+                "kind": "command",
+                "tool_name": "goto_pose",
+                "arguments": {"name": "展示位"},
+                "missing": [],
+                "confidence": 0.99,
+                "source_text": "执行姿态展示位",
+                "evidence": {"pose": "展示位"},
+            }
+        )
+
+        action = result["pending_action"]
+        self.assertEqual(action["tool_name"], "goto_pose")
+        self.assertEqual(action["summary"]["pose_name"], "展示位")
+        self.assertEqual(bridge.pose_calls, [])
+
+        service.agent_confirm_pending(action["id"])
+
+        self.assertEqual(bridge.pose_calls, ["展示位"])
+
+    def test_semantic_subject_lock_profile_creates_card_for_each_safe_step(self) -> None:
+        service, _bridge = make_service()
+
+        for operation, expected_call in (("move_to_start", "move_to_start"), ("play", "play")):
+            result = service._handle_agent_semantic_intent(
+                {
+                    "kind": "command",
+                    "tool_name": "run_subject_lock_profile",
+                    "arguments": {"name": "环绕主体", "operation": operation},
+                    "missing": [],
+                    "confidence": 0.99,
+                    "source_text": f"{operation} 环绕主体",
+                    "evidence": {"profile": "环绕主体"},
+                }
+            )
+
+            action = result["pending_action"]
+            self.assertEqual(action["tool_name"], "run_subject_lock_profile")
+            self.assertEqual(action["arguments"]["profile_id"], "环绕_001")
+            self.assertEqual(action["summary"]["profile_name"], "环绕主体")
+            service.agent_confirm_pending(action["id"])
+
+            self.assertEqual(service.subject_lock_calls[-1], (expected_call, "环绕_001"))
 
     def test_direct_stop_follow_is_immediate_and_never_creates_pending_action(self) -> None:
         service, _bridge = make_service()
@@ -453,19 +592,14 @@ class AgentRealMotionServiceTest(unittest.TestCase):
         self.assertEqual(bridge.single_moves, [])
         self.assertEqual(bridge.joints["j12"], 0.0)
 
-    def test_direct_named_commands_all_use_the_standard_pending_store(self) -> None:
+    def test_only_home_uses_the_direct_standard_pending_store(self) -> None:
         service, _bridge = make_service()
-        cases = [
-            ("打开夹爪", "set_gripper"),
-            ("回 Home", "run_robot_behavior"),
-            ("播放挥手动作", "play_action"),
-            ("启动视觉跟随", "start_face_follow"),
-        ]
-        for phrase, tool_name in cases:
-            result = service._handle_agent_direct_command(phrase)
-            action = result["pending_action"]
-            self.assertEqual(action["tool_name"], tool_name)
-            service.agent_cancel_pending(action["id"])
+
+        result = service._handle_agent_direct_command("回 Home")
+
+        action = result["pending_action"]
+        self.assertEqual(action["tool_name"], "run_robot_behavior")
+        service.agent_cancel_pending(action["id"])
 
     def test_busy_action_rejects_new_increasing_risk_proposal(self) -> None:
         service, bridge = make_service()

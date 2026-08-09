@@ -67,6 +67,30 @@ def robot_tool_specs() -> list[dict[str, Any]]:
         {
             "type": "function",
             "function": {
+                "name": "list_actions",
+                "description": "只读查询动作库中的真实动作名称和摘要，不产生运动。",
+                "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "list_poses",
+                "description": "只读查询姿态库中的真实姿态名称、说明和关节目标，不产生运动。",
+                "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "list_subject_lock_profiles",
+                "description": "只读查询已保存的主体锁定运镜轨迹及其安全检查状态，不产生运动。",
+                "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
+            },
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "stop_robot",
                 "description": "立即停止机械臂运动、动作回放或危险动作。用户说停、停止、别动、急停时优先调用。",
                 "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
@@ -143,6 +167,36 @@ def robot_tool_specs() -> list[dict[str, Any]]:
                     "type": "object",
                     "properties": {"name": {"type": "string"}, "speed": {"type": "number"}, "loop": {"type": "boolean"}},
                     "required": ["name"],
+                    "additionalProperties": False,
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "goto_pose",
+                "description": "执行姿态库中的指定姿态，只生成待确认卡片，不会直接运动。",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"name": {"type": "string"}},
+                    "required": ["name"],
+                    "additionalProperties": False,
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "run_subject_lock_profile",
+                "description": "对主体锁定运镜轨迹执行回到起点或正式播放，只生成待确认卡片。",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string"},
+                        "profile_id": {"type": "string"},
+                        "operation": {"type": "string", "enum": ["move_to_start", "play"]},
+                    },
+                    "required": ["name", "operation"],
                     "additionalProperties": False,
                 },
             },

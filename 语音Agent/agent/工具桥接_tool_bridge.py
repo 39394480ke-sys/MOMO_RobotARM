@@ -43,11 +43,26 @@ class RobotToolBridge:
         match tool_name:
             case "get_robot_state":
                 return self._get("/api/v1/robot/state")
+            case "list_actions":
+                return self._get("/api/v1/actions")
+            case "list_poses":
+                return self._get("/api/v1/poses")
+            case "list_subject_lock_profiles":
+                return self._get("/api/v1/subject-lock/profiles")
             case "stop_robot":
                 return self._post("/api/v1/motion/stop", None)
             case "stop_face_follow":
                 return self._post("/api/v1/follow/stop", None)
-            case "set_gripper" | "move_joint" | "rotate_joint" | "run_robot_behavior" | "play_action" | "start_face_follow":
+            case (
+                "set_gripper"
+                | "move_joint"
+                | "rotate_joint"
+                | "run_robot_behavior"
+                | "play_action"
+                | "goto_pose"
+                | "run_subject_lock_profile"
+                | "start_face_follow"
+            ):
                 return self._post(
                     "/api/v1/agent/tool/propose",
                     {"tool_name": tool_name, "arguments": dict(args)},

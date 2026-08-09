@@ -80,25 +80,6 @@ from .state_manager import SessionStateManager
 from .websocket_manager import WebSocketManager
 
 
-def _parse_agent_motion_number(token: str) -> float | None:
-    text = str(token or "").strip()
-    sign = -1.0 if text.startswith(("负", "-")) else 1.0
-    text = text.lstrip("正负+-")
-    try:
-        return sign * float(text)
-    except ValueError:
-        pass
-    digits = {"零": 0, "〇": 0, "一": 1, "二": 2, "两": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9}
-    if text in digits:
-        return sign * float(digits[text])
-    match = re.fullmatch(r"([一二两三四五六七八九]?)(十)([一二三四五六七八九]?)", text)
-    if match:
-        tens = digits.get(match.group(1), 1)
-        ones = digits.get(match.group(3), 0)
-        return sign * float(tens * 10 + ones)
-    return None
-
-
 class WebControlService:
     """Web/API 统一业务入口。"""
 
@@ -378,6 +359,11 @@ class WebControlService:
         kind = str(intent.get("kind") or "clarify")
         tool_name = str(intent.get("tool_name") or "").strip()
         arguments = dict(intent.get("arguments") or {}) if isinstance(intent.get("arguments"), dict) else {}
+        tool_name, arguments = self._ground_agent_catalog_intent(
+            tool_name,
+            arguments,
+            source_text=str(intent.get("source_text") or ""),
+        )
         missing = [str(item) for item in intent.get("missing", []) if str(item).strip()] if isinstance(intent.get("missing"), list) else []
         try:
             confidence = float(intent.get("confidence", 0.0))
@@ -389,6 +375,11 @@ class WebControlService:
             "set_gripper": ("open_ratio",),
             "run_robot_behavior": ("name",),
             "play_action": ("name",),
+            "goto_pose": ("name",),
+            "run_subject_lock_profile": ("name", "operation"),
+            "list_actions": (),
+            "list_poses": (),
+            "list_subject_lock_profiles": (),
             "start_face_follow": (),
             "stop_face_follow": (),
             "stop_robot": (),
@@ -400,7 +391,13 @@ class WebControlService:
                     missing.append(field)
         if tool_name == "move_joint" and kind == "command":
             missing.extend(self._agent_motion_grounding_gaps(intent, arguments))
-        if kind == "clarify" or missing or confidence < 0.70 or tool_name not in required:
+        read_only_tools = {"get_robot_state", "list_actions", "list_poses", "list_subject_lock_profiles"}
+        if (
+            kind == "clarify"
+            or missing
+            or (confidence < 0.70 and tool_name not in read_only_tools)
+            or tool_name not in required
+        ):
             reply = str(intent.get("reply") or "").strip()
             if not reply:
                 labels = {
@@ -430,6 +427,25 @@ class WebControlService:
             connection_text = "已连接" if state.get("connected") else "未连接"
             reply = f"当前模式 {state.get('mode')}，{connection_text}。{summary}"
             return self._agent_semantic_message(reply, intent, {"robot_state": state})
+        if tool_name == "list_actions":
+            actions = self.list_actions().get("actions", [])
+            names = [str(item.get("name") or "").strip() for item in actions if isinstance(item, dict)]
+            reply = f"动作库共有 {len(names)} 个动作：" + ("、".join(names) if names else "暂无动作。")
+            return self._agent_semantic_message(reply, intent, {"actions": actions})
+        if tool_name == "list_poses":
+            poses = self.list_poses().get("poses", [])
+            names = [str(item.get("name") or "").strip() for item in poses if isinstance(item, dict)]
+            reply = f"姿态库共有 {len(names)} 个姿态：" + ("、".join(names) if names else "暂无姿态。")
+            return self._agent_semantic_message(reply, intent, {"poses": poses})
+        if tool_name == "list_subject_lock_profiles":
+            profiles = self.subject_lock_profiles()
+            names = [
+                str(item.get("name") or item.get("profile_id") or "").strip()
+                for item in profiles
+                if isinstance(item, dict)
+            ]
+            reply = f"主体锁定运镜共有 {len(names)} 条已保存轨迹：" + ("、".join(names) if names else "暂无轨迹。")
+            return self._agent_semantic_message(reply, intent, {"subject_lock_profiles": profiles})
 
         try:
             proposal = self.agent_propose_tool(tool_name, arguments)
@@ -596,7 +612,7 @@ class WebControlService:
         }
 
     def _handle_agent_direct_command(self, content: str) -> dict[str, Any] | None:
-        """Reliably map explicit Chinese motion commands before model fallback."""
+        """Keep only safety-critical and Home commands deterministic."""
 
         normalized = " ".join(str(content or "").strip().split())
         if not normalized:
@@ -611,27 +627,8 @@ class WebControlService:
             return self._agent_direct_result(reply, {"stop_robot": result})
 
         proposal: dict[str, Any] | None = None
-        if re.search(r"(启动|开始|打开)视觉跟随", normalized):
-            proposal = self.agent_propose_tool("start_face_follow", {})
-        elif re.search(r"(打开|张开|松开)夹爪", normalized):
-            proposal = self.agent_propose_tool("set_gripper", {"open_ratio": 1.0})
-        elif re.search(r"(关闭|闭合|夹紧)夹爪", normalized):
-            proposal = self.agent_propose_tool("set_gripper", {"open_ratio": 0.0})
-        elif re.search(r"(返回|回到|回)\s*home\b", normalized, re.IGNORECASE):
+        if re.search(r"(返回|回到|回)\s*home\b", normalized, re.IGNORECASE):
             proposal = self.agent_propose_tool("run_robot_behavior", {"name": "home"})
-        else:
-            action_match = re.fullmatch(
-                r"(?:请)?(?:播放|执行)(?:动作)?[\s「『“\"]*([^\s」』”\"]{1,40}?)[\s」』”\"]*(?:动作)?",
-                normalized,
-            )
-            if action_match:
-                proposal = self.agent_propose_tool(
-                    "play_action", {"name": action_match.group(1), "speed": 1.0, "loop": False}
-                )
-            else:
-                joint_arguments = self._agent_direct_joint_arguments(normalized)
-                if joint_arguments is not None:
-                    proposal = self.agent_propose_tool("move_joint", joint_arguments)
         if proposal is None:
             return None
         pending = proposal["pending_action"]
@@ -645,6 +642,79 @@ class WebControlService:
             "raw_payload": {"direct_command": True, "pending_action": pending},
         }
 
+    def _ground_agent_catalog_intent(
+        self,
+        tool_name: str,
+        arguments: dict[str, Any],
+        *,
+        source_text: str,
+    ) -> tuple[str, dict[str, Any]]:
+        if tool_name not in {"play_action", "run_robot_behavior", "goto_pose", "run_subject_lock_profile"}:
+            return tool_name, arguments
+        requested_name = str(arguments.get("name") or "").strip()
+        if tool_name == "run_robot_behavior" and requested_name in {"home", "open_gripper", "close_gripper"}:
+            return tool_name, arguments
+        if tool_name in {"play_action", "run_robot_behavior"}:
+            actions = self.list_actions().get("actions", [])
+            match = self._match_agent_catalog_entry(requested_name, source_text, actions, ("name",))
+            if match is not None:
+                return "play_action", {**arguments, "name": str(match.get("name") or "")}
+        elif tool_name == "goto_pose":
+            poses = self.list_poses().get("poses", [])
+            match = self._match_agent_catalog_entry(requested_name, source_text, poses, ("name",))
+            if match is not None:
+                return tool_name, {**arguments, "name": str(match.get("name") or "")}
+        elif tool_name == "run_subject_lock_profile":
+            profiles = self.subject_lock_profiles()
+            match = self._match_agent_catalog_entry(requested_name, source_text, profiles, ("name", "profile_id"))
+            if match is not None:
+                return tool_name, {
+                    **arguments,
+                    "name": str(match.get("name") or match.get("profile_id") or ""),
+                    "profile_id": str(match.get("profile_id") or ""),
+                }
+        return tool_name, arguments
+
+    def _match_agent_catalog_entry(
+        self,
+        requested_name: str,
+        source_text: str,
+        entries: list[dict[str, Any]],
+        fields: tuple[str, ...],
+    ) -> dict[str, Any] | None:
+        requested_key = self._agent_catalog_match_key(requested_name)
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            if requested_key and any(
+                self._agent_catalog_match_key(str(entry.get(field) or "")) == requested_key for field in fields
+            ):
+                return entry
+        source_key = self._agent_catalog_match_key(source_text)
+        candidates = [
+            entry
+            for entry in entries
+            if isinstance(entry, dict)
+            and any(
+                self._agent_catalog_match_key(str(entry.get(field) or ""))
+                and self._agent_catalog_match_key(str(entry.get(field) or "")) in source_key
+                for field in fields
+            )
+        ]
+        if not candidates:
+            return None
+        candidates.sort(
+            key=lambda entry: max(
+                len(self._agent_catalog_match_key(str(entry.get(field) or ""))) for field in fields
+            ),
+            reverse=True,
+        )
+        return candidates[0]
+
+    @staticmethod
+    def _agent_catalog_match_key(value: str) -> str:
+        return re.sub(r"[\W_]+", "", str(value or ""), flags=re.UNICODE).casefold()
+
     @staticmethod
     def _agent_direct_result(reply: str, payload: dict[str, Any]) -> dict[str, Any]:
         return {
@@ -653,41 +723,6 @@ class WebControlService:
             "session_id": "agent-direct-command",
             "raw_payload": {"direct_command": True, **payload},
         }
-
-    @staticmethod
-    def _agent_direct_joint_arguments(content: str) -> dict[str, Any] | None:
-        joint_match = re.search(r"j(1[0-5])", content, re.IGNORECASE)
-        if joint_match is None or not re.search(r"(旋转|转动|移动|运动|调整|增加|减少|升高|降低|设为)", content):
-            return None
-        joint_name = f"j{joint_match.group(1)}"
-        value_match = re.search(
-            r"([正负+-]?(?:\d+(?:\.\d+)?|[零〇一二两三四五六七八九十]+))\s*(毫米|mm|度|°)",
-            content,
-            re.IGNORECASE,
-        )
-        if value_match is None:
-            return None
-        value = _parse_agent_motion_number(value_match.group(1))
-        if value is None:
-            return None
-        unit = value_match.group(2).lower()
-        if joint_name == "j10" and unit not in {"毫米", "mm"}:
-            raise WebAPIError("AGENT_MOTION_REJECTED", "J10 请使用毫米。")
-        if joint_name != "j10" and unit in {"毫米", "mm"}:
-            raise WebAPIError("AGENT_MOTION_REJECTED", f"{joint_name.upper()} 请使用度。")
-        absolute = bool(re.search(r"(移动到|运动到|旋转到|转到|调整到|设为|目标)", content))
-        if absolute:
-            return {"joint_name": joint_name, "mode": "absolute", "value": value}
-        negative = bool(re.search(r"(反向|负向|逆时针|减少|降低)", content))
-        positive = bool(re.search(r"(正向|顺时针|增加|升高)", content))
-        explicit_sign = value_match.group(1).startswith(("正", "负", "+", "-"))
-        if not (negative or positive or explicit_sign):
-            return None
-        if negative or value_match.group(1).startswith(("负", "-")):
-            value = -abs(value)
-        elif positive or value_match.group(1).startswith(("正", "+")):
-            value = abs(value)
-        return {"joint_name": joint_name, "mode": "relative", "value": value}
 
     def agent_reset_session(self) -> dict[str, Any]:
         try:
@@ -1931,6 +1966,21 @@ class WebControlService:
                         return tool_result_ok(tool_name, service.get_robot_state())
                     except Exception as exc:
                         return tool_result_fail(tool_name, f"读取 Web 同进程机械臂状态失败：{exc}")
+                if tool_name == "list_actions":
+                    try:
+                        return tool_result_ok(tool_name, service.list_actions())
+                    except Exception as exc:
+                        return tool_result_fail(tool_name, f"读取动作库失败：{exc}")
+                if tool_name == "list_poses":
+                    try:
+                        return tool_result_ok(tool_name, service.list_poses())
+                    except Exception as exc:
+                        return tool_result_fail(tool_name, f"读取姿态库失败：{exc}")
+                if tool_name == "list_subject_lock_profiles":
+                    try:
+                        return tool_result_ok(tool_name, {"profiles": service.subject_lock_profiles()})
+                    except Exception as exc:
+                        return tool_result_fail(tool_name, f"读取主体锁定轨迹失败：{exc}")
                 if tool_name == "stop_robot":
                     try:
                         return tool_result_ok(tool_name, service.stop())
@@ -2005,15 +2055,90 @@ class WebControlService:
                     detail = self.get_action(str(safe_args["name"]))
                 except Exception as exc:
                     raise WebAPIError("AGENT_ACTION_NOT_FOUND", f"动作库里不存在动作：{safe_args.get('name')}") from exc
-                frames = detail.get("frames", []) if isinstance(detail.get("frames"), list) else []
+                action_data = detail.get("action", {}) if isinstance(detail.get("action"), dict) else detail
+                summary_data = detail.get("summary", {}) if isinstance(detail.get("summary"), dict) else {}
+                frames = action_data.get("poses", []) if isinstance(action_data.get("poses"), list) else []
                 summary = {
                     "title": f"播放动作：{safe_args['name']}",
                     "name": safe_args["name"],
                     "speed": float(safe_args.get("speed", 1.0)),
                     "loop": False,
-                    "frame_count": len(frames),
-                    "duration_sec": detail.get("duration_sec"),
+                    "frame_count": int(summary_data.get("pose_count", len(frames)) or len(frames)),
+                    "duration_sec": summary_data.get("总时长"),
                     "confirmation_text": f"将播放一次动作“{safe_args['name']}”。请确认机械臂周围安全后执行。",
+                }
+            elif name == "goto_pose":
+                try:
+                    detail = self.get_pose(str(safe_args["name"]))
+                except Exception as exc:
+                    raise WebAPIError("AGENT_POSE_NOT_FOUND", f"姿态库里不存在姿态：{safe_args.get('name')}") from exc
+                pose_name = str(detail.get("name") or safe_args["name"])
+                pose = detail.get("pose", {}) if isinstance(detail.get("pose"), dict) else {}
+                targets = pose.get("关节角度", []) if isinstance(pose.get("关节角度"), list) else []
+                safe_args = {"name": pose_name}
+                items = []
+                for index, target in enumerate(targets[: len(JOINT_ORDER)]):
+                    joint = JOINT_ORDER[index]
+                    current = float(snapshot["joints"].get(joint, 0.0))
+                    items.append(
+                        {
+                            "joint": joint.upper(),
+                            "current": current,
+                            "target": float(target),
+                            "delta": float(target) - current,
+                            "unit": "mm" if joint == "j10" else "deg",
+                        }
+                    )
+                summary = {
+                    "title": f"执行姿态：{pose_name}",
+                    "pose_name": pose_name,
+                    "description": str(detail.get("description") or pose.get("说明") or ""),
+                    "speed_percent": 50,
+                    "items": items,
+                    "confirmation_text": f"将移动到姿态“{pose_name}”。请确认机械臂周围安全后执行。",
+                }
+            elif name == "run_subject_lock_profile":
+                profiles = self.subject_lock_profiles()
+                profile_id = str(safe_args.get("profile_id") or "")
+                match = next(
+                    (
+                        item
+                        for item in profiles
+                        if isinstance(item, dict)
+                        and (
+                            str(item.get("profile_id") or "") == profile_id
+                            or str(item.get("name") or "") == str(safe_args.get("name") or "")
+                        )
+                    ),
+                    None,
+                )
+                if match is None:
+                    raise WebAPIError(
+                        "AGENT_SUBJECT_LOCK_NOT_FOUND",
+                        f"主体锁定轨迹里不存在：{safe_args.get('name')}",
+                    )
+                profile_id = str(match.get("profile_id") or "")
+                detail = self.subject_lock_profile(profile_id)
+                validation = detail.get("validation", {}) if isinstance(detail.get("validation"), dict) else {}
+                if not bool(validation.get("valid", False)):
+                    raise WebAPIError("AGENT_SUBJECT_LOCK_NOT_READY", "这条主体锁定轨迹尚未通过安全检查。")
+                operation = str(safe_args["operation"])
+                profile_name = str(detail.get("name") or match.get("name") or profile_id)
+                rail = detail.get("rail", {}) if isinstance(detail.get("rail"), dict) else {}
+                safe_args = {"name": profile_name, "profile_id": profile_id, "operation": operation}
+                action_text = "回到轨迹起点" if operation == "move_to_start" else "播放主体锁定轨迹"
+                summary = {
+                    "title": f"{action_text}：{profile_name}",
+                    "profile_name": profile_name,
+                    "profile_id": profile_id,
+                    "operation": operation,
+                    "rail_start_mm": rail.get("start_mm"),
+                    "rail_end_mm": rail.get("end_mm"),
+                    "rail_speed_mm_s": rail.get("requested_speed_mm_s"),
+                    "calibration_point_count": len(detail.get("calibration_points", []))
+                    if isinstance(detail.get("calibration_points"), list)
+                    else match.get("calibration_point_count"),
+                    "confirmation_text": f"将{action_text}“{profile_name}”。请确认机械臂周围安全后执行。",
                 }
             elif name == "start_face_follow":
                 follow = self.follow_status()
@@ -2161,6 +2286,22 @@ class WebControlService:
                         confirm_text=self.confirm_text,
                     )
                 )
+            elif tool_name == "goto_pose":
+                result = self.goto_pose(
+                    GotoPoseRequest(
+                        name=str(arguments["name"]),
+                        speed_percent=50,
+                        confirm_text=self.confirm_text,
+                    )
+                )
+            elif tool_name == "run_subject_lock_profile":
+                request = SubjectLockProfileActionRequest(confirm_text=self.confirm_text)
+                if str(arguments.get("operation")) == "move_to_start":
+                    result = self.subject_lock_move_to_start(str(arguments["profile_id"]), request)
+                elif str(arguments.get("operation")) == "play":
+                    result = self.subject_lock_play(str(arguments["profile_id"]), request)
+                else:
+                    raise WebAPIError("AGENT_TOOL_REJECTED", "主体锁定轨迹操作无效。")
             elif tool_name == "start_face_follow":
                 follow = self.follow_status()
                 effective = follow.get("effective_config", {}) if isinstance(follow.get("effective_config"), dict) else {}
@@ -2208,6 +2349,9 @@ class WebControlService:
         follow = self.follow_status()
         if bool(follow.get("running")):
             raise WebAPIError("AGENT_MOTION_BUSY", "视觉跟随正在运行，请先停止视觉跟随。")
+        subject = getattr(self, "_subject_lock_controller", None)
+        if subject is not None and bool(subject.get_status().get("running")):
+            raise WebAPIError("AGENT_MOTION_BUSY", "主体锁定运镜正在运行，请先停止。")
 
     def _agent_require_gripper(self) -> None:
         calibration = self.get_calibration_status().get("calibration", {})

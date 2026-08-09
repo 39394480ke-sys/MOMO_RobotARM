@@ -59,7 +59,7 @@ class OpenAICompatibleAgentClient:
         prompt = """你是机械臂的语义指令解析器。只判断用户想让系统做什么，不要回答“我能不能控制硬件”，不要执行工具。
 只输出一个 JSON 对象，字段如下：
 kind: command | clarify | conversation
-tool_name: get_robot_state | stop_robot | stop_face_follow | set_gripper | move_joint | run_robot_behavior | play_action | start_face_follow | ""
+tool_name: get_robot_state | list_actions | list_poses | list_subject_lock_profiles | stop_robot | stop_face_follow | set_gripper | move_joint | run_robot_behavior | play_action | goto_pose | run_subject_lock_profile | start_face_follow | ""
 arguments: object
 actions: 用户一句话要求多个动作时，按原话顺序输出 [{tool_name, arguments, missing, evidence}]；单动作时为空数组
 execution_mode: simultaneous | sequential | ""；只有用户明说“同时”才是 simultaneous
@@ -77,6 +77,10 @@ evidence: 从用户原话逐字复制的证据，包含 joint、direction_or_tar
 - J12-J15 不接受绝对目标，必须追问相对方向和变化量。
 - 打开夹爪是 set_gripper {"open_ratio":1.0}，闭合夹爪是 {"open_ratio":0.0}。
 - 回 Home 是 run_robot_behavior {"name":"home"}。播放动作必须有确切动作库名称。
+- 询问动作库、姿态库或主体锁定轨迹中有什么，分别使用 list_actions、list_poses、list_subject_lock_profiles。这些是只读查询。
+- 执行动作库内容使用 play_action {"name":"原话中的动作名"}；执行姿态库内容使用 goto_pose {"name":"原话中的姿态名"}。
+- 主体锁定轨迹“回到起点”使用 run_subject_lock_profile {"name":"轨迹名","operation":"move_to_start"}；正式播放使用 operation="play"。
+- 动作库、姿态库和主体锁定轨迹的名称必须逐字来自用户原话，不得自行改名；后端会和真实库内容核对。
 - 启动视觉跟随是 start_face_follow；停止机械臂或停止跟随是立即降低风险的指令。
 - 只询问原理、能力、状态解释或普通聊天，且没有要求执行具体动作时，才是 conversation。
 - 模糊指令绝不得变成 command。
@@ -96,6 +100,12 @@ evidence: 从用户原话逐字复制的证据，包含 joint、direction_or_tar
                 {"role": "assistant", "content": '{"kind":"command","tool_name":"","arguments":{},"execution_mode":"simultaneous","actions":[{"tool_name":"move_joint","arguments":{"joint_name":"j10","mode":"absolute","value":30},"missing":[],"evidence":{"joint":"j10","direction_or_target":"运动到","value":"30","unit":"mm"}},{"tool_name":"move_joint","arguments":{"joint_name":"j11","mode":"relative","value":30},"missing":[],"evidence":{"joint":"j11","direction_or_target":"正转","value":"30","unit":"度"}}],"missing":[],"reply":"","confidence":1.0,"evidence":{}}'},
                 {"role": "user", "content": "J12 是做什么的？"},
                 {"role": "assistant", "content": '{"kind":"conversation","tool_name":"","arguments":{},"missing":[],"reply":"","confidence":1.0,"evidence":{}}'},
+                {"role": "user", "content": "动作库里面有什么动作？"},
+                {"role": "assistant", "content": '{"kind":"command","tool_name":"list_actions","arguments":{},"missing":[],"reply":"","confidence":1.0,"evidence":{}}'},
+                {"role": "user", "content": "执行姿态展示位"},
+                {"role": "assistant", "content": '{"kind":"command","tool_name":"goto_pose","arguments":{"name":"展示位"},"missing":[],"reply":"","confidence":1.0,"evidence":{"pose":"展示位"}}'},
+                {"role": "user", "content": "播放主体锁定轨迹环绕主体"},
+                {"role": "assistant", "content": '{"kind":"command","tool_name":"run_subject_lock_profile","arguments":{"name":"环绕主体","operation":"play"},"missing":[],"reply":"","confidence":1.0,"evidence":{"profile":"环绕主体"}}'},
                 {"role": "user", "content": user_text},
             ],
             "temperature": 0.0,
@@ -109,7 +119,33 @@ evidence: 从用户原话逐字复制的证据，包含 joint、direction_or_tar
             payload.pop("response_format", None)
             data = self._post_chat(payload)
         content = str(_choice_message(data).get("content") or "")
-        intent = _normalize_robot_intent(_parse_json_object(content))
+        parsed = _parse_json_object(content)
+        if not isinstance(parsed, dict) or not parsed:
+            focused_prompt = """只针对这句话判断机械臂用户意图，并只输出 JSON 对象。
+可用 tool_name：
+- get_robot_state：读取当前状态
+- list_actions / list_poses / list_subject_lock_profiles：只读查询动作库、姿态库、主体锁定轨迹
+- play_action / goto_pose：执行指定动作或姿态
+- run_subject_lock_profile：主体锁定轨迹，arguments 必须包含原话中的 name 和 operation（move_to_start 或 play）
+- move_joint / set_gripper / start_face_follow / stop_face_follow / stop_robot / run_robot_behavior
+
+输出字段：kind(command|clarify|conversation)、tool_name、arguments、missing、reply、confidence、evidence。
+询问库中“有什么、有哪些、查看、读取”是 command，必须选择对应 list 工具；不要回答自己无权访问。
+执行动作、姿态或轨迹也是 command，名称逐字取自原话。信息不足才 clarify，普通闲聊才 conversation。"""
+            retry_payload = {
+                "model": self.backend_cfg.get("model"),
+                "messages": [
+                    {"role": "system", "content": focused_prompt},
+                    {"role": "user", "content": user_text},
+                ],
+                "temperature": 0.0,
+                "max_tokens": 500,
+                "response_format": {"type": "json_object"},
+            }
+            retry_payload = {key: value for key, value in retry_payload.items() if value is not None}
+            retry_data = self._post_chat(retry_payload)
+            parsed = _parse_json_object(str(_choice_message(retry_data).get("content") or ""))
+        intent = _normalize_robot_intent(parsed)
         intent["source_text"] = user_text
         return intent
 

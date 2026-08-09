@@ -67,6 +67,55 @@ class SemanticIntentTest(unittest.TestCase):
         self.assertEqual([item["arguments"]["joint_name"] for item in intent["actions"]], ["j10", "j11"])
         self.assertEqual(intent["actions"][1]["evidence"]["direction_or_target"], "正转")
 
+    def test_semantic_prompt_grants_read_only_library_tools_and_card_based_execution_tools(self) -> None:
+        client, captured = self.make_client(
+            '{"kind":"command","tool_name":"list_actions","arguments":{},'
+            '"missing":[],"reply":"","confidence":0.99}'
+        )
+
+        intent = client.interpret_robot_intent("动作库里面有什么动作")
+
+        prompt = captured[0]["messages"][0]["content"]
+        self.assertEqual(intent["tool_name"], "list_actions")
+        self.assertIn("list_actions", prompt)
+        self.assertIn("list_poses", prompt)
+        self.assertIn("list_subject_lock_profiles", prompt)
+        self.assertIn("goto_pose", prompt)
+        self.assertIn("run_subject_lock_profile", prompt)
+
+    def test_empty_model_json_gets_a_focused_ai_semantic_retry(self) -> None:
+        client = OpenAICompatibleAgentClient.__new__(OpenAICompatibleAgentClient)
+        client.backend_cfg = {"model": "test-model"}
+        client.agent_cfg = {"timeout_sec": 5}
+        responses = iter(
+            [
+                {"choices": [{"message": {"content": "{}"}}]},
+                {
+                    "choices": [
+                        {
+                            "message": {
+                                "content": (
+                                    '{"kind":"command","tool_name":"list_actions","arguments":{},'
+                                    '"missing":[],"reply":"","confidence":1.0}'
+                                )
+                            }
+                        }
+                    ]
+                },
+            ]
+        )
+        captured = []
+        client._post_chat = types.MethodType(
+            lambda self, payload: captured.append(payload) or next(responses),
+            client,
+        )
+
+        intent = client.interpret_robot_intent("动作库里面有什么动作")
+
+        self.assertEqual(intent["tool_name"], "list_actions")
+        self.assertEqual(len(captured), 2)
+        self.assertIn("只针对这句话", captured[1]["messages"][0]["content"])
+
 
 if __name__ == "__main__":
     unittest.main()

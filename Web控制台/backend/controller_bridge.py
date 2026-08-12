@@ -1086,7 +1086,13 @@ class ControllerBridge:
         except Exception as exc:
             return self._exception("删除动作失败", exc)
 
-    def play_action(self, name: str, speed: float = 1.0, loop: bool = False) -> dict[str, Any]:
+    def play_action(
+        self,
+        name: str,
+        speed: float = 1.0,
+        loop: bool = False,
+        on_first_pose_ready: Any | None = None,
+    ) -> dict[str, Any]:
         """阻塞式动作播放；service 会把它放到后台线程里执行。"""
 
         try:
@@ -1097,7 +1103,13 @@ class ControllerBridge:
             sequence = load_action_for_replay(library, player, name)
             self._ensure_connected_for_motion()
             self._set_action_status("playing", name, f"播放中：{name}")
-            ok = play_loaded_action(player, sequence, speed=playback_speed, loop=loop)
+            ok = play_loaded_action(
+                player,
+                sequence,
+                speed=playback_speed,
+                loop=loop,
+                on_first_pose_ready=on_first_pose_ready,
+            )
             message = f"动作播放完成：{name}" if ok else f"动作播放未完成：{name}"
             self._set_action_status("idle" if ok else "stopped", name, message)
             self._log("info" if ok else "warning", "play_action", message, name=name, speed=playback_speed, loop=loop)

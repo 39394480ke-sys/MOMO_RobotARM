@@ -101,7 +101,13 @@ class SequencePlayer:
             raise ValueError(report["问题"] + " 该动作只能用于仿真或 dry-run 预览。")
         return True
 
-    def play(self, sequence: Mapping[str, Any], loop: bool = False, speed: float = 1.0) -> bool:
+    def play(
+        self,
+        sequence: Mapping[str, Any],
+        loop: bool = False,
+        speed: float = 1.0,
+        on_first_pose_ready: Any | None = None,
+    ) -> bool:
         speed = normalize_playback_speed(speed)
         self.validate_sequence(sequence)
         self.validate_variant_for_replay(sequence)
@@ -127,7 +133,11 @@ class SequencePlayer:
         synchronized_timing = bool(playback_cfg.get("synchronized_segment_timing", True))
         continuous_playback = pass_through or (continuous_default and synchronized_timing)
         start_index = 0
-        if self.config.get("playback", {}).get("return_to_first_pose_before_replay", True):
+        first_pose_ready_notified = False
+        position_before_replay = bool(
+            self.config.get("playback", {}).get("return_to_first_pose_before_replay", True)
+        ) or on_first_pose_ready is not None
+        if position_before_replay:
             first_pose = poses[0]
             first_duration = self._duration_for_pose(first_pose, speed)
             self.logger.log(
@@ -139,9 +149,15 @@ class SequencePlayer:
             )
             if not self.play_pose(first_pose, first_duration, wait_until_reached=True):
                 return False
+            if on_first_pose_ready is not None:
+                on_first_pose_ready()
+            first_pose_ready_notified = True
             if not continuous_playback:
                 self._sleep_with_controls(self._hold_duration(first_pose, sequence, speed))
             start_index = 1
+
+        if not first_pose_ready_notified and on_first_pose_ready is not None:
+            on_first_pose_ready()
 
         if continuous_playback:
             while True:

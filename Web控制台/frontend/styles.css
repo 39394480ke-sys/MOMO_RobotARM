@@ -478,6 +478,69 @@ pre {
   justify-self: end;
 }
 
+.action-video-dialog {
+  width: min(460px, calc(100vw - 32px));
+  padding: 0;
+  border: 1px solid #86c79b;
+  border-radius: 8px;
+  background: #fff;
+  color: #18212f;
+  box-shadow: 0 18px 48px rgb(15 23 42 / 24%);
+}
+
+.action-video-dialog::backdrop {
+  background: rgb(15 23 42 / 46%);
+}
+
+.action-video-dialog-body {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  gap: 14px;
+  padding: 22px;
+}
+
+.action-video-success {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #15803d;
+  color: #fff;
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.action-video-dialog-body h3,
+.action-video-dialog-body p {
+  margin: 0;
+}
+
+.action-video-dialog-body p {
+  margin-top: 7px;
+  color: #566173;
+  line-height: 1.6;
+}
+
+.action-video-dialog-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.dialog-primary-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 8px 12px;
+  border: 1px solid var(--blue);
+  border-radius: 6px;
+  background: var(--blue);
+  color: #fff;
+  text-decoration: none;
+}
+
 .action-detail-panel,
 .pose-detail-panel {
   margin-bottom: 12px;

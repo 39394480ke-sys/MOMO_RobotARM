@@ -26,6 +26,8 @@ const state = {
   motionTuning: null,
   kinematicsStatus: null,
   recording: null,
+  action: null,
+  lastActionVideoDialogId: "",
   agent: null,
   agentMessages: [],
   lastAgentReply: null,
@@ -94,6 +96,7 @@ function bindEvents() {
   $("#saveRecordingBtn").addEventListener("click", saveActionRecording);
   $("#cancelRecordingBtn").addEventListener("click", cancelActionRecording);
   $("#recordingFrameWarningClose").addEventListener("click", () => $("#recordingFrameWarningDialog").close());
+  $("#actionVideoClose").addEventListener("click", () => $("#actionVideoDialog").close());
   $("#refreshFollowBtn").addEventListener("click", refreshFollow);
   $("#startFollowBtn").addEventListener("click", startFollow);
   $("#stopFollowBtn").addEventListener("click", stopFollow);
@@ -559,6 +562,8 @@ function connectWebSocket() {
     if (msg.type === "state") {
       state.session = msg.data.session || state.session;
       state.robot = msg.data.robot || state.robot;
+      state.action = msg.data.action || state.action;
+      handleActionVideoState(state.action?.video_recording);
       if (msg.data.continuous_jog) renderContinuousJog(msg.data.continuous_jog);
       if (msg.data.subject_lock) {
         state.subjectLock = msg.data.subject_lock;
@@ -827,9 +832,33 @@ async function playAction(name) {
     name,
     speed: Number($("#actionSpeed").value || 1),
     loop: $("#actionLoop").checked,
+    record_video: $("#recordActionVideo").checked,
   });
   if (!body) return;
-  await postJsonLogged("/api/v1/actions/play", body, { timeout: 10000 });
+  const data = await postJsonLogged("/api/v1/actions/play", body, { timeout: 10000 });
+  state.action = data.action || state.action;
+  handleActionVideoState(data.video_recording);
+}
+
+function handleActionVideoState(video) {
+  if (!video || video.state !== "ready" || !video.media_id) return;
+  const finishedAt = Number(video.finished_at || 0);
+  if (finishedAt && Date.now() / 1000 - finishedAt > 60) return;
+  if (state.lastActionVideoDialogId === video.media_id) return;
+  state.lastActionVideoDialogId = video.media_id;
+  const duration = Number(video.duration_sec);
+  const durationText = Number.isFinite(duration) ? `，时长 ${duration.toFixed(1)} 秒` : "";
+  $("#actionVideoSummary").textContent = `${video.action_name || "动作"} 的录像已保存${durationText}。`;
+  $("#actionVideoOpen").href = cameraHubUrl(video.camera_hub_path || `/?media=${encodeURIComponent(video.media_id)}`);
+  const dialog = $("#actionVideoDialog");
+  if (!dialog.open) dialog.showModal();
+}
+
+function cameraHubUrl(path = "/") {
+  const port = Number(state.config?.camera_hub?.public_port || 8020);
+  const host = window.location.hostname || "127.0.0.1";
+  const normalizedPath = String(path || "/").startsWith("/") ? path : `/${path}`;
+  return `http://${host}:${port}${normalizedPath}`;
 }
 
 async function startActionRecording() {

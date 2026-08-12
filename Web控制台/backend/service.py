@@ -98,6 +98,7 @@ class WebControlService:
         self.bridge = ControllerBridge(config, base_dir=self.base_dir, logger=self.logger)
         self._lock = threading.RLock()
         self._action_thread: threading.Thread | None = None
+        self._action_video: dict[str, Any] | None = None
         self._follow_controller: Any | None = None
         self._subject_lock_controller: Any | None = None
         self._continuous_jog_thread: threading.Thread | None = None
@@ -139,6 +140,7 @@ class WebControlService:
                 if key != "continuous_target_horizon_s"
             },
             "follow": self.config.get("follow", {}),
+            "camera_hub": self._camera_hub_public_config(),
             "agent_demo": self._agent_demo_public_config(),
             "poster_demo": self._poster_demo_public_config(),
         }
@@ -1650,21 +1652,60 @@ class WebControlService:
                 self.bridge.stop_action()
                 self._action_thread.join(timeout=0.5)
             self.stop_continuous_jog(join_timeout=0.2)
+            self._action_video = None
+            video = (
+                {
+                    "state": "positioning",
+                    "action_name": request.name,
+                    "message": "正在前往动作第一帧，到位后开始录像。",
+                }
+                if request.record_video and self._action_video_enabled()
+                else None
+            )
+            self._action_video = video
 
             def worker() -> None:
+                def start_video_after_positioning() -> None:
+                    if video is None:
+                        return
+                    try:
+                        started = self._start_action_video(request.name)
+                        if started is None:
+                            raise RuntimeError("Camera Hub 动作录像未启用。")
+                        video.clear()
+                        video.update(started)
+                        time.sleep(max(0.0, float(self.config.get("camera_hub", {}).get("preroll_sec", 0.4))))
+                    except Exception as exc:
+                        video.update({"state": "error", "finished_at": time.time(), "error": str(exc)})
+                        raise
+
                 try:
-                    self.bridge.play_action(request.name, request.speed, request.loop)
+                    if video is not None:
+                        self.bridge.play_action(
+                            request.name,
+                            request.speed,
+                            request.loop,
+                            on_first_pose_ready=start_video_after_positioning,
+                        )
+                    else:
+                        self.bridge.play_action(request.name, request.speed, request.loop)
                 except Exception as exc:
                     self._remember_error("ACTION_WORKER_FAILED", f"动作线程异常：{exc}")
                     self.logger.log("error", "action_worker_exception", str(exc), traceback=traceback.format_exc())
+                finally:
+                    if video is not None and video.get("state") in {"recording", "finalizing"}:
+                        self._finish_action_video(video, request.name)
 
             self._action_thread = threading.Thread(target=worker, name=f"web-action-{request.name}", daemon=True)
             self._action_thread.start()
             self.logger.log("info", "action_started", f"动作已开始：{request.name}", name=request.name, speed=request.speed, loop=request.loop)
-            return {
+            response = {
                 "message": f"动作已开始播放：{request.name}",
                 "action": self.current_action_status(),
             }
+            if video is not None:
+                response["video_recording"] = dict(video)
+            return response
 
     def pause_action(self) -> dict[str, Any]:
         return self._unwrap_bridge(self.bridge.pause_action(), code="ACTION_PAUSE_FAILED")
@@ -1682,7 +1723,103 @@ class WebControlService:
     def current_action_status(self) -> dict[str, Any]:
         action = dict(self.bridge.action_status)
         action["thread_alive"] = bool(self._action_thread and self._action_thread.is_alive())
+        video = getattr(self, "_action_video", None)
+        if video is not None:
+            action["video_recording"] = dict(video)
         return action
+
+    def _start_action_video(self, action_name: str) -> dict[str, Any] | None:
+        config = self.config.get("camera_hub", {})
+        if not self._action_video_enabled():
+            return None
+        try:
+            media = self._camera_hub_post("/api/v1/recordings/start")
+        except WebAPIError:
+            raise
+        except Exception as exc:
+            raise WebAPIError(
+                "CAMERA_HUB_RECORDING_START_FAILED",
+                f"已到动作第一帧，但 Camera Hub 无法开始录像，正式动作未执行：{exc}",
+                status_code=502,
+            ) from exc
+        media_id = str(media.get("id") or "").strip()
+        if not media_id:
+            raise WebAPIError("CAMERA_HUB_INVALID_RESPONSE", "Camera Hub 未返回录像 ID，动作未执行。", status_code=502)
+        video = {
+            "state": "recording",
+            "media_id": media_id,
+            "action_name": action_name,
+            "created_at": media.get("created_at"),
+            "started_at": time.time(),
+        }
+        self.logger.log("info", "action_video_started", f"动作录像已开始：{action_name}", media_id=media_id)
+        return video
+
+    def _action_video_enabled(self) -> bool:
+        config = self.config.get("camera_hub", {})
+        return bool(config.get("enabled", False)) and bool(config.get("record_with_actions", True))
+
+    def _finish_action_video(self, video: dict[str, Any], action_name: str) -> None:
+        media_id = str(video.get("media_id") or "")
+        if self._action_video is video:
+            video["state"] = "finalizing"
+        try:
+            media = self._camera_hub_post("/api/v1/recordings/stop")
+            stopped_id = str(media.get("id") or media_id)
+            if stopped_id != media_id:
+                raise RuntimeError(f"录像 ID 不一致：started={media_id}, stopped={stopped_id}")
+            video.update(
+                {
+                    "state": "ready",
+                    "finished_at": time.time(),
+                    "duration_sec": media.get("duration_sec"),
+                    "download_name": media.get("download_name"),
+                    "content_path": media.get("content_url") or f"/api/v1/media/{media_id}/content",
+                    "camera_hub_path": f"/?media={media_id}",
+                }
+            )
+            self.logger.log("info", "action_video_ready", f"动作录像已保存：{action_name}", media_id=media_id)
+        except Exception as exc:
+            video.update({"state": "error", "finished_at": time.time(), "error": str(exc)})
+            self._remember_error("CAMERA_HUB_RECORDING_STOP_FAILED", f"动作已结束，但录像保存失败：{exc}")
+
+    def _camera_hub_post(self, path: str) -> dict[str, Any]:
+        config = self.config.get("camera_hub", {})
+        base_url = str(config.get("base_url") or "http://127.0.0.1:8020").rstrip("/")
+        timeout_key = "finalize_timeout_sec" if path.endswith("/stop") else "request_timeout_sec"
+        timeout = max(0.5, float(config.get(timeout_key, 90.0 if path.endswith("/stop") else 5.0)))
+        request = urllib.request.Request(f"{base_url}{path}", data=b"", method="POST")
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            detail = ""
+            try:
+                detail = str(json.loads(exc.read().decode("utf-8")).get("detail") or "")
+            except Exception:
+                pass
+            if exc.code == 409:
+                raise WebAPIError(
+                    "CAMERA_HUB_RECORDING_CONFLICT",
+                    "Camera Hub 已在录像，请先停止现有录像后再播放动作。",
+                    status_code=409,
+                ) from exc
+            raise WebAPIError(
+                "CAMERA_HUB_HTTP_ERROR",
+                f"Camera Hub HTTP {exc.code}{f'：{detail}' if detail else ''}",
+                status_code=502,
+            ) from exc
+        if not isinstance(payload, dict):
+            raise WebAPIError("CAMERA_HUB_INVALID_RESPONSE", "Camera Hub 返回了无效数据。", status_code=502)
+        return payload
+
+    def _camera_hub_public_config(self) -> dict[str, Any]:
+        config = self.config.get("camera_hub", {})
+        return {
+            "enabled": bool(config.get("enabled", False)),
+            "public_port": int(config.get("public_port", 8020)),
+            "record_with_actions": bool(config.get("record_with_actions", True)),
+        }
 
     # ------------------------------------------------------------------
     # 运动学额外接口，供前端 FK / IK 页使用。

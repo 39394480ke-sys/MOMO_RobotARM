@@ -103,4 +103,29 @@ for frame in ab_frames:
 assert ab_frames[-1]["j10"] == 100.0
 assert ab_frames[-1]["j11"] == 10.0
 
+recording_controller = RecordingController()
+recording_player = NoSleepSequencePlayer(recording_controller, config)
+first_pose_events: list[tuple[int, float, float]] = []
+
+
+def on_first_pose_ready() -> None:
+    first_pose_events.append(
+        (
+            len(recording_controller.frames),
+            recording_controller.current["j10"],
+            recording_controller.current["j11"],
+        )
+    )
+
+
+recording_ok = recording_player.play(sequence, on_first_pose_ready=on_first_pose_ready)
+assert recording_ok is True
+assert recording_player.play_pose_calls == 1
+assert len(first_pose_events) == 1, first_pose_events
+positioning_frame_count, ready_j10, ready_j11 = first_pose_events[0]
+assert positioning_frame_count > 0
+assert (ready_j10, ready_j11) == (0.0, 0.0)
+assert recording_controller.frames[positioning_frame_count - 1]["j10"] == 0.0
+assert recording_controller.frames[positioning_frame_count]["j10"] > 0.0
+
 print("连续插值同步测试通过")

@@ -1042,8 +1042,17 @@ def load_action_for_replay(library: Any, player: Any, name: str) -> dict[str, An
     return sequence
 
 
-def play_loaded_action(player: Any, sequence: Mapping[str, Any], speed: float = 1.0, loop: bool = False) -> bool:
-    return bool(player.play(sequence, loop=bool(loop), speed=float(speed)))
+def play_loaded_action(
+    player: Any,
+    sequence: Mapping[str, Any],
+    speed: float = 1.0,
+    loop: bool = False,
+    on_first_pose_ready: Any | None = None,
+) -> bool:
+    kwargs = {"loop": bool(loop), "speed": float(speed)}
+    if on_first_pose_ready is not None:
+        kwargs["on_first_pose_ready"] = on_first_pose_ready
+    return bool(player.play(sequence, **kwargs))
 
 
 def load_pose_manager(project_root: str | Path, sim_config_path: str | Path) -> Any:

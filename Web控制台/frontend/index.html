@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>机械臂 Web 控制台</title>
-    <link rel="stylesheet" href="/static/styles.css?v=20260725-agent-layout-recording-warning-dialog" />
+    <link rel="stylesheet" href="/static/styles.css?v=20260725-agent-layout-recording-warning-dialog-20260812-action-camera-recording" />
   </head>
   <body>
     <div id="app">
@@ -149,6 +149,10 @@
                 <label class="check-inline">
                   <input id="actionLoop" type="checkbox" />
                   <span>循环</span>
+                </label>
+                <label class="check-inline">
+                  <input id="recordActionVideo" type="checkbox" checked />
+                  <span>同步录像</span>
                 </label>
                 <button id="pauseActionBtn">暂停</button>
                 <button id="resumeActionBtn">继续</button>
@@ -711,7 +715,21 @@
       </div>
     </dialog>
 
+    <dialog id="actionVideoDialog" class="action-video-dialog" aria-labelledby="actionVideoTitle">
+      <div class="action-video-dialog-body">
+        <div class="action-video-success" aria-hidden="true">✓</div>
+        <div>
+          <h3 id="actionVideoTitle">动作拍摄完成</h3>
+          <p id="actionVideoSummary">录像已保存到 Camera Hub。</p>
+        </div>
+        <div class="action-video-dialog-actions">
+          <button id="actionVideoClose" type="button">关闭</button>
+          <a id="actionVideoOpen" class="dialog-primary-link" target="_blank" rel="noreferrer">在 Camera Hub 查看</a>
+        </div>
+      </div>
+    </dialog>
+
     <script src="/static/audio-recorder.js?v=20260724-web-cloud-stt"></script>
-    <script src="/static/app.js?v=20260725-continuous-follow-j10-mm-ai-confirm-agent-layout-recording-unnamed-two-frame-guard"></script>
+    <script src="/static/app.js?v=20260725-continuous-follow-j10-mm-ai-confirm-agent-layout-recording-unnamed-two-frame-guard-20260812-action-camera-recording"></script>
   </body>
 </html>

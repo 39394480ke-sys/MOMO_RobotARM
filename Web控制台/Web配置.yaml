@@ -16,6 +16,15 @@ app:
   log_path: runtime/logs/web_api.log
   session_state_path: runtime/state/session_state.json
 
+camera_hub:
+  enabled: true
+  base_url: http://127.0.0.1:8020
+  public_port: 8020
+  record_with_actions: true
+  preroll_sec: 0.4
+  request_timeout_sec: 5.0
+  finalize_timeout_sec: 90.0
+
 agent_demo:
   enabled: true
   trigger_text: 帮我生成一个环绕主体运镜的轨迹

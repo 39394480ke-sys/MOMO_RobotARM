@@ -165,6 +165,7 @@ class PlayActionRequest(BaseModel):
     name: str
     speed: float = Field(1.0, ge=0.1, le=3.0)
     loop: bool = False
+    record_video: bool = True
     confirm_text: str = ""
 
 

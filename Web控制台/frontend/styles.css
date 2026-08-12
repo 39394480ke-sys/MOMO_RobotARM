@@ -444,6 +444,40 @@ pre {
   margin-bottom: 12px;
 }
 
+.warning-dialog {
+  width: min(420px, calc(100vw - 32px));
+  padding: 0;
+  border: 1px solid #f0b44d;
+  border-radius: 8px;
+  background: #fff;
+  color: #18212f;
+  box-shadow: 0 18px 48px rgb(15 23 42 / 24%);
+}
+
+.warning-dialog::backdrop {
+  background: rgb(15 23 42 / 46%);
+}
+
+.warning-dialog-body {
+  display: grid;
+  gap: 14px;
+  padding: 22px;
+}
+
+.warning-dialog-body h3,
+.warning-dialog-body p {
+  margin: 0;
+}
+
+.warning-dialog-body p {
+  color: #566173;
+  line-height: 1.6;
+}
+
+.warning-dialog-body button {
+  justify-self: end;
+}
+
 .action-detail-panel,
 .pose-detail-panel {
   margin-bottom: 12px;

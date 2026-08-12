@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>机械臂 Web 控制台</title>
-    <link rel="stylesheet" href="/static/styles.css?v=20260725-agent-layout" />
+    <link rel="stylesheet" href="/static/styles.css?v=20260725-agent-layout-recording-warning-dialog" />
   </head>
   <body>
     <div id="app">
@@ -703,7 +703,15 @@
       </div>
     </div>
 
+    <dialog id="recordingFrameWarningDialog" class="warning-dialog" aria-labelledby="recordingFrameWarningTitle">
+      <div class="warning-dialog-body">
+        <h3 id="recordingFrameWarningTitle">至少需要两帧</h3>
+        <p>当前录制只有一帧，暂时不能保存。已采集的帧仍会保留，请继续采集后再保存。</p>
+        <button id="recordingFrameWarningClose" class="primary" type="button">继续采集</button>
+      </div>
+    </dialog>
+
     <script src="/static/audio-recorder.js?v=20260724-web-cloud-stt"></script>
-    <script src="/static/app.js?v=20260725-continuous-follow-j10-mm-ai-confirm-agent-layout"></script>
+    <script src="/static/app.js?v=20260725-continuous-follow-j10-mm-ai-confirm-agent-layout-recording-unnamed-two-frame-guard"></script>
   </body>
 </html>

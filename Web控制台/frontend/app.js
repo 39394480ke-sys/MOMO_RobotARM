@@ -93,6 +93,7 @@ function bindEvents() {
   $("#captureRecordingBtn").addEventListener("click", captureActionRecording);
   $("#saveRecordingBtn").addEventListener("click", saveActionRecording);
   $("#cancelRecordingBtn").addEventListener("click", cancelActionRecording);
+  $("#recordingFrameWarningClose").addEventListener("click", () => $("#recordingFrameWarningDialog").close());
   $("#refreshFollowBtn").addEventListener("click", refreshFollow);
   $("#startFollowBtn").addEventListener("click", startFollow);
   $("#stopFollowBtn").addEventListener("click", stopFollow);
@@ -832,13 +833,13 @@ async function playAction(name) {
 }
 
 async function startActionRecording() {
-  const fallback = `Web录制_${new Date().toTimeString().slice(0, 8).replaceAll(":", "")}`;
-  const name = $("#recordingNameInput").value.trim() || fallback;
+  const name = $("#recordingNameInput").value.trim();
   const body = await withSafety({ name });
   if (!body) return;
   try {
     const data = await postJsonLogged("/api/v1/actions/recording/start", body);
     state.recording = data.recording || {};
+    if (!name && state.recording.name) $("#recordingNameInput").value = state.recording.name;
     renderRecordingStatus();
   } catch (_) {}
 }
@@ -854,18 +855,36 @@ async function captureActionRecording() {
 }
 
 async function saveActionRecording() {
+  const recording = state.recording || {};
+  if (Number(recording.pose_count || 0) < 2) {
+    showRecordingFrameWarning();
+    return;
+  }
   try {
+    const clearAutoName = Boolean(recording.auto_named);
     const data = await postJsonLogged("/api/v1/actions/recording/save", {});
     state.recording = data.recording || {};
+    if (clearAutoName) $("#recordingNameInput").value = "";
     renderRecordingStatus();
     await loadActions();
   } catch (_) {}
 }
 
+function showRecordingFrameWarning() {
+  const dialog = $("#recordingFrameWarningDialog");
+  if (typeof dialog.showModal === "function") {
+    dialog.showModal();
+    return;
+  }
+  window.alert("动作录制至少需要两帧。当前帧已保留，请继续采集后再保存。");
+}
+
 async function cancelActionRecording() {
   try {
+    const clearAutoName = Boolean(state.recording?.auto_named);
     const data = await postJsonLogged("/api/v1/actions/recording/cancel", {});
     state.recording = data.recording || {};
+    if (clearAutoName) $("#recordingNameInput").value = "";
     renderRecordingStatus();
   } catch (_) {}
 }

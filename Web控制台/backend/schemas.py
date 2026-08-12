@@ -169,7 +169,7 @@ class PlayActionRequest(BaseModel):
 
 
 class ActionRecordingStartRequest(BaseModel):
-    name: str = Field(..., min_length=1)
+    name: str = ""
     confirm_text: str = ""
 
 

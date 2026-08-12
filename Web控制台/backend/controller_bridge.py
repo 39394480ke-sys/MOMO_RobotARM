@@ -11,12 +11,13 @@
 
 from __future__ import annotations
 
+import math
 import platform
+import re
 import shutil
 import subprocess
 import time
 import traceback
-import math
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -93,6 +94,7 @@ class ControllerBridge:
         self.recording_sequence: dict[str, Any] | None = None
         self.recording_name = ""
         self.recording_source = "web_record"
+        self.recording_auto_named = False
         self.last_error = ""
         self.action_status: dict[str, Any] = {
             "state": "idle",
@@ -1126,7 +1128,8 @@ class ControllerBridge:
 
     def start_action_recording(self, name: str, source: str = "web_record") -> dict[str, Any]:
         try:
-            action_name = sanitize_action_name(name)
+            requested_name = str(name or "").strip()
+            action_name = sanitize_action_name(requested_name) if requested_name else self._next_untitled_action_name()
             self.recording_sequence = build_recording_sequence(
                 action_name,
                 source,
@@ -1135,6 +1138,7 @@ class ControllerBridge:
             )
             self.recording_name = action_name
             self.recording_source = source
+            self.recording_auto_named = not requested_name
             self._ensure_controller()
             self._set_action_status("recording", action_name, f"录制中：{action_name}")
             self._log("info", "start_recording", f"已开始动作录制：{action_name}", name=action_name, source=source)
@@ -1164,8 +1168,9 @@ class ControllerBridge:
         try:
             if self.recording_sequence is None:
                 return bridge_fail("没有正在进行的动作录制。")
-            if not self.recording_sequence.get("poses"):
-                return bridge_fail("当前录制没有任何姿态帧，不能保存。")
+            poses = self.recording_sequence.get("poses", [])
+            if len(poses) < 2:
+                return bridge_fail("动作录制至少需要两帧。当前录制内容已保留，请继续采集后再保存。")
             name = self.recording_name
             refresh_action_pose_count(self.recording_sequence)
             path = self._get_action_library().save_action(name, self.recording_sequence)
@@ -1173,6 +1178,7 @@ class ControllerBridge:
             self.recording_sequence = None
             self.recording_name = ""
             self.recording_source = "web_record"
+            self.recording_auto_named = False
             self._set_action_status("idle", "", "空闲")
             self._log("info", "save_recording_action", f"动作录制已保存：{name}", name=name, pose_count=count, action_path=str(path))
             return bridge_ok(
@@ -1187,6 +1193,7 @@ class ControllerBridge:
         self.recording_sequence = None
         self.recording_name = ""
         self.recording_source = "web_record"
+        self.recording_auto_named = False
         self._set_action_status("idle", "", "空闲")
         self._log("warning", "cancel_recording_action", "已取消动作录制。", name=name)
         return bridge_ok("已取消动作录制。", {"recording": self._recording_summary()})
@@ -1530,9 +1537,22 @@ class ControllerBridge:
             "active": self.recording_sequence is not None,
             "name": self.recording_name,
             "source": self.recording_source,
+            "auto_named": self.recording_auto_named,
             "robot_variant": sequence.get("robot_variant") if isinstance(sequence, dict) else None,
             "pose_count": len(sequence.get("poses", [])) if isinstance(sequence, dict) else 0,
         }
+
+    def _next_untitled_action_name(self) -> str:
+        names = set(self._get_action_library().list_actions())
+        used_numbers = {
+            int(match.group(1))
+            for name in names
+            if (match := re.fullmatch(r"未命名(\d+)", name))
+        }
+        index = 1
+        while index in used_numbers:
+            index += 1
+        return f"未命名{index}"
 
     # ------------------------------------------------------------------
     # 安全 / 日志

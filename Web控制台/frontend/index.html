@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>机械臂 Web 控制台</title>
-    <link rel="stylesheet" href="/static/styles.css?v=20260725-agent-layout-recording-warning-dialog-20260812-action-camera-recording" />
+    <link rel="stylesheet" href="/static/styles.css?v=20260716-continuous-follow-j10-mm-ai-confirm-mobile-joint-hold-agent-layout-recording-unnamed-two-frame-guard-20260812-action-camera-recording-camera-hub-vision-v3" />
   </head>
   <body>
     <div id="app">
@@ -282,23 +282,12 @@
                 </dl>
               </section>
 
-              <section class="panel vision-preview-panel">
+              <section class="panel camera-hub-vision-panel">
                 <div class="panel-head">
-                  <h3>视觉预览</h3>
-                  <div class="inline-actions">
-                    <button id="refreshVisionPreviewBtn">刷新画面</button>
-                    <button id="toggleVisionLiveBtn">开始实时刷新</button>
-                    <button id="loadVisionMockBtn">加载模拟目标</button>
-                    <button id="clearVisionMockBtn">退出模拟</button>
-                  </div>
-                </div>
-                <div class="vision-preview">
-                  <img id="visionPreviewFrame" alt="视觉服务画面预览" />
-                  <svg id="visionOverlay" class="vision-overlay" aria-hidden="true"></svg>
+                  <h3>视觉状态</h3>
+                  <a id="cameraHubFollowLink" class="command-link" href="http://127.0.0.1:8020/" target="_blank" rel="noreferrer">打开 Camera Hub</a>
                 </div>
                 <dl class="kv wide">
-                  <dt>frame</dt><dd id="visionPreviewUrl">--</dd>
-                  <dt>状态</dt><dd id="visionPreviewState">等待刷新</dd>
                   <dt>服务</dt><dd id="visionHealthState">--</dd>
                   <dt>引擎</dt><dd id="visionEngineState">--</dd>
                   <dt>目标</dt><dd id="visionLatestState">--</dd>
@@ -316,20 +305,7 @@
                   <dt>人脸数</dt><dd id="visionFacesState">--</dd>
                   <dt>检测器</dt><dd id="visionDetectorState">--</dd>
                 </dl>
-                <div class="vision-target-tools">
-                  <div class="input-grid four">
-                    <input id="visionTargetX" type="number" min="0" step="1" placeholder="x" />
-                    <input id="visionTargetY" type="number" min="0" step="1" placeholder="y" />
-                    <input id="visionTargetW" type="number" min="1" step="1" placeholder="w" />
-                    <input id="visionTargetH" type="number" min="1" step="1" placeholder="h" />
-                  </div>
-                  <div class="inline-actions">
-                    <button id="selectVisionTargetBtn">选择手动目标</button>
-                    <button id="resetVisionTargetBtn">重置目标</button>
-                    <button id="refreshVisionTargetBtn">刷新目标状态</button>
-                  </div>
-                  <div id="visionTargetToolState" class="inline-status">手动目标未操作</div>
-                </div>
+                <div id="visionTargetToolState" class="inline-status">目标状态未读取</div>
                 <details class="debug-output-panel">
                   <summary>调试输出</summary>
                   <pre id="visionLatestJson" class="result-box"></pre>
@@ -436,14 +412,10 @@
                 <div id="subjectLockMessage" class="inline-status">等待操作</div>
               </section>
 
-              <section class="panel subject-lock-preview-panel">
+              <section class="panel subject-lock-preview-panel camera-hub-subject-panel">
                 <div class="panel-head">
                   <h3>主体框选</h3>
-                  <button id="refreshSubjectLockPreviewBtn">刷新画面</button>
-                </div>
-                <div class="vision-preview subject-lock-preview">
-                  <img id="subjectLockPreviewFrame" alt="主体锁定画面" />
-                  <svg id="subjectLockOverlay" class="vision-overlay" aria-hidden="true"></svg>
+                  <a id="cameraHubSubjectLink" class="command-link" href="http://127.0.0.1:8020/" target="_blank" rel="noreferrer">打开 Camera Hub</a>
                 </div>
                 <div id="subjectLockTargetState" class="inline-status">尚未框选主体</div>
               </section>
@@ -668,7 +640,7 @@
               <section class="panel module-links-panel">
                 <div class="panel-head"><h3>模块入口</h3></div>
                 <div class="module-link-grid">
-                  <a href="/api/v1/vision/frame.jpg" target="_blank" rel="noreferrer">视觉画面</a>
+                  <a id="cameraHubSettingsLink" href="http://127.0.0.1:8020/" target="_blank" rel="noreferrer">Camera Hub</a>
                   <a href="/api/v1/vision/latest" target="_blank" rel="noreferrer">视觉 latest</a>
                   <a href="http://127.0.0.1:8000/debug" target="_blank" rel="noreferrer">视觉调试</a>
                   <a href="/docs" target="_blank" rel="noreferrer">Web API</a>
@@ -730,6 +702,6 @@
     </dialog>
 
     <script src="/static/audio-recorder.js?v=20260724-web-cloud-stt"></script>
-    <script src="/static/app.js?v=20260725-continuous-follow-j10-mm-ai-confirm-agent-layout-recording-unnamed-two-frame-guard-20260812-action-camera-recording"></script>
+    <script src="/static/app.js?v=20260716-continuous-follow-j10-mm-ai-confirm-mobile-joint-hold-agent-layout-recording-unnamed-two-frame-guard-20260812-action-camera-recording-camera-hub-vision-v3"></script>
   </body>
 </html>

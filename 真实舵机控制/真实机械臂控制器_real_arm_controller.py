@@ -213,8 +213,13 @@ class RealArmController:
             ),
         }
 
-    def stream_joint_target(self, joint_key: str, target_deg: float) -> 流写入结果:
-        """连续位置流单帧：仅安全检查、映射并写入当前关节。"""
+    def stream_joint_target(
+        self,
+        joint_key: str,
+        target_deg: float,
+        max_target_lead: float | None = None,
+    ) -> 流写入结果:
+        """连续位置流单帧，并限制目标领先真实位置的距离。"""
 
         if joint_key not in self.joint_config_by_key:
             return 流写入结果(False, f"未知关节：{joint_key}", False)
@@ -223,6 +228,21 @@ class RealArmController:
 
         try:
             target = float(target_deg)
+            if max_target_lead is not None and not self.is_dry_run():
+                present_raw = int(self.driver.read_present_position(joint_key))
+                self.current_raw[joint_key] = present_raw
+                entry = self._calibration_entry_for_move(joint_key)
+                present = float(
+                    present_raw_to_joint_detail(
+                        joint_key,
+                        present_raw,
+                        self.joint_config_by_key[joint_key],
+                        entry,
+                        self.runtime_state,
+                    )["joint_deg"]
+                )
+                lead = abs(float(max_target_lead))
+                target = max(present - lead, min(present + lead, target))
             targets = {joint_key: target}
             angle_check = self.safety_checker.check_all_joint_angles(targets, self.joint_config_by_key)
             if not angle_check.成功:

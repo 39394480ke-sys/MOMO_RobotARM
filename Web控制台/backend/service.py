@@ -1273,6 +1273,7 @@ class WebControlService:
             update_hz = max(2.0, float(tuning.get("continuous_update_hz", 50.0)))
             max_step = self._manual_step_limit()
             speed = min(abs(float(request.speed_deg_s)), max_step * update_hz)
+            max_target_lead = min(max_step, max(0.05, speed * 0.03))
             state_result = self.bridge.get_state()
             state_data = self._unwrap_bridge(state_result, code="CONTINUOUS_JOG_STATE_FAILED")
             current_joints = state_data.get("joints_deg", {})
@@ -1288,6 +1289,7 @@ class WebControlService:
                 "start_deg": start_deg,
                 "target_deg": start_deg,
                 "delta_per_tick": direction * min(max_step, speed / update_hz),
+                "max_target_lead": max_target_lead,
                 "started_at": time.time(),
                 "tick_count": 0,
                 "write_count": 0,
@@ -1310,7 +1312,11 @@ class WebControlService:
                     with self._lock:
                         if stop_event.is_set():
                             return False
-                        result = self.bridge.stream_single_joint_target(joint, target_deg)
+                        result = self.bridge.stream_single_joint_target(
+                            joint,
+                            target_deg,
+                            max_target_lead=max_target_lead,
+                        )
                     if not result.get("ok"):
                         message = str(result.get("message") or result.get("error") or "连续控制失败。")
                         raise RuntimeError(message)
@@ -1867,7 +1873,7 @@ class WebControlService:
         }
 
     # ------------------------------------------------------------------
-    # 视觉服务代理。前端只访问 Web 服务，避免浏览器侧 127.0.0.1 指向错误机器。
+    # 视觉 JSON 代理供状态页使用；实时画面和框选已迁移到 Camera Hub。
     # ------------------------------------------------------------------
     def vision_health(self) -> dict[str, Any]:
         return self._fetch_vision_json("/health")

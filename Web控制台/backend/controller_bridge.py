@@ -729,7 +729,12 @@ class ControllerBridge:
         except Exception as exc:
             return self._exception("批量关节移动失败", exc)
 
-    def stream_single_joint_target(self, joint_key: str, target_deg: float) -> dict[str, Any]:
+    def stream_single_joint_target(
+        self,
+        joint_key: str,
+        target_deg: float,
+        max_target_lead: float | None = None,
+    ) -> dict[str, Any]:
         """连续位置流单帧，不读取全关节、不落盘、不写逐帧日志。"""
 
         try:
@@ -740,7 +745,7 @@ class ControllerBridge:
             if self.controller is None:
                 return bridge_fail("控制器未创建。")
             if hasattr(self.controller, "stream_joint_target"):
-                result = self.controller.stream_joint_target(joint, target)
+                result = self.controller.stream_joint_target(joint, target, max_target_lead=max_target_lead)
                 data = {
                     "joint_key": joint,
                     "target_deg": target,

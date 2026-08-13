@@ -60,6 +60,19 @@ button.danger {
   color: #fff;
 }
 
+.command-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 8px 12px;
+  border: 1px solid var(--blue);
+  border-radius: 6px;
+  color: #fff;
+  background: var(--blue);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
 input,
 select {
   border: 1px solid var(--line);
@@ -693,68 +706,8 @@ pre {
   grid-column: span 12;
 }
 
-.vision-preview-panel {
+.camera-hub-vision-panel {
   grid-column: span 12;
-}
-
-.vision-preview {
-  margin-top: 10px;
-  position: relative;
-  display: grid;
-  place-items: center;
-  min-height: 260px;
-  background: #111827;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  overflow: hidden;
-  cursor: crosshair;
-  user-select: none;
-}
-
-.vision-preview img {
-  display: block;
-  width: 100%;
-  max-height: 420px;
-  object-fit: contain;
-}
-
-.vision-overlay {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-}
-
-.vision-overlay .bbox {
-  fill: none;
-  stroke: #22c55e;
-  stroke-width: 2;
-}
-
-.vision-overlay .desired {
-  stroke: #38bdf8;
-  stroke-width: 2;
-}
-
-.vision-overlay .center {
-  fill: #f97316;
-  stroke: #fff7ed;
-  stroke-width: 1.5;
-}
-
-.vision-overlay .dead-zone {
-  fill: rgba(56, 189, 248, 0.08);
-  stroke: rgba(56, 189, 248, 0.72);
-  stroke-dasharray: 6 4;
-  stroke-width: 1.5;
-}
-
-.vision-overlay .selection-box {
-  fill: rgba(59, 130, 246, 0.16);
-  stroke: #f8fafc;
-  stroke-dasharray: 5 4;
-  stroke-width: 2;
 }
 
 .input-grid {
@@ -907,20 +860,6 @@ th {
   accent-color: var(--blue);
 }
 
-.subject-lock-preview {
-  width: 100%;
-  min-width: 0;
-  aspect-ratio: 16 / 9;
-  min-height: 260px;
-}
-
-.subject-lock-preview img {
-  width: 100%;
-  height: 100%;
-  min-width: 0;
-  max-width: 100%;
-  object-fit: contain;
-}
 
 .subject-lock-curve {
   display: block;
@@ -1424,10 +1363,6 @@ th {
     white-space: nowrap;
   }
 
-  .subject-lock-preview {
-    min-height: 180px;
-  }
-
   .joints-panel,
   .tcp-panel,
   .log-panel,
@@ -1436,7 +1371,7 @@ th {
   .kin-render-panel,
   .kin-compute-panel,
   .jog-panel,
-  .vision-preview-panel,
+  .camera-hub-vision-panel,
   .settings-grid > .panel,
   .hardware-panel,
   .agent-chat-panel,

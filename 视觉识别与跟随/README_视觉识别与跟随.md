@@ -151,12 +151,18 @@ POST http://127.0.0.1:8010/api/v1/motion/joint-step
 python 视觉主程序_main.py gesture
 ```
 
-第一版只识别手势，不默认执行真实动作。可识别手势用于后续扩展：
+除 `Victory` 拍照外，其余手势只做识别，不默认执行真实动作：
 
+- `Victory`：通过 Camera Hub 保存一张主流原图
 - `Open_Palm`：停止
 - `Closed_Fist`：闭合夹爪
 - `Thumb_Up`：播放动作
 - `Pointing_Up`：回家
+
+`Victory` 必须同时成为原始手势和稳定手势才会触发。拍照通过后台线程异步执行，不会
+阻塞视觉处理；默认拍照后冷却 5 秒，并且必须先放下手或变成其他手势才会重新上膛。
+状态可在 `/latest` 的 `victory_snapshot` 和 `gesture.snapshot` 中查看。相关配置位于
+`gesture.victory_snapshot`，Camera Hub 默认地址为 `http://127.0.0.1:8020`。
 
 ## 阶段八 follow 接口
 
@@ -186,12 +192,16 @@ curl -X POST http://127.0.0.1:8010/api/v1/follow/start \
 
 ```bash
 export ARM_VISION_SOURCE_TYPE=rtsp
-export ARM_VISION_RTSP_URL=rtsp://127.0.0.1:8554/armcam
+export ARM_VISION_RTSP_URL=rtsp://127.0.0.1:8554/armcam-analysis
 ```
 
+`armcam-analysis` 是 Camera Hub 的 640x360、30 FPS 分析流；1080p `armcam` 继续供
+WebRTC 预览、拍照和录像使用。RTSP 由专用线程持续解码，视觉处理只读取单槽中的最新
+一帧；慢消费者会丢弃中间帧而不会积压旧画面。结果包含源帧编号、接收时间、处理延迟
+和丢帧数，跟随控制器会拒绝元数据缺失、重复、停止更新或超过超时阈值的画面。
+
 RTSP 模式不会回退去抢占本地摄像头。URL 缺失、源配置错误、打开失败、读帧失败或
-旋转配置无效时，接口会返回清晰错误而不是让进程崩溃。读帧失败后，引擎会关闭当前
-源；下一次 `process` 调用会尝试重新打开/重连 RTSP，从而走 Camera Hub 的重连路径。
+旋转配置无效时，接口会返回清晰错误而不是让进程崩溃；断流后读取线程会自动重连。
 这些错误不会触发机械臂动作。
 
 YuNet 权重缺失：把 `face_detection_yunet_2023mar.onnx` 放进 `weights/`。缺失时服务仍可启动，但人脸检测不可用。

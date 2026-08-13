@@ -24,7 +24,7 @@ class FakeRealController:
         self.read_count = 0
         self.sync_count = 0
 
-    def stream_joint_target(self, joint_key: str, target_deg: float):
+    def stream_joint_target(self, joint_key: str, target_deg: float, max_target_lead: float | None = None):
         self.stream_count += 1
         return types.SimpleNamespace(成功=True, 消息="已写入", 已写入=True, 目标raw=1234)
 
@@ -180,6 +180,7 @@ class StreamingBridge:
         self.target = 0.0
         self.stream_count = 0
         self.sync_count = 0
+        self.max_target_leads: list[float | None] = []
         self.full_move_count = 0
         self.fail_after: int | None = None
 
@@ -193,9 +194,15 @@ class StreamingBridge:
     def get_cached_state(self) -> dict:
         return self.get_state()
 
-    def stream_single_joint_target(self, joint_key: str, target_deg: float) -> dict:
+    def stream_single_joint_target(
+        self,
+        joint_key: str,
+        target_deg: float,
+        max_target_lead: float | None = None,
+    ) -> dict:
         self.target = float(target_deg)
         self.stream_count += 1
+        self.max_target_leads.append(max_target_lead)
         if self.fail_after is not None and self.stream_count >= self.fail_after:
             return {"ok": False, "message": "模拟通信失败", "error": "模拟通信失败", "data": {}}
         return {
@@ -241,10 +248,25 @@ class WebServiceContinuousWorkerTest(unittest.TestCase):
         self.assertFalse(result["jog"]["running"])
         self.assertGreaterEqual(service.bridge.stream_count, 3)
         self.assertEqual(service.bridge.full_move_count, 0)
+        self.assertTrue(all(lead == 0.3 for lead in service.bridge.max_target_leads))
         self.assertEqual(service.bridge.sync_count, 1)
         self.assertGreater(result["jog"]["actual_update_hz"], 0.0)
         self.assertIn("skipped_tick_count", result["jog"])
         self.assertIn("write_count", result["jog"])
+
+    def test_target_lead_scales_with_requested_speed(self) -> None:
+        slow = self.make_service()
+        slow.start_continuous_jog(ContinuousJogStartRequest(joint_key="j11", direction=1, speed_deg_s=2.0))
+        time.sleep(0.03)
+        slow.stop_continuous_jog(join_timeout=1.0)
+
+        fast = self.make_service()
+        fast.start_continuous_jog(ContinuousJogStartRequest(joint_key="j11", direction=1, speed_deg_s=20.0))
+        time.sleep(0.03)
+        fast.stop_continuous_jog(join_timeout=1.0)
+
+        self.assertTrue(all(lead == 0.06 for lead in slow.bridge.max_target_leads))
+        self.assertTrue(all(lead == 0.6 for lead in fast.bridge.max_target_leads))
 
     def test_communication_failure_terminates_stream_and_still_syncs(self) -> None:
         service = self.make_service()

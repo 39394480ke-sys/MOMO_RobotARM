@@ -19,6 +19,8 @@ from .主体跟踪_object_tracker import ObjectTracker
 from .摄像头_source import VideoSource
 from .目标选择_target_selector import TargetSelector
 from .结果存储_result_store import ResultStore
+from .胜利手势拍照_victory_snapshot import VictorySnapshotController
+from .异步手势处理_async_gesture import AsyncGestureProcessor
 
 
 class VisionEngine:
@@ -45,6 +47,8 @@ class VisionEngine:
         self.offset_calculator = OffsetCalculator(self.target_cfg)
         self.smoother = OffsetSmoother(self.smoothing_cfg)
         self.gesture_detector = GestureDetector(self.gesture_cfg, self.base_dir)
+        self.gesture_processor = AsyncGestureProcessor(self.gesture_detector, self.gesture_cfg)
+        self.victory_snapshot = VictorySnapshotController(self.gesture_cfg.get("victory_snapshot", {}))
         self.store = ResultStore(self.service_cfg, self.base_dir)
         self.visualizer = Visualizer()
 
@@ -57,6 +61,11 @@ class VisionEngine:
         self.manual_reference_size = 0.0
         self._running = False
         self._thread: threading.Thread | None = None
+        self._stop_event = threading.Event()
+        self._stop_event.set()
+        self._run_generation = 0
+        self._lifecycle_error = ""
+        self._thread_join_timeout_sec = max(0.2, float(self.service_cfg.get("thread_join_timeout_sec", 2.0)))
         self._lock = threading.RLock()
         self._last_frame_time = 0.0
         self._fps = 0.0
@@ -68,9 +77,43 @@ class VisionEngine:
         with self._lock:
             if self._running:
                 return self.get_status()
+            if self._thread and self._thread.is_alive():
+                self._lifecycle_error = "上一轮视觉引擎线程尚未退出，已拒绝重新启动。"
+                return self.get_status()
+            gesture_processor = getattr(self, "gesture_processor", None)
+            gesture_status = (
+                gesture_processor.start()
+                if gesture_processor is not None
+                else {"enabled": False, "running": False}
+            )
+            if gesture_status.get("enabled") and not gesture_status.get("running"):
+                self._lifecycle_error = str(
+                    gesture_status.get("last_error")
+                    or "异步手势识别 worker 尚未就绪，已拒绝启动视觉引擎。"
+                )
+                return self.get_status()
+            snapshot_status = self.victory_snapshot.start()
+            if snapshot_status.get("enabled") and not snapshot_status.get("running"):
+                if gesture_processor is not None:
+                    gesture_processor.stop()
+                self._lifecycle_error = str(
+                    snapshot_status.get("lifecycle_error")
+                    or "Victory 拍照 worker 尚未就绪，已拒绝启动视觉引擎。"
+                )
+                return self.get_status()
+            self._run_generation += 1
+            generation = self._run_generation
+            stop_event = threading.Event()
+            self._stop_event = stop_event
             self.started_at = time.time()
             self._running = True
-            self._thread = threading.Thread(target=self._loop, name="vision-engine", daemon=True)
+            self._lifecycle_error = ""
+            self._thread = threading.Thread(
+                target=self._loop,
+                args=(stop_event, generation),
+                name="vision-engine",
+                daemon=True,
+            )
             self._thread.start()
             self.logger.info("视觉引擎已启动。")
             return self.get_status()
@@ -78,9 +121,28 @@ class VisionEngine:
     def stop(self) -> dict[str, Any]:
         with self._lock:
             self._running = False
-        if self._thread and self._thread.is_alive():
-            self._thread.join(timeout=1.0)
+            self._stop_event.set()
+        # 先释放视频源，让阻塞中的 read 尽快返回，再等待引擎线程。
         self.video_source.close()
+        gesture_processor = getattr(self, "gesture_processor", None)
+        gesture_status = (
+            gesture_processor.stop()
+            if gesture_processor is not None
+            else {"thread_alive": False}
+        )
+        self.victory_snapshot.stop()
+        if self._thread and self._thread.is_alive():
+            self._thread.join(timeout=self._thread_join_timeout_sec)
+        with self._lock:
+            if self._thread and self._thread.is_alive():
+                self._lifecycle_error = "视觉引擎线程尚未退出；完成前不允许重启。"
+            elif gesture_status.get("thread_alive"):
+                self._lifecycle_error = str(
+                    gesture_status.get("last_error")
+                    or "异步手势识别线程尚未退出；完成前不允许重启。"
+                )
+            else:
+                self._thread = None
         self.logger.info("视觉引擎已停止。")
         return self.get_status()
 
@@ -147,7 +209,13 @@ class VisionEngine:
                 self._save_result_and_placeholder(result, self.video_source.last_error)
                 return result
 
-        ok, frame, error = self.video_source.read()
+        metadata_reader = getattr(self.video_source, "read_with_metadata", None)
+        if callable(metadata_reader):
+            ok, frame, frame_metadata, error = metadata_reader()
+        else:  # 兼容旧的自定义视频源适配器
+            ok, frame, error = self.video_source.read()
+            # 旧 read() 仍可用于预览，但不伪造“当前时刻采集”的可信元数据。
+            frame_metadata = None
         if not ok or frame is None:
             self.video_source.close()
             result = self._camera_unavailable_result(error)
@@ -159,8 +227,12 @@ class VisionEngine:
         height, width = frame.shape[:2]
         with self._lock:
             self.latest_frame = frame.copy()
-        now = time.time()
-        self._update_fps(now)
+        frame_received_at = self._metadata_optional_float(frame_metadata, "frame_received_at")
+        source_frame_id = frame_metadata.get("source_frame_id") if isinstance(frame_metadata, dict) else None
+        if source_frame_id is None or frame_received_at is None:
+            source_frame_id = None
+            frame_received_at = None
+        dropped_source_frames = self._metadata_int(frame_metadata, "dropped_source_frames", 0)
 
         if self.target_mode == "manual" and self.object_tracker.active:
             face_result = {"available": self.face_detector.available, "error": "", "faces": []}
@@ -177,9 +249,24 @@ class VisionEngine:
         else:
             offset = self.offset_calculator.empty(width, height)
         smoothed = self.smoother.update(offset if detected else None)
-        if not self._latest_gesture or self.frame_id % self._gesture_every_n_frames == 0:
-            self._latest_gesture = self.gesture_detector.detect(frame)
-        gesture = dict(self._latest_gesture)
+        gesture, observe_gesture = self._process_gesture(
+            frame,
+            source_frame_id=source_frame_id,
+            frame_received_at=frame_received_at,
+        )
+        victory_snapshot = (
+            self.victory_snapshot.observe(gesture)
+            if observe_gesture
+            else self.victory_snapshot.status()
+        )
+        gesture["snapshot"] = victory_snapshot
+        processed_at = time.time()
+        processing_latency_sec = (
+            max(0.0, processed_at - frame_received_at)
+            if frame_received_at is not None
+            else None
+        )
+        self._update_fps(processed_at)
 
         direction = {
             "horizontal": offset.get("horizontal", "center"),
@@ -187,8 +274,14 @@ class VisionEngine:
             "combined": offset.get("combined", "center"),
         }
         result = {
-            "timestamp": now,
+            # timestamp 保留为处理完成时刻，兼容现有 API 调用方。
+            "timestamp": processed_at,
             "frame_id": self.frame_id,
+            "source_frame_id": source_frame_id,
+            "frame_received_at": frame_received_at,
+            "processed_at": processed_at,
+            "processing_latency_sec": processing_latency_sec,
+            "dropped_source_frames": dropped_source_frames,
             "detected": detected,
             "has_target": detected,
             "target_source": target_info.get("target_source", "none"),
@@ -219,6 +312,7 @@ class VisionEngine:
             },
             "direction": direction,
             "gesture": gesture,
+            "victory_snapshot": victory_snapshot,
             "fps": round(self._fps, 3),
             "camera": {
                 **self.video_source.source_description,
@@ -262,6 +356,7 @@ class VisionEngine:
         return {
             "running": bool(self._running),
             "thread_alive": thread_alive,
+            "lifecycle_error": self._lifecycle_error,
             "started_at": self.started_at,
             "uptime_sec": round(time.time() - self.started_at, 3) if self.started_at else 0.0,
             "frame_id": self.frame_id,
@@ -282,12 +377,22 @@ class VisionEngine:
                 "error": self.gesture_detector.last_error,
                 "model_path": str(self.gesture_detector.model_path),
             },
+            "gesture_worker": (
+                self.gesture_processor.status()
+                if getattr(self, "gesture_processor", None) is not None
+                else {"enabled": False, "running": False, "thread_alive": False}
+            ),
+            "victory_snapshot": self.victory_snapshot.status(),
             "latest_timestamp": latest.get("timestamp"),
+            "latest_source_frame_id": latest.get("source_frame_id"),
+            "latest_frame_received_at": latest.get("frame_received_at"),
+            "latest_processing_latency_sec": latest.get("processing_latency_sec"),
+            "dropped_source_frames": latest.get("dropped_source_frames", 0),
         }
 
-    def _loop(self) -> None:
+    def _loop(self, stop_event: threading.Event, generation: int) -> None:
         interval = 1.0 / max(1.0, float(self.camera_cfg.get("fps", 30)))
-        while self._running:
+        while not stop_event.is_set():
             started = time.time()
             try:
                 result = self.process_once()
@@ -300,16 +405,29 @@ class VisionEngine:
                 time.sleep(0.2)
             elapsed = time.time() - started
             if elapsed < interval:
-                time.sleep(interval - elapsed)
+                stop_event.wait(interval - elapsed)
+        with self._lock:
+            if generation == self._run_generation:
+                self._running = False
 
     def _camera_unavailable_result(self, message: str) -> dict[str, Any]:
         self.smoother.reset()
         width = int(self.camera_cfg.get("width", 640))
         height = int(self.camera_cfg.get("height", 480))
         offset = self.offset_calculator.empty(width, height)
+        processed_at = time.time()
+        # 断流不能证明用户已放下手，因此只读状态，不将空画面计为 release。
+        victory_snapshot = self.victory_snapshot.status()
         return {
-            "timestamp": time.time(),
+            "timestamp": processed_at,
             "frame_id": self.frame_id,
+            "source_frame_id": None,
+            "frame_received_at": None,
+            "processed_at": processed_at,
+            "processing_latency_sec": None,
+            "dropped_source_frames": self._metadata_int(
+                getattr(self.video_source, "last_frame_metadata", {}), "dropped_source_frames", 0
+            ),
             "detected": False,
             "has_target": False,
             "target_source": "none",
@@ -341,7 +459,9 @@ class VisionEngine:
                 "confidence": 0.0,
                 "stable_frames": 0,
                 "message": self.gesture_detector.last_error,
+                "snapshot": victory_snapshot,
             },
+            "victory_snapshot": victory_snapshot,
             "fps": 0.0,
             "camera": {
                 **(self.video_source.source_description or {"source_type": self.camera_cfg.get("source_type", "camera")}),
@@ -355,6 +475,51 @@ class VisionEngine:
             },
             "message": message or "camera unavailable",
         }
+
+    def _process_gesture(
+        self,
+        frame: Any,
+        *,
+        source_frame_id: Any,
+        frame_received_at: float | None,
+    ) -> tuple[dict[str, Any], bool]:
+        """返回当前手势，以及是否应推进 Victory 状态机。"""
+
+        processor = getattr(self, "gesture_processor", None)
+        if processor is not None and processor.status().get("running"):
+            processor.submit(
+                frame,
+                source_frame_id=source_frame_id,
+                frame_received_at=frame_received_at,
+            )
+            gesture, is_new, valid = processor.consume()
+            self._latest_gesture = dict(gesture)
+            # 缓存、过期、无可信帧时间或推理异常都不能触发/释放 Victory。
+            return gesture, bool(is_new and valid)
+
+        is_new = False
+        if not self._latest_gesture or self.frame_id % self._gesture_every_n_frames == 0:
+            self._latest_gesture = self.gesture_detector.detect(frame)
+            is_new = True
+        gesture = dict(self._latest_gesture)
+        valid = bool(gesture.get("available", False)) and not str(gesture.get("message", "") or "")
+        return gesture, bool(is_new and valid)
+
+    @staticmethod
+    def _metadata_optional_float(metadata: Any, key: str) -> float | None:
+        if not isinstance(metadata, dict) or metadata.get(key) is None:
+            return None
+        try:
+            return float(metadata[key])
+        except (TypeError, ValueError):
+            return None
+
+    @staticmethod
+    def _metadata_int(metadata: Any, key: str, default: int) -> int:
+        try:
+            return int(metadata.get(key, default)) if isinstance(metadata, dict) else int(default)
+        except (TypeError, ValueError):
+            return int(default)
 
     def _select_target(self, frame: Any, faces: list[dict[str, Any]]) -> dict[str, Any]:
         mode = self.target_mode if self.target_mode in {"face", "manual", "hybrid"} else "face"

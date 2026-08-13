@@ -25,6 +25,7 @@ class FaceDetector:
         self.score_threshold = float(self.config.get("face_score_threshold", 0.75))
         self.nms_threshold = float(self.config.get("face_nms_threshold", 0.3))
         self.top_k = int(self.config.get("face_top_k", 5000))
+        self.processing_max_width = max(0, int(self.config.get("face_processing_max_width", 0)))
         self.detector: Any | None = None
         self.input_size: tuple[int, int] | None = None
         self.available = False
@@ -38,11 +39,22 @@ class FaceDetector:
             return {"available": True, "error": "输入画面为空。", "faces": []}
 
         height, width = frame.shape[:2]
+        detection_frame = frame
+        detection_width = width
+        detection_height = height
+        if self.processing_max_width and width > self.processing_max_width:
+            detection_width = self.processing_max_width
+            detection_height = max(1, int(round(height * detection_width / float(width))))
+            detection_frame = cv2.resize(
+                frame,
+                (detection_width, detection_height),
+                interpolation=cv2.INTER_AREA,
+            )
         try:
-            self._ensure_detector(width, height)
+            self._ensure_detector(detection_width, detection_height)
             if self.detector is None:
                 return {"available": False, "error": self.last_error, "faces": []}
-            _ok, faces_raw = self.detector.detect(frame)
+            _ok, faces_raw = self.detector.detect(detection_frame)
         except Exception as exc:
             self.last_error = f"YuNet 检测失败：{exc}"
             return {"available": False, "error": self.last_error, "faces": []}
@@ -52,10 +64,16 @@ class FaceDetector:
             return {"available": True, "error": "", "faces": faces}
 
         frame_area = max(1.0, float(width * height))
+        scale_x = width / float(detection_width)
+        scale_y = height / float(detection_height)
         for row in faces_raw:
             values = [float(v) for v in row.tolist()]
             x, y, w, h = values[:4]
             score = float(values[-1])
+            x *= scale_x
+            y *= scale_y
+            w *= scale_x
+            h *= scale_y
             x = max(0.0, min(float(width - 1), x))
             y = max(0.0, min(float(height - 1), y))
             w = max(0.0, min(float(width) - x, w))

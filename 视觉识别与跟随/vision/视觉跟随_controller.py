@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import math
 import threading
 import time
 from collections import deque
@@ -79,6 +80,7 @@ class VisionFollowController:
         self._sample_thread: threading.Thread | None = None
         self._control_thread: threading.Thread | None = None
         self._stop_event = threading.Event()
+        self._run_generation = 0
         self._lock = threading.RLock()
         self._pan_active = False
         self._tilt_active = False
@@ -89,9 +91,11 @@ class VisionFollowController:
         self._step_count = 0
         self._last_ndx: float | None = None
         self._last_ndy: float | None = None
+        self._step_latest_source_frame_id: Any = None
         self._manual_axis_command_at: dict[str, float] = {}
         self.control_update_hz = max(2.0, min(60.0, float(self.follow_cfg.get("control_update_hz", 40.0))))
         self.vision_stale_timeout_sec = max(0.05, float(self.follow_cfg.get("vision_stale_timeout_sec", 0.25)))
+        self.thread_join_timeout_sec = max(0.05, float(self.follow_cfg.get("thread_join_timeout_sec", 1.0)))
         self._stream_latest: dict[str, Any] = {}
         self._stream_latest_at = 0.0
         self._stream_latest_key: Any = None
@@ -115,26 +119,50 @@ class VisionFollowController:
         with self._lock:
             if self._running:
                 return self.get_status()
+            if self._worker_threads_alive():
+                self._hold_reason = "previous_run_still_stopping"
+                self._last_error = "上一轮视觉跟随线程尚未退出，已拒绝重新启动。"
+                return self.get_status()
+            self._run_generation += 1
+            generation = self._run_generation
+            stop_event = threading.Event()
+            self._stop_event = stop_event
+            self._reset_run_state_locked()
             self._running = True
-            self._stop_event.clear()
+            self._last_error = ""
             if self._uses_continuous_stream():
                 self._stream_sync_done = False
-                self._sample_thread = threading.Thread(target=self._sample_loop, name="vision-follow-sample", daemon=True)
-                self._control_thread = threading.Thread(target=self._control_loop, name="vision-follow-control", daemon=True)
+                self._sample_thread = threading.Thread(
+                    target=self._sample_loop,
+                    args=(stop_event, generation),
+                    name="vision-follow-sample",
+                    daemon=True,
+                )
+                self._control_thread = threading.Thread(
+                    target=self._control_loop,
+                    args=(stop_event, generation),
+                    name="vision-follow-control",
+                    daemon=True,
+                )
                 self._sample_thread.start()
                 self._control_thread.start()
                 return self.get_status()
-            self._thread = threading.Thread(target=self._loop, name="vision-follow", daemon=True)
+            self._thread = threading.Thread(
+                target=self._loop,
+                args=(stop_event, generation),
+                name="vision-follow",
+                daemon=True,
+            )
             self._thread.start()
             return self.get_status()
 
     def stop(self) -> dict[str, Any]:
         self.request_stop()
         if self._thread and self._thread.is_alive():
-            self._thread.join(timeout=1.0)
+            self._thread.join(timeout=self.thread_join_timeout_sec)
         for thread in (self._sample_thread, self._control_thread):
             if thread and thread.is_alive():
-                thread.join(timeout=1.0)
+                thread.join(timeout=self.thread_join_timeout_sec)
         self._sync_stream_once()
         self._reset_joint_activity()
         self._rail.stop("idle")
@@ -147,6 +175,31 @@ class VisionFollowController:
             self._running = False
             self._stop_event.set()
 
+    def _worker_threads_alive(self) -> bool:
+        return any(
+            thread is not None and thread.is_alive()
+            for thread in (self._thread, self._sample_thread, self._control_thread)
+        )
+
+    def _reset_run_state_locked(self) -> None:
+        self._stream_latest = {}
+        self._stream_latest_at = 0.0
+        self._stream_latest_key = None
+        self._last_result = None
+        self._step_latest_source_frame_id = None
+        self._stream_targets = {}
+        self._stream_velocities = {}
+        self._hold_reason = "starting"
+        self._last_command = None
+        self._last_ndx = None
+        self._last_ndy = None
+        self._reset_joint_activity()
+
+    def _finish_run(self, generation: int) -> None:
+        with self._lock:
+            if generation == self._run_generation:
+                self._running = False
+
     def _sync_stream_once(self) -> None:
         if not self._uses_continuous_stream() or self.stream_sync is None:
             return
@@ -156,9 +209,24 @@ class VisionFollowController:
             self._stream_sync_done = True
         self.stream_sync()
 
-    def step_once(self) -> dict[str, Any]:
+    def step_once(self, stop_event: threading.Event | None = None) -> dict[str, Any]:
         latest = self._read_latest()
+        if stop_event is not None and stop_event.is_set():
+            self._reset_joint_activity()
+            return self._remember_noop("stopping", "视觉跟随正在停止，不下发动作。")
         self._last_result = latest
+        freshness_hold = self._vision_freshness_hold_reason(latest)
+        if not freshness_hold:
+            source_frame_id = latest.get("source_frame_id")
+            if source_frame_id == self._step_latest_source_frame_id:
+                freshness_hold = "vision_frame_repeated"
+            else:
+                self._step_latest_source_frame_id = source_frame_id
+        if freshness_hold:
+            self._last_ndx = None
+            self._last_ndy = None
+            self._reset_joint_activity()
+            return self._remember_noop(freshness_hold, self._freshness_message(freshness_hold))
         target_safety = self._target_safety_check(latest)
         if target_safety is not None:
             self._pan_active = False
@@ -189,6 +257,9 @@ class VisionFollowController:
 
         if not commands:
             return self._remember_noop("dead_zone", "目标在死区内，不下发动作。")
+        if stop_event is not None and stop_event.is_set():
+            self._reset_joint_activity()
+            return self._remember_noop("stopping", "视觉跟随正在停止，不下发动作。")
 
         return self._execute_commands(commands, action="joint_step", ndx=ndx, ndy=ndy)
 
@@ -242,6 +313,7 @@ class VisionFollowController:
         sorted_intervals = sorted(intervals)
         p95 = sorted_intervals[min(len(sorted_intervals) - 1, int(len(sorted_intervals) * 0.95))] if intervals else 0.0
         mean_interval = sum(intervals) / len(intervals) if intervals else 0.0
+        latest_frame_age = self._source_frame_age_sec(latest)
         return {
             "running": bool(self._running),
             "thread_alive": bool(
@@ -258,7 +330,10 @@ class VisionFollowController:
             "tick_count": self._tick_count,
             "write_count": self._write_count,
             "skipped_tick_count": self._skipped_tick_count,
-            "latest_vision_age_ms": round(max(0.0, time.monotonic() - self._stream_latest_at) * 1000.0, 3) if self._stream_latest_at else None,
+            "latest_vision_age_ms": round(latest_frame_age * 1000.0, 3) if latest_frame_age is not None else None,
+            "latest_processing_latency_ms": self._milliseconds_or_none(latest.get("processing_latency_sec")),
+            "latest_source_frame_id": latest.get("source_frame_id"),
+            "dropped_source_frames": latest.get("dropped_source_frames", 0),
             "hold_reason": self._hold_reason,
             "targets_deg": dict(self._stream_targets),
             "velocities_deg_s": dict(self._stream_velocities),
@@ -303,6 +378,11 @@ class VisionFollowController:
             "step_count": self._tick_count if self._uses_continuous_stream() else self._step_count,
             "last_command": self._last_command,
             "last_vision": {
+                "source_frame_id": latest.get("source_frame_id"),
+                "frame_received_at": latest.get("frame_received_at"),
+                "processed_at": latest.get("processed_at"),
+                "processing_latency_sec": latest.get("processing_latency_sec"),
+                "dropped_source_frames": latest.get("dropped_source_frames", 0),
                 "detected": latest.get("detected", False),
                 "direction": (latest.get("direction") or {}).get("combined"),
                 "offset": {
@@ -322,37 +402,40 @@ class VisionFollowController:
             "last_error": self._last_error,
         }
 
-    def _loop(self) -> None:
-        while self._running:
+    def _loop(self, stop_event: threading.Event, generation: int) -> None:
+        while not stop_event.is_set():
             try:
-                self.step_once()
+                self.step_once(stop_event=stop_event)
             except Exception as exc:
                 self._last_error = str(exc)
                 self._remember_command(self._command_result("error", f"视觉跟随异常：{exc}", ok=False))
-            time.sleep(max(0.02, self.poll_interval_sec))
+            stop_event.wait(max(0.02, self.poll_interval_sec))
+        self._finish_run(generation)
 
     def _uses_continuous_stream(self) -> bool:
         return self.command_mode.strip().lower() in {"stream", "continuous", "continuous_position_stream"} and (
             self.dry_run or (self.initial_state_provider is not None and self.stream_writer is not None)
         )
 
-    def _sample_loop(self) -> None:
-        while not self._stop_event.is_set():
+    def _sample_loop(self, stop_event: threading.Event, generation: int) -> None:
+        while not stop_event.is_set():
             try:
                 latest = self._read_latest()
                 now = time.monotonic()
-                key = latest.get("frame_id", latest.get("timestamp"))
+                key = latest.get("source_frame_id")
                 with self._lock:
+                    if stop_event.is_set() or generation != self._run_generation:
+                        break
                     self._stream_latest = latest
-                    if key is None or key != self._stream_latest_key:
+                    if key is not None and key != self._stream_latest_key:
                         self._stream_latest_at = now
                         self._stream_latest_key = key
                     self._last_result = latest
             except Exception as exc:
                 self._last_error = str(exc)
-            self._stop_event.wait(max(0.01, self.poll_interval_sec))
+            stop_event.wait(max(0.01, self.poll_interval_sec))
 
-    def _control_loop(self) -> None:
+    def _control_loop(self, stop_event: threading.Event, generation: int) -> None:
         initial = self.initial_state_provider() if self.initial_state_provider is not None else {}
         planner = ContinuousFollowPlanner(self.follow_cfg, initial)
         rail_target = float(initial.get("j10", self._rail.virtual_pos_mm))
@@ -361,8 +444,8 @@ class VisionFollowController:
         last_tick = time.monotonic()
         deadline = last_tick + period
         previous_tick: float | None = None
-        while not self._stop_event.is_set():
-            if self._stop_event.wait(max(0.0, deadline - time.monotonic())):
+        while not stop_event.is_set():
+            if stop_event.wait(max(0.0, deadline - time.monotonic())):
                 break
             now = time.monotonic()
             if now - deadline >= period:
@@ -381,8 +464,13 @@ class VisionFollowController:
             hold = ""
             guard = self._target_safety_check(latest) if latest else self._command_result("no_target", "没有视觉结果。")
             offset = read_smoothed_offset(latest) if latest else None
-            if not latest_at or now - latest_at > self.vision_stale_timeout_sec:
-                hold = "vision_stale"
+            freshness_hold = (
+                self._vision_freshness_hold_reason(latest, latest_source_seen_at=latest_at, now_monotonic=now)
+                if latest
+                else "vision_metadata_missing"
+            )
+            if freshness_hold:
+                hold = freshness_hold
             elif guard is not None:
                 hold = str(guard.get("action", "target_guard"))
             elif offset is None:
@@ -400,11 +488,17 @@ class VisionFollowController:
             if rail_step is not None:
                 rail_target += rail_step
                 targets["j10"] = rail_target
-            response = {"ok": True, "dry_run": True, "data": {"written_joints": list(targets)}}
-            if self._stop_event.is_set():
+            response = {
+                "ok": True,
+                "dry_run": True,
+                "data": {"written_joints": [] if hold else list(targets)},
+            }
+            if stop_event.is_set():
                 break
             if not hold and not self.dry_run and self.stream_writer is not None:
                 response = self.stream_writer(targets)
+            if stop_event.is_set() or generation != self._run_generation:
+                break
             if not hold:
                 self._write_count += len(response.get("data", {}).get("written_joints", targets)) if response.get("ok") else 0
             self._tick_count += 1
@@ -420,11 +514,11 @@ class VisionFollowController:
                 "response": response,
                 "timestamp": time.time(),
             }
-            if not response.get("ok", False) and not self._stop_event.is_set():
+            if not response.get("ok", False) and not stop_event.is_set():
                 self._last_error = str(response.get("message") or response.get("error") or "连续视觉跟随写入失败。")
-                self._stop_event.set()
-                self._running = False
-        self._running = False
+                stop_event.set()
+                self._finish_run(generation)
+        self._finish_run(generation)
         self._sync_stream_once()
 
     def _read_latest(self) -> dict[str, Any]:
@@ -433,6 +527,74 @@ class VisionFollowController:
         if self.engine is not None:
             return unwrap_vision_payload(dict(self.engine.get_latest_result()))
         return unwrap_vision_payload(fetch_json_url(self.latest_url, self.http_timeout_sec))
+
+    def _vision_freshness_hold_reason(
+        self,
+        latest: dict[str, Any],
+        *,
+        latest_source_seen_at: float = 0.0,
+        now_monotonic: float | None = None,
+    ) -> str:
+        required = ("source_frame_id", "frame_received_at", "processed_at", "processing_latency_sec")
+        if any(latest.get(key) is None for key in required):
+            return "vision_metadata_missing"
+        if str(latest.get("source_frame_id", "")).strip() == "":
+            return "vision_metadata_missing"
+        try:
+            frame_received_at = float(latest["frame_received_at"])
+            processed_at = float(latest["processed_at"])
+            reported_latency = float(latest["processing_latency_sec"])
+        except (TypeError, ValueError, KeyError):
+            return "vision_metadata_invalid"
+        if not all(math.isfinite(value) for value in (frame_received_at, processed_at, reported_latency)):
+            return "vision_metadata_invalid"
+        measured_latency = processed_at - frame_received_at
+        if reported_latency < 0.0 or measured_latency < -0.01:
+            return "vision_metadata_invalid"
+        if max(reported_latency, measured_latency) > self.vision_stale_timeout_sec:
+            return "vision_processing_stale"
+        frame_age = time.time() - frame_received_at
+        if frame_age < -1.0:
+            return "vision_metadata_invalid"
+        if frame_age > self.vision_stale_timeout_sec:
+            return "vision_frame_stale"
+        if latest_source_seen_at:
+            monotonic_now = time.monotonic() if now_monotonic is None else float(now_monotonic)
+            if monotonic_now - latest_source_seen_at > self.vision_stale_timeout_sec:
+                return "vision_not_updating"
+        return ""
+
+    @staticmethod
+    def _source_frame_age_sec(latest: dict[str, Any]) -> float | None:
+        try:
+            received_at = float(latest.get("frame_received_at"))
+        except (TypeError, ValueError):
+            return None
+        if not math.isfinite(received_at):
+            return None
+        return max(0.0, time.time() - received_at)
+
+    @staticmethod
+    def _milliseconds_or_none(value: Any) -> float | None:
+        try:
+            seconds = float(value)
+        except (TypeError, ValueError):
+            return None
+        if not math.isfinite(seconds):
+            return None
+        return round(max(0.0, seconds) * 1000.0, 3)
+
+    @staticmethod
+    def _freshness_message(reason: str) -> str:
+        messages = {
+            "vision_metadata_missing": "视觉结果缺少源帧时间元数据，不下发动作。",
+            "vision_metadata_invalid": "视觉结果的源帧时间元数据无效，不下发动作。",
+            "vision_frame_repeated": "视觉源帧重复，本次不下发动作。",
+            "vision_frame_stale": "视觉源帧已过期，不下发动作。",
+            "vision_processing_stale": "视觉帧处理延迟超限，不下发动作。",
+            "vision_not_updating": "视觉源帧长时间未更新，不下发动作。",
+        }
+        return messages.get(reason, "视觉结果不可用，不下发动作。")
 
     def _enabled_follow_joints(self) -> list[str]:
         raw = self.follow_cfg.get("enabled_follow_joints")

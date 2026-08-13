@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import os
 import tempfile
+import threading
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -14,7 +16,7 @@ from vision.摄像头_source import VideoSource
 from 视觉主程序_main import load_config
 
 
-CAMERA_HUB_URL = "rtsp://127.0.0.1:8554/armcam"
+CAMERA_HUB_URL = "rtsp://127.0.0.1:8554/armcam-analysis"
 PROJECT_ROOT = VISION_ROOT.parent
 
 
@@ -48,6 +50,9 @@ class FakeCv2:
     CAP_PROP_FRAME_HEIGHT = 3
     CAP_PROP_FPS = 4
     ROTATE_180 = 5
+    CAP_FFMPEG = 6
+    CAP_PROP_OPEN_TIMEOUT_MSEC = 7
+    CAP_PROP_READ_TIMEOUT_MSEC = 8
 
     def __init__(
         self,
@@ -59,9 +64,11 @@ class FakeCv2:
         self.open_error = open_error
         self.rotate_error = rotate_error
         self.sources: list[object] = []
+        self.capture_args: list[tuple[object, ...]] = []
 
-    def VideoCapture(self, source: object) -> FakeCapture:
+    def VideoCapture(self, source: object, *args: object) -> FakeCapture:
         self.sources.append(source)
+        self.capture_args.append(tuple(args))
         if self.open_error is not None:
             raise self.open_error
         return self.captures.pop(0)
@@ -70,6 +77,36 @@ class FakeCv2:
         if self.rotate_error is not None:
             raise self.rotate_error
         return frame
+
+
+class StreamingCapture(FakeCapture):
+    def __init__(self, interval_sec: float = 0.002):
+        super().__init__(opened=True)
+        self.interval_sec = interval_sec
+        self.counter = 0
+
+    def read(self):
+        time.sleep(self.interval_sec)
+        if self.released:
+            return False, None
+        self.counter += 1
+        return True, f"frame-{self.counter}"
+
+
+class BlockingCapture(FakeCapture):
+    def __init__(self):
+        super().__init__(opened=True)
+        self.entered = threading.Event()
+        self.unblocked = threading.Event()
+
+    def read(self):
+        self.entered.set()
+        self.unblocked.wait(timeout=2.0)
+        return False, None
+
+    def release(self) -> None:
+        super().release()
+        self.unblocked.set()
 
 
 class CameraSourceEnvironmentTest(unittest.TestCase):
@@ -107,6 +144,7 @@ class CameraSourceEnvironmentTest(unittest.TestCase):
         with patch.object(source_module, "cv2", fake_cv2):
             source = VideoSource({"source_type": "rtsp", "camera_index": 7, "rtsp_url": CAMERA_HUB_URL})
             self.assertTrue(source.open(), source.last_error)
+            source.close()
         self.assertEqual(fake_cv2.sources, [CAMERA_HUB_URL])
         self.assertIsInstance(fake_cv2.sources[0], str)
 
@@ -142,18 +180,23 @@ class CameraSourceEnvironmentTest(unittest.TestCase):
             self.assertIn("backend unavailable", source.last_error)
 
         first = FakeCapture(opened=True, reads=[RuntimeError("stream interrupted")])
-        second = FakeCapture(opened=True, reads=[(True, "frame-2")])
+        second = StreamingCapture()
         reconnect_cv2 = FakeCv2([first, second])
         with patch.object(source_module, "cv2", reconnect_cv2):
-            source = VideoSource({"source_type": "rtsp", "rtsp_url": CAMERA_HUB_URL})
+            source = VideoSource(
+                {
+                    "source_type": "rtsp",
+                    "rtsp_url": CAMERA_HUB_URL,
+                    "read_timeout_msec": 300,
+                    "reconnect_interval_sec": 0.01,
+                }
+            )
             self.assertTrue(source.open(), source.last_error)
             ok, frame, error = source.read()
-            self.assertFalse(ok)
-            self.assertIsNone(frame)
-            self.assertIn("stream interrupted", error)
+            self.assertTrue(ok, error)
+            self.assertTrue(str(frame).startswith("frame-"))
+            self.assertTrue(first.released)
             source.close()
-            self.assertTrue(source.open(), source.last_error)
-            self.assertEqual(source.read(), (True, "frame-2", ""))
         self.assertEqual(reconnect_cv2.sources, [CAMERA_HUB_URL, CAMERA_HUB_URL])
 
     def test_rotate_failure_returns_read_error_and_can_reconnect(self) -> None:
@@ -162,18 +205,76 @@ class CameraSourceEnvironmentTest(unittest.TestCase):
         fake_cv2 = FakeCv2([first, second], rotate_error=RuntimeError("rotate failed"))
         with patch.object(source_module, "cv2", fake_cv2):
             source = VideoSource(
-                {"source_type": "rtsp", "rtsp_url": CAMERA_HUB_URL, "rotate_180": True}
+                {
+                    "source_type": "rtsp",
+                    "rtsp_url": CAMERA_HUB_URL,
+                    "rotate_180": True,
+                    "read_timeout_msec": 50,
+                    "reconnect_interval_sec": 1.0,
+                }
             )
             self.assertTrue(source.open(), source.last_error)
             ok, frame, error = source.read()
             self.assertFalse(ok)
             self.assertIsNone(frame)
-            self.assertIn("rotate failed", error)
+            self.assertTrue(error)
 
             source.close()
             fake_cv2.rotate_error = None
             self.assertTrue(source.open(), source.last_error)
             self.assertEqual(source.read(), (True, "frame-2", ""))
+            source.close()
+
+    def test_rtsp_sets_low_latency_buffer_and_timeouts(self) -> None:
+        capture = StreamingCapture()
+        fake_cv2 = FakeCv2([capture])
+        with patch.object(source_module, "cv2", fake_cv2):
+            source = VideoSource(
+                {
+                    "source_type": "rtsp",
+                    "rtsp_url": CAMERA_HUB_URL,
+                    "open_timeout_msec": 700,
+                    "read_timeout_msec": 300,
+                }
+            )
+            self.assertTrue(source.open(), source.last_error)
+            source.close()
+
+        self.assertEqual(fake_cv2.capture_args[0], (fake_cv2.CAP_FFMPEG, [7, 700, 8, 300]))
+        self.assertIn((fake_cv2.CAP_PROP_BUFFERSIZE, 1), capture.properties)
+        self.assertIn((fake_cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 700), capture.properties)
+        self.assertIn((fake_cv2.CAP_PROP_READ_TIMEOUT_MSEC, 300), capture.properties)
+
+    def test_rtsp_slow_consumer_gets_latest_single_slot_frame(self) -> None:
+        capture = StreamingCapture(interval_sec=0.001)
+        fake_cv2 = FakeCv2([capture])
+        with patch.object(source_module, "cv2", fake_cv2):
+            source = VideoSource(
+                {"source_type": "rtsp", "rtsp_url": CAMERA_HUB_URL, "read_timeout_msec": 300}
+            )
+            self.assertTrue(source.open(), source.last_error)
+            ok, _frame, first_meta, error = source.read_with_metadata()
+            self.assertTrue(ok, error)
+            time.sleep(0.04)
+            ok, _frame, second_meta, error = source.read_with_metadata()
+            self.assertTrue(ok, error)
+            source.close()
+
+        self.assertGreater(second_meta["source_frame_id"], first_meta["source_frame_id"] + 5)
+        self.assertGreater(second_meta["dropped_source_frames"], 0)
+        self.assertEqual(source._latest_frame, None)
+
+    def test_close_unblocks_reader_and_joins_thread(self) -> None:
+        capture = BlockingCapture()
+        fake_cv2 = FakeCv2([capture])
+        with patch.object(source_module, "cv2", fake_cv2):
+            source = VideoSource({"source_type": "rtsp", "rtsp_url": CAMERA_HUB_URL})
+            self.assertTrue(source.open(), source.last_error)
+            self.assertTrue(capture.entered.wait(timeout=0.2))
+            source.close()
+
+        self.assertTrue(capture.released)
+        self.assertIsNone(source._reader_thread)
 
 
 if __name__ == "__main__":

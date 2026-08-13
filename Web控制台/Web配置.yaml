@@ -4,18 +4,16 @@ server:
   reload: false
   cors_enabled: true
   allowed_origins:
-    - http://127.0.0.1:8010
-    - http://localhost:8010
-    - http://127.0.0.1:8000
-    - http://localhost:8000
-
+  - http://127.0.0.1:8010
+  - http://localhost:8010
+  - http://127.0.0.1:8000
+  - http://localhost:8000
 app:
   title: 我的机械臂 Web 控制台
   default_mode: dry_run
   state_poll_interval_ms: 500
   log_path: runtime/logs/web_api.log
   session_state_path: runtime/state/session_state.json
-
 camera_hub:
   enabled: true
   base_url: http://127.0.0.1:8020
@@ -24,14 +22,13 @@ camera_hub:
   preroll_sec: 0.4
   request_timeout_sec: 5.0
   finalize_timeout_sec: 90.0
-
 agent_demo:
   enabled: true
   trigger_text: 帮我生成一个环绕主体运镜的轨迹
   execute_texts:
-    - 执行
-    - 开始执行
-    - 播放
+  - 执行
+  - 开始执行
+  - 播放
   action_name: 环绕运镜
   speed: 1.0
   response_delay_sec: 3.0
@@ -60,19 +57,18 @@ agent_demo:
       run_once: true
       stop_available: true
       real_session_required: true
-
 poster_demo:
   enabled: true
   response_delay_sec: 5.0
   fixed_poster_url: /static/assets/momo_ai_poster_demo.png
   fixed_output: momo_ai_poster_demo.png
   trigger_keywords:
-    - 海报
+  - 海报
   intent_keywords:
-    - 生成
-    - 做
-    - 制作
-    - 出一张
+  - 生成
+  - 做
+  - 制作
+  - 出一张
   output_dir: runtime/posters
   width: 1122
   height: 1402
@@ -80,25 +76,22 @@ poster_demo:
   subtitle: LIVE ROBOT CAMERA CAPTURE
   footer: Generated from current vision frame
   style_name: Cinematic robot poster
-  accent_color: "#38bdf8"
+  accent_color: '#38bdf8'
   border_px: 34
   response_text: 已抓取当前画面，并生成一张 AI 海报。
-
 controller:
   sim_config_path: ../仿真控制系统/配置.yaml
   real_config_path: ../真实舵机控制/真实配置.yaml
   kinematics_config_path: ../URDF运动学仿真/运动学配置.yaml
   action_config_path: ../动作录制与回放增强/动作配置.yaml
-
 safety:
   default_dry_run: true
   real_mode_requires_confirm: false
   real_confirm_text: 我确认机械臂周围安全
   max_manual_step_deg: 5.0
   max_real_step_deg: 3.0
-
 motion:
-  default_speed_percent: 50
+  default_speed_percent: 50.0
   default_joint_step_deg: 2.0
   default_cartesian_step_mm: 5.0
   default_cartesian_angle_deg: 5.0
@@ -113,7 +106,6 @@ motion:
     j13: 1
     j14: 1
     j15: 1
-
 follow:
   latest_url: http://127.0.0.1:8000/latest
   robot_api_base: http://127.0.0.1:8010

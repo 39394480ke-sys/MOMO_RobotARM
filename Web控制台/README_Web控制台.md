@@ -150,7 +150,9 @@ GET  /api/v1/vision/latest
 GET  /api/v1/vision/frame.jpg
 ```
 
-“视觉跟随”页的画面预览走 Web 后端代理 `/api/v1/vision/frame.jpg`，前端不再直接访问 `127.0.0.1:8000`。预览只读，不会向机械臂发送动作。
+机械臂 Web 只显示视觉状态，不再轮询 JPEG。实时预览、目标叠加和拖拽框选统一放在
+Camera Hub 的 WebRTC 页面（默认 `http://127.0.0.1:8020/`），避免重复解码和低帧率预览。
+`/api/v1/vision/frame.jpg` 仅为兼容旧客户端保留。
 
 ## 手机语音输入与 HTTPS
 

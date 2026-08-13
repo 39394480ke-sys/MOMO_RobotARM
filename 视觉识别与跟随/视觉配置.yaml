@@ -6,46 +6,49 @@ camera:
   fps: 30
   processing_max_width: 640
   rotate_180: false
-  video_file: ""
-  rtsp_url: ""
-
+  video_file: ''
+  rtsp_url: ''
 detector:
   face_backend: opencv_yunet
   face_model_path: weights/face_detection_yunet_2023mar.onnx
-  face_score_threshold: 0.60
+  face_score_threshold: 0.6
   face_nms_threshold: 0.3
   face_top_k: 5000
-
+  face_processing_max_width: 480
 gesture:
   enabled: true
   backend: mediapipe
   model_path: weights/gesture_recognizer.task
   stable_frames: 4
+  async_enabled: true
+  process_hz: 5.0
+  stale_timeout_sec: 0.5
   process_every_n_frames: 3
-
+  victory_snapshot:
+    enabled: true
+    gesture: Victory
+    camera_hub_url: http://127.0.0.1:8020
+    cooldown_sec: 5.0
+    timeout_sec: 8.0
 target:
   mode: face
   selection_strategy: largest_face
-  center_x_norm: 0.50
+  center_x_norm: 0.5
   center_y_norm: 0.42
   dead_zone_x: 0.02
   dead_zone_y: 0.025
-
 tracker:
   type: CSRT
   max_lost_frames: 15
   min_box_width: 20
   min_box_height: 20
-
 manual_select:
   allow_gui_select: true
   allow_api_select: true
-
 smoothing:
   enabled: true
   alpha: 0.35
   lost_target_keep_sec: 0.8
-
 service:
   host: 127.0.0.1
   port: 8000
@@ -53,54 +56,45 @@ service:
   latest_frame_path: runtime/latest_frame.jpg
   latest_result_path: runtime/latest_result.json
   persist_hz: 5.0
-
 follow:
   robot_api_base: http://127.0.0.1:8010
   command_mode: stream
   poll_interval_sec: 0.05
   control_update_hz: 40.0
   vision_stale_timeout_sec: 0.25
-  max_pan_speed_deg_s: 12.0
-  max_tilt_speed_deg_s: 10.0
-  pan_accel_deg_s2: 30.0
-  tilt_accel_deg_s2: 25.0
+  max_pan_speed_deg_s: 7.6
+  max_tilt_speed_deg_s: 7.6
+  pan_accel_deg_s2: 35.1
+  tilt_accel_deg_s2: 35.1
   http_timeout_sec: 1.0
   move_duration_sec: 0.25
   speed_percent: 60
-
   pan_joint: j11
   tilt_joint: j13
   enabled_follow_joints:
-    - j11
-    - j13
-
+  - j11
+  - j13
   pan_sign: 1.0
   tilt_sign: 1.0
-
   pan_gain_deg_per_norm: 4.8
   tilt_gain_deg_per_norm: 4.8
-
-  pan_dead_zone_norm: 0.03
-  tilt_dead_zone_norm: 0.035
-  pan_resume_zone_norm: 0.05
-  tilt_resume_zone_norm: 0.055
-
+  pan_dead_zone_norm: 0.07
+  tilt_dead_zone_norm: 0.07
+  pan_resume_zone_norm: 0.085
+  tilt_resume_zone_norm: 0.08
   min_pan_step_deg: 0.5
   min_tilt_step_deg: 0.5
   pan_min_step_zone_norm: 0.12
   tilt_min_step_zone_norm: 0.12
-
   max_pan_step_deg: 3.0
   max_tilt_step_deg: 3.0
-
   rail_cinematic:
     enabled: false
     joint: j10
     start_mm: -140
     end_mm: 140
-    speed_mm_s: 5.0
+    speed_mm_s: 5
     bounce: false
-
   two_step_cinematic:
     sample_interval_sec: 0.12
     playback_smooth: 0.55
@@ -110,6 +104,5 @@ follow:
     playback_hz: 20
     ease_sec: 0.8
     min_rail_step_mm: 0.25
-
   real_mode_requires_confirm: false
   dry_run_default: true

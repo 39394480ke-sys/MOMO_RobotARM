@@ -41,14 +41,10 @@ const state = {
   subjectLockProfiles: [],
   subjectLockProfile: null,
   subjectLockProfileId: "",
-  subjectLockVision: null,
-  subjectLockDrag: null,
   subjectLockTimer: null,
-  subjectLockPreviewTick: 0,
-  visionLiveTimer: null,
   latestVision: null,
-  visionMockActive: false,
-  visionDrag: null,
+  visionStatusTimer: null,
+  visionStatusRefreshInFlight: false,
   jointControlMode: "step",
   continuousJogActive: false,
   continuousJogStopping: false,
@@ -72,11 +68,16 @@ async function init() {
   await loadConfig();
   await refreshAll();
   connectWebSocket();
+  startVisionStatusPolling();
   state.agentPendingTimer = window.setInterval(expireAgentPendingActions, 1000);
 }
 
 function bindEvents() {
   $$(".nav-item").forEach((btn) => btn.addEventListener("click", () => showPage(btn.dataset.page)));
+  window.addEventListener("focus", refreshActiveVisionStatus);
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) refreshActiveVisionStatus();
+  });
   $("#topStopBtn").addEventListener("click", stopNow);
   $("#quickStopBtn").addEventListener("click", stopNow);
   $("#refreshStateBtn").addEventListener("click", refreshState);
@@ -97,26 +98,12 @@ function bindEvents() {
   $("#cancelRecordingBtn").addEventListener("click", cancelActionRecording);
   $("#recordingFrameWarningClose").addEventListener("click", () => $("#recordingFrameWarningDialog").close());
   $("#actionVideoClose").addEventListener("click", () => $("#actionVideoDialog").close());
-  $("#refreshFollowBtn").addEventListener("click", refreshFollow);
+  $("#refreshFollowBtn").addEventListener("click", refreshFollowPageStatus);
   $("#startFollowBtn").addEventListener("click", startFollow);
   $("#stopFollowBtn").addEventListener("click", stopFollow);
   $("#saveFollowConfigBtn").addEventListener("click", saveFollowConfig);
   $("#followLatestUrl").addEventListener("input", () => {
     $("#followLatestUrl").dataset.userEdited = "1";
-    renderVisionPreviewUrl();
-  });
-  $("#refreshVisionPreviewBtn").addEventListener("click", refreshVisionPreview);
-  $("#toggleVisionLiveBtn").addEventListener("click", toggleVisionLivePreview);
-  $("#loadVisionMockBtn").addEventListener("click", loadVisionMock);
-  $("#clearVisionMockBtn").addEventListener("click", clearVisionMock);
-  $("#selectVisionTargetBtn").addEventListener("click", selectVisionTarget);
-  $("#resetVisionTargetBtn").addEventListener("click", resetVisionTarget);
-  $("#refreshVisionTargetBtn").addEventListener("click", refreshVisionTargetState);
-  $("#visionPreviewFrame").addEventListener("load", () => renderVisionOverlay(state.latestVision));
-  bindVisionDragSelect();
-  window.addEventListener("resize", () => {
-    renderVisionOverlay(state.latestVision);
-    renderSubjectLockOverlay();
   });
   $("#refreshAgentBtn").addEventListener("click", loadAgentStatus);
   $("#sendAgentBtn").addEventListener("click", sendAgentMessage);
@@ -125,16 +112,13 @@ function bindEvents() {
   $("#resetAgentBtn").addEventListener("click", resetAgentSession);
   $("#clearAgentChatBtn").addEventListener("click", clearAgentChat);
   $("#agentChatLog").addEventListener("click", handleAgentPendingActionClick);
-  $("#refreshSubjectLockBtn").addEventListener("click", loadSubjectLockStatus);
-  $("#refreshSubjectLockPreviewBtn").addEventListener("click", refreshSubjectLockPreview);
+  $("#refreshSubjectLockBtn").addEventListener("click", refreshSubjectLockPageStatus);
   $("#startSubjectLockCalibrationBtn").addEventListener("click", startSubjectLockCalibration);
   $("#validateSubjectLockBtn").addEventListener("click", validateSubjectLockProfile);
   $("#moveSubjectLockToStartBtn").addEventListener("click", moveSubjectLockToStart);
   $("#playSubjectLockBtn").addEventListener("click", playSubjectLockProfile);
   $("#stopSubjectLockBtn").addEventListener("click", stopSubjectLock);
   $("#subjectLockProfilesList").addEventListener("click", handleSubjectLockProfileClick);
-  $("#subjectLockPreviewFrame").addEventListener("load", renderSubjectLockOverlay);
-  bindSubjectLockDragSelect();
   $("#agentInput").addEventListener("keydown", (event) => {
     if (event.key === "Enter") sendAgentMessage();
   });
@@ -251,6 +235,7 @@ async function loadConfig() {
   try {
     state.config = await getJson("/api/v1/config");
     renderConfig();
+    updateCameraHubLinks();
   } catch (error) {
     showError(error);
   }
@@ -436,7 +421,7 @@ async function loadSubjectLockProfile(profileId, refreshStatus = true) {
 
 async function startSubjectLockCalibration() {
   try {
-    const latest = state.subjectLockVision || (await getJson("/api/v1/vision/latest", { timeout: 5000 }));
+    const latest = await getJson("/api/v1/vision/latest", { timeout: 5000 });
     if (!latest.has_target && !latest.detected) throw new ApiError("SUBJECT_LOCK_TARGET_REQUIRED", "请先在画面中框选主体。");
     const body = await withSafety({
       name: $("#subjectLockName").value.trim(),
@@ -531,11 +516,8 @@ function currentSubjectLockProfileId() {
 
 function startSubjectLockPolling() {
   if (state.subjectLockTimer) return;
-  state.subjectLockPreviewTick = 0;
   state.subjectLockTimer = window.setInterval(async () => {
     await loadSubjectLockStatus({ quiet: true, loadProfiles: false, loadProfile: false });
-    state.subjectLockPreviewTick += 1;
-    if (state.subjectLockPreviewTick % 4 === 0) await refreshSubjectLockPreview({ quiet: true });
     if (!state.subjectLock?.running) {
       stopSubjectLockPolling();
       await loadSubjectLockStatus({ quiet: true });
@@ -857,8 +839,17 @@ function handleActionVideoState(video) {
 function cameraHubUrl(path = "/") {
   const port = Number(state.config?.camera_hub?.public_port || 8020);
   const host = window.location.hostname || "127.0.0.1";
+  const protocol = window.location.protocol === "https:" ? "https:" : "http:";
   const normalizedPath = String(path || "/").startsWith("/") ? path : `/${path}`;
-  return `http://${host}:${port}${normalizedPath}`;
+  return `${protocol}//${host}:${port}${normalizedPath}`;
+}
+
+function updateCameraHubLinks() {
+  const url = cameraHubUrl("/");
+  ["#cameraHubFollowLink", "#cameraHubSubjectLink", "#cameraHubSettingsLink"].forEach((selector) => {
+    const link = $(selector);
+    if (link) link.href = url;
+  });
 }
 
 async function startActionRecording() {
@@ -1350,7 +1341,6 @@ function renderConfig() {
   if ($("#followLatestUrl") && !$("#followLatestUrl").dataset.userEdited) {
     $("#followLatestUrl").value = latestUrl;
   }
-  renderVisionPreviewUrl();
 }
 
 function renderSession() {
@@ -1744,78 +1734,33 @@ function renderCompactFileList(selector, items) {
     : `<div class="empty-text">暂无文件</div>`;
 }
 
-function refreshVisionPreview() {
-  state.visionMockActive = false;
-  const image = $("#visionPreviewFrame");
-  const url = renderVisionPreviewUrl();
-  if (!url) return;
-  $("#visionPreviewState").textContent = "刷新中";
-  image.onload = () => {
-    $("#visionPreviewState").textContent = "已更新";
-  };
-  image.onerror = () => {
-    $("#visionPreviewState").textContent = "无法读取视觉服务";
-  };
-  image.src = `${url}${url.includes("?") ? "&" : "?"}t=${Date.now()}`;
-  refreshVisionProxyStatus();
+async function refreshFollowPageStatus() {
+  await Promise.allSettled([refreshFollow(), refreshVisionProxyStatus()]);
 }
 
-function loadVisionMock() {
-  state.visionMockActive = true;
-  if (state.visionLiveTimer) {
-    clearInterval(state.visionLiveTimer);
-    state.visionLiveTimer = null;
-    $("#toggleVisionLiveBtn").textContent = "开始实时刷新";
-  }
-  const latest = buildVisionMockLatest();
-  const image = $("#visionPreviewFrame");
-  image.onload = () => renderVisionOverlay(latest);
-  image.src = buildVisionMockFrameDataUrl();
-  $("#visionPreviewUrl").textContent = "mock://vision/latest";
-  $("#visionPreviewState").textContent = "模拟目标已加载";
-  renderVisionTargetState({
-    target_mode: "mock",
-    tracking_state: "locked",
-    target: latest.target,
-  });
-  renderVisionHealth({ running: true, camera_available: true, service: "mock" });
-  renderVisionEngineStatus({ running: true, frame_id: 1, fps: latest.fps, camera: { ...latest.camera, opened: true } }, latest);
-  renderVisionLatestDebug(latest);
+async function refreshSubjectLockPageStatus() {
+  await Promise.allSettled([loadSubjectLockStatus(), refreshSubjectLockTargetState()]);
 }
 
-function clearVisionMock() {
-  state.visionMockActive = false;
-  $("#visionPreviewState").textContent = "模拟已退出";
-  refreshVisionPreview();
+function startVisionStatusPolling() {
+  if (state.visionStatusTimer) return;
+  state.visionStatusTimer = window.setInterval(refreshActiveVisionStatus, 2000);
 }
 
-function toggleVisionLivePreview() {
-  if (state.visionLiveTimer) {
-    clearInterval(state.visionLiveTimer);
-    state.visionLiveTimer = null;
-    $("#toggleVisionLiveBtn").textContent = "开始实时刷新";
-    $("#visionPreviewState").textContent = "实时刷新已停止";
-    return;
-  }
-  refreshVisionPreview();
-  state.visionLiveTimer = setInterval(refreshVisionPreview, 500);
-  $("#toggleVisionLiveBtn").textContent = "停止实时刷新";
-}
+async function refreshActiveVisionStatus() {
+  if (document.hidden || state.visionStatusRefreshInFlight) return;
+  const followActive = $("#pageFollow")?.classList.contains("active");
+  const subjectLockActive = $("#pageCinematic")?.classList.contains("active");
+  if (!followActive && !subjectLockActive) return;
 
-function renderVisionPreviewUrl() {
-  const frameUrl = "/api/v1/vision/frame.jpg";
-  $("#visionPreviewUrl").textContent = frameUrl || "--";
-  return frameUrl;
-}
-
-function frameUrlFromLatest(latestUrl) {
+  state.visionStatusRefreshInFlight = true;
   try {
-    const url = new URL(latestUrl, location.origin);
-    url.pathname = url.pathname.replace(/\/latest\/?$/, "/frame.jpg");
-    url.search = "";
-    return url.toString();
-  } catch (_) {
-    return "";
+    const requests = [];
+    if (followActive) requests.push(refreshVisionProxyStatus());
+    if (subjectLockActive) requests.push(refreshSubjectLockTargetState());
+    await Promise.allSettled(requests);
+  } finally {
+    state.visionStatusRefreshInFlight = false;
   }
 }
 
@@ -1844,22 +1789,12 @@ async function refreshVisionProxyStatus() {
     $("#visionCameraState").textContent = "--";
     $("#visionLatestJson").textContent = "";
     state.latestVision = null;
-    renderVisionOverlay(null);
   }
 }
 
 function renderVisionHealth(health) {
   $("#visionHealthState").textContent = health.camera_available ? "camera ok" : health.running ? "running / no camera" : "未启动";
   $("#visionHealthState").className = health.camera_available ? "ok-text" : health.running ? "" : "bad-text";
-}
-
-async function refreshVisionTargetState() {
-  try {
-    const targetState = await getJson("/api/v1/vision/target/state", { timeout: 3000 });
-    renderVisionTargetState(targetState);
-  } catch (error) {
-    showError(error);
-  }
 }
 
 function renderVisionTargetState(targetState) {
@@ -1869,6 +1804,18 @@ function renderVisionTargetState(targetState) {
   $("#visionTargetToolState").textContent = Array.isArray(bbox)
     ? `目标 ${mode} / ${tracking} / bbox=${bbox.map((value) => formatNum(value, 0)).join(",")}`
     : `目标 ${mode} / ${tracking}`;
+}
+
+async function refreshSubjectLockTargetState() {
+  try {
+    const targetState = await getJson("/api/v1/vision/target/state", { timeout: 3000 });
+    const source = targetState.target?.source || targetState.target_source || "none";
+    $("#subjectLockTargetState").textContent = targetState.has_target
+      ? `已锁定 · ${source}`
+      : `未锁定 · ${targetState.tracking_state || "idle"}`;
+  } catch (_) {
+    $("#subjectLockTargetState").textContent = "视觉服务不可用";
+  }
 }
 
 function renderVisionEngineStatus(status, latest = null) {
@@ -1888,37 +1835,6 @@ function renderVisionEngineStatus(status, latest = null) {
   $("#visionCameraState").textContent = `opened=${formatBool(opened)} / read=${formatBool(read)} / index=${cameraIndex ?? "--"}`;
   if (width && height) {
     $("#visionFrameSize").textContent = `${width} x ${height} @ ${formatNum(fps, 1)}fps`;
-  }
-}
-
-async function selectVisionTarget() {
-  try {
-    const body = {
-      x: Number($("#visionTargetX").value),
-      y: Number($("#visionTargetY").value),
-      w: Number($("#visionTargetW").value),
-      h: Number($("#visionTargetH").value),
-    };
-    if (!Number.isFinite(body.x) || !Number.isFinite(body.y) || !Number.isFinite(body.w) || !Number.isFinite(body.h) || body.w < 1 || body.h < 1) {
-      throw new ApiError("BAD_VISION_TARGET", "请输入有效的 x/y/w/h 像素框。");
-    }
-    const result = await postJson("/api/v1/vision/target/select", body);
-    $("#visionTargetToolState").textContent = result.message || "手动目标已选择";
-    await refreshVisionProxyStatus();
-    refreshVisionPreview();
-  } catch (error) {
-    showError(error);
-  }
-}
-
-async function resetVisionTarget() {
-  try {
-    const result = await postJson("/api/v1/vision/target/reset", {});
-    $("#visionTargetToolState").textContent = result.message || "目标已重置";
-    await refreshVisionProxyStatus();
-    refreshVisionPreview();
-  } catch (error) {
-    showError(error);
   }
 }
 
@@ -1962,398 +1878,12 @@ function renderVisionLatestDebug(latest) {
     null,
     2
   );
-  renderVisionOverlay(latest);
-}
-
-function buildVisionMockLatest() {
-  const width = 1280;
-  const height = 720;
-  const bbox = [760, 210, 210, 260];
-  const center = [bbox[0] + bbox[2] / 2, bbox[1] + bbox[3] / 2];
-  const desired = [width * 0.5, height * 0.42];
-  const dx = center[0] - desired[0];
-  const dy = center[1] - desired[1];
-  const ndx = dx / (width / 2);
-  const ndy = dy / (height / 2);
-  return {
-    timestamp: Date.now() / 1000,
-    frame_id: 1,
-    detected: true,
-    has_target: true,
-    target_source: "mock",
-    tracking_state: "locked",
-    target: { bbox, center, area: bbox[2] * bbox[3], confidence: 0.92 },
-    bbox,
-    center,
-    confidence: 0.92,
-    faces: [{ bbox, center, area: bbox[2] * bbox[3], confidence: 0.92 }],
-    offset: {
-      dx,
-      dy,
-      ndx,
-      ndy,
-      desired_center: desired,
-      target_center: center,
-      in_dead_zone: Math.abs(ndx) < 0.02 && Math.abs(ndy) < 0.025,
-      valid: true,
-      dead_zone_x_norm: 0.02,
-      dead_zone_y_norm: 0.025,
-    },
-    smoothed_offset: { ndx: ndx * 0.72, ndy: ndy * 0.72, valid: true, kept: false },
-    direction: {
-      horizontal: ndx > 0 ? "right" : ndx < 0 ? "left" : "center",
-      vertical: ndy > 0 ? "down" : ndy < 0 ? "up" : "center",
-      combined: "right-down",
-    },
-    gesture: { available: false, raw: "", stable: "", confidence: 0 },
-    fps: 30,
-    camera: { source_type: "mock", camera_index: 0, opened: true, available: true, width, height },
-    detector: { face_backend: "mock", face_available: true, face_error: "" },
-    message: "模拟视觉目标。不会访问摄像头，也不会控制机械臂。",
-  };
-}
-
-function buildVisionMockFrameDataUrl() {
-  const svg = `
-<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
-  <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#111827"/>
-      <stop offset="1" stop-color="#1f2937"/>
-    </linearGradient>
-  </defs>
-  <rect width="1280" height="720" fill="url(#bg)"/>
-  <g opacity="0.35" stroke="#64748b" stroke-width="1">
-    ${Array.from({ length: 16 }, (_, index) => `<line x1="${index * 80}" y1="0" x2="${index * 80}" y2="720"/>`).join("")}
-    ${Array.from({ length: 9 }, (_, index) => `<line x1="0" y1="${index * 80}" x2="1280" y2="${index * 80}"/>`).join("")}
-  </g>
-  <rect x="760" y="210" width="210" height="260" rx="18" fill="#334155" stroke="#94a3b8" stroke-width="4"/>
-  <circle cx="825" cy="295" r="18" fill="#e2e8f0"/>
-  <circle cx="905" cy="295" r="18" fill="#e2e8f0"/>
-  <path d="M820 390 Q865 430 920 390" fill="none" stroke="#e2e8f0" stroke-width="10" stroke-linecap="round"/>
-  <text x="44" y="70" fill="#e5e7eb" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="32">Mock Vision Frame</text>
-  <text x="44" y="116" fill="#94a3b8" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="22">用于验证目标框、中心点、期望中心和死区叠加层</text>
-</svg>`;
-  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
-}
-
-function renderVisionOverlay(latest) {
-  const overlay = $("#visionOverlay");
-  if (!overlay) return;
-  overlay.replaceChildren();
-  if (!latest) return;
-  const rect = visionImageRect();
-  const camera = latest.camera || {};
-  const width = Number(camera.width || 0);
-  const height = Number(camera.height || 0);
-  if (!rect || width <= 0 || height <= 0) return;
-  const sx = rect.width / width;
-  const sy = rect.height / height;
-  const toX = (x) => rect.x + Number(x || 0) * sx;
-  const toY = (y) => rect.y + Number(y || 0) * sy;
-  const make = (tag, attrs) => {
-    const node = document.createElementNS("http://www.w3.org/2000/svg", tag);
-    Object.entries(attrs).forEach(([key, value]) => node.setAttribute(key, String(value)));
-    overlay.appendChild(node);
-    return node;
-  };
-  const offset = latest.offset || {};
-  const desired = offset.desired_center || latest.desired_center || null;
-  const deadZoneX = Number(offset.dead_zone_x_norm ?? latest.dead_zone_x_norm ?? 0.02) * width;
-  const deadZoneY = Number(offset.dead_zone_y_norm ?? latest.dead_zone_y_norm ?? 0.025) * height;
-  if (Array.isArray(desired) && desired.length >= 2) {
-    make("rect", {
-      class: "dead-zone",
-      x: toX(Number(desired[0]) - deadZoneX),
-      y: toY(Number(desired[1]) - deadZoneY),
-      width: Math.max(1, deadZoneX * 2 * sx),
-      height: Math.max(1, deadZoneY * 2 * sy),
-    });
-    make("line", { class: "desired", x1: toX(desired[0]) - 12, y1: toY(desired[1]), x2: toX(desired[0]) + 12, y2: toY(desired[1]) });
-    make("line", { class: "desired", x1: toX(desired[0]), y1: toY(desired[1]) - 12, x2: toX(desired[0]), y2: toY(desired[1]) + 12 });
-  }
-  const bbox = latest.bbox || latest.target?.bbox || null;
-  if (Array.isArray(bbox) && bbox.length >= 4) {
-    make("rect", {
-      class: "bbox",
-      x: toX(bbox[0]),
-      y: toY(bbox[1]),
-      width: Math.max(1, Number(bbox[2] || 0) * sx),
-      height: Math.max(1, Number(bbox[3] || 0) * sy),
-    });
-  }
-  const center = latest.center || latest.target?.center || offset.target_center || null;
-  if (Array.isArray(center) && center.length >= 2) {
-    make("circle", { class: "center", cx: toX(center[0]), cy: toY(center[1]), r: 5 });
-  }
 }
 
 function formatBool(value) {
   if (value === true) return "true";
   if (value === false) return "false";
   return "--";
-}
-
-function visionImageRect() {
-  const preview = $(".vision-preview");
-  const img = $("#visionPreviewFrame");
-  if (!preview || !img) return null;
-  const parent = preview.getBoundingClientRect();
-  const rect = img.getBoundingClientRect();
-  if (!rect.width || !rect.height) return null;
-  return {
-    x: rect.left - parent.left,
-    y: rect.top - parent.top,
-    width: rect.width,
-    height: rect.height,
-  };
-}
-
-function bindVisionDragSelect() {
-  const preview = $(".vision-preview");
-  const img = $("#visionPreviewFrame");
-  if (!preview || !img) return;
-  preview.addEventListener("pointerdown", (event) => {
-    if (event.button !== 0) return;
-    const rect = img.getBoundingClientRect();
-    if (!rect.width || !rect.height) return;
-    event.preventDefault();
-    preview.setPointerCapture?.(event.pointerId);
-    state.visionDrag = {
-      pointerId: event.pointerId,
-      startX: event.clientX,
-      startY: event.clientY,
-      endX: event.clientX,
-      endY: event.clientY,
-    };
-    renderVisionSelectionBox();
-  });
-  preview.addEventListener("pointermove", (event) => {
-    if (!state.visionDrag || state.visionDrag.pointerId !== event.pointerId) return;
-    state.visionDrag.endX = event.clientX;
-    state.visionDrag.endY = event.clientY;
-    renderVisionSelectionBox();
-  });
-  preview.addEventListener("pointerup", finishVisionDragSelect);
-  preview.addEventListener("pointercancel", clearVisionDragSelect);
-}
-
-function renderVisionSelectionBox() {
-  const overlay = $("#visionOverlay");
-  if (!overlay || !state.visionDrag) return;
-  const parent = $(".vision-preview").getBoundingClientRect();
-  const x1 = state.visionDrag.startX - parent.left;
-  const y1 = state.visionDrag.startY - parent.top;
-  const x2 = state.visionDrag.endX - parent.left;
-  const y2 = state.visionDrag.endY - parent.top;
-  let node = $("#visionSelectionBox");
-  if (!node) {
-    node = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-    node.setAttribute("id", "visionSelectionBox");
-    node.setAttribute("class", "selection-box");
-    overlay.appendChild(node);
-  }
-  node.setAttribute("x", String(Math.min(x1, x2)));
-  node.setAttribute("y", String(Math.min(y1, y2)));
-  node.setAttribute("width", String(Math.abs(x2 - x1)));
-  node.setAttribute("height", String(Math.abs(y2 - y1)));
-}
-
-async function finishVisionDragSelect(event) {
-  if (!state.visionDrag || state.visionDrag.pointerId !== event.pointerId) return;
-  const body = visionDragToFrameBox();
-  clearVisionDragSelect();
-  if (!body) return;
-  $("#visionTargetX").value = String(body.x);
-  $("#visionTargetY").value = String(body.y);
-  $("#visionTargetW").value = String(body.w);
-  $("#visionTargetH").value = String(body.h);
-  try {
-    const result = await postJson("/api/v1/vision/target/select", body);
-    $("#visionTargetToolState").textContent = result.message || `已框选主体 x=${body.x}, y=${body.y}, w=${body.w}, h=${body.h}`;
-    await refreshVisionProxyStatus();
-    refreshVisionPreview();
-  } catch (error) {
-    showError(error);
-  }
-}
-
-function clearVisionDragSelect() {
-  state.visionDrag = null;
-  $("#visionSelectionBox")?.remove();
-}
-
-function visionDragToFrameBox() {
-  const latest = state.latestVision || {};
-  const camera = latest.camera || {};
-  const width = Number(camera.width || 0);
-  const height = Number(camera.height || 0);
-  const img = $("#visionPreviewFrame");
-  const rect = img.getBoundingClientRect();
-  const drag = state.visionDrag;
-  if (!drag || width <= 0 || height <= 0 || !rect.width || !rect.height) return null;
-  const x1 = Math.max(rect.left, Math.min(rect.right, drag.startX));
-  const y1 = Math.max(rect.top, Math.min(rect.bottom, drag.startY));
-  const x2 = Math.max(rect.left, Math.min(rect.right, drag.endX));
-  const y2 = Math.max(rect.top, Math.min(rect.bottom, drag.endY));
-  const sx = width / rect.width;
-  const sy = height / rect.height;
-  const x = Math.round((Math.min(x1, x2) - rect.left) * sx);
-  const y = Math.round((Math.min(y1, y2) - rect.top) * sy);
-  const w = Math.round(Math.abs(x2 - x1) * sx);
-  const h = Math.round(Math.abs(y2 - y1) * sy);
-  if (w < 8 || h < 8) return null;
-  return { x, y, w, h };
-}
-
-function handleVisionFrameClick(event) {
-  const latest = state.latestVision || {};
-  const camera = latest.camera || {};
-  const width = Number(camera.width || 0);
-  const height = Number(camera.height || 0);
-  const rect = $("#visionPreviewFrame").getBoundingClientRect();
-  if (width <= 0 || height <= 0 || !rect.width || !rect.height) return;
-  const x = Math.round(((event.clientX - rect.left) / rect.width) * width);
-  const y = Math.round(((event.clientY - rect.top) / rect.height) * height);
-  const bbox = latest.bbox || latest.target?.bbox || null;
-  const defaultW = Array.isArray(bbox) && bbox.length >= 4 ? Math.max(1, Math.round(Number(bbox[2]) || 80)) : 80;
-  const defaultH = Array.isArray(bbox) && bbox.length >= 4 ? Math.max(1, Math.round(Number(bbox[3]) || 80)) : 80;
-  $("#visionTargetX").value = String(Math.max(0, x - Math.round(defaultW / 2)));
-  $("#visionTargetY").value = String(Math.max(0, y - Math.round(defaultH / 2)));
-  $("#visionTargetW").value = String(defaultW);
-  $("#visionTargetH").value = String(defaultH);
-  $("#visionTargetToolState").textContent = `已填入点击坐标：x=${x}, y=${y}`;
-}
-
-
-async function refreshSubjectLockPreview(options = {}) {
-  try {
-    state.subjectLockVision = await getJson("/api/v1/vision/latest", { timeout: 5000 });
-    const image = $("#subjectLockPreviewFrame");
-    image.src = `/api/v1/vision/frame.jpg?t=${Date.now()}`;
-    const source = state.subjectLockVision.target_source || "none";
-    $("#subjectLockTargetState").textContent = state.subjectLockVision.has_target || state.subjectLockVision.detected ? `已锁定 · ${source}` : "尚未框选主体";
-    renderSubjectLockOverlay();
-  } catch (error) {
-    $("#subjectLockTargetState").textContent = "视觉服务不可用";
-    if (!options.quiet) showError(error);
-  }
-}
-
-function subjectLockImageRect() {
-  const preview = $(".subject-lock-preview");
-  const image = $("#subjectLockPreviewFrame");
-  if (!preview || !image) return null;
-  const parent = preview.getBoundingClientRect();
-  const rect = image.getBoundingClientRect();
-  if (!rect.width || !rect.height) return null;
-  return { x: rect.left - parent.left, y: rect.top - parent.top, width: rect.width, height: rect.height, pageRect: rect };
-}
-
-function renderSubjectLockOverlay() {
-  const overlay = $("#subjectLockOverlay");
-  const latest = state.subjectLockVision || {};
-  if (!overlay) return;
-  overlay.replaceChildren();
-  const imageRect = subjectLockImageRect();
-  const width = Number(latest.camera?.width || 0);
-  const height = Number(latest.camera?.height || 0);
-  if (!imageRect || width <= 0 || height <= 0) return;
-  const sx = imageRect.width / width;
-  const sy = imageRect.height / height;
-  const make = (tag, attrs) => {
-    const node = document.createElementNS("http://www.w3.org/2000/svg", tag);
-    Object.entries(attrs).forEach(([key, value]) => node.setAttribute(key, String(value)));
-    overlay.appendChild(node);
-    return node;
-  };
-  const toX = (value) => imageRect.x + Number(value || 0) * sx;
-  const toY = (value) => imageRect.y + Number(value || 0) * sy;
-  const desired = latest.offset?.desired_center || latest.desired_center || [width / 2, height / 2];
-  make("line", { class: "desired", x1: toX(desired[0]) - 12, y1: toY(desired[1]), x2: toX(desired[0]) + 12, y2: toY(desired[1]) });
-  make("line", { class: "desired", x1: toX(desired[0]), y1: toY(desired[1]) - 12, x2: toX(desired[0]), y2: toY(desired[1]) + 12 });
-  const bbox = latest.bbox || latest.target?.bbox;
-  if (Array.isArray(bbox) && bbox.length >= 4) {
-    make("rect", { class: "bbox", x: toX(bbox[0]), y: toY(bbox[1]), width: Math.max(1, Number(bbox[2]) * sx), height: Math.max(1, Number(bbox[3]) * sy) });
-  }
-}
-
-function bindSubjectLockDragSelect() {
-  const preview = $(".subject-lock-preview");
-  if (!preview) return;
-  preview.addEventListener("pointerdown", (event) => {
-    if (event.button !== 0) return;
-    const rect = $("#subjectLockPreviewFrame").getBoundingClientRect();
-    if (!rect.width || !rect.height) return;
-    event.preventDefault();
-    preview.setPointerCapture?.(event.pointerId);
-    state.subjectLockDrag = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, endX: event.clientX, endY: event.clientY };
-    renderSubjectLockSelection();
-  });
-  preview.addEventListener("pointermove", (event) => {
-    if (!state.subjectLockDrag || state.subjectLockDrag.pointerId !== event.pointerId) return;
-    state.subjectLockDrag.endX = event.clientX;
-    state.subjectLockDrag.endY = event.clientY;
-    renderSubjectLockSelection();
-  });
-  preview.addEventListener("pointerup", finishSubjectLockDragSelect);
-  preview.addEventListener("pointercancel", clearSubjectLockDragSelect);
-}
-
-function renderSubjectLockSelection() {
-  const overlay = $("#subjectLockOverlay");
-  const drag = state.subjectLockDrag;
-  if (!overlay || !drag) return;
-  const parent = $(".subject-lock-preview").getBoundingClientRect();
-  let node = $("#subjectLockSelectionBox");
-  if (!node) {
-    node = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-    node.setAttribute("id", "subjectLockSelectionBox");
-    node.setAttribute("class", "selection-box");
-    overlay.appendChild(node);
-  }
-  const x1 = drag.startX - parent.left;
-  const y1 = drag.startY - parent.top;
-  const x2 = drag.endX - parent.left;
-  const y2 = drag.endY - parent.top;
-  node.setAttribute("x", String(Math.min(x1, x2)));
-  node.setAttribute("y", String(Math.min(y1, y2)));
-  node.setAttribute("width", String(Math.abs(x2 - x1)));
-  node.setAttribute("height", String(Math.abs(y2 - y1)));
-}
-
-async function finishSubjectLockDragSelect(event) {
-  const drag = state.subjectLockDrag;
-  if (!drag || drag.pointerId !== event.pointerId) return;
-  const latest = state.subjectLockVision || {};
-  const width = Number(latest.camera?.width || 0);
-  const height = Number(latest.camera?.height || 0);
-  const rect = $("#subjectLockPreviewFrame").getBoundingClientRect();
-  const x1 = Math.max(rect.left, Math.min(rect.right, drag.startX));
-  const y1 = Math.max(rect.top, Math.min(rect.bottom, drag.startY));
-  const x2 = Math.max(rect.left, Math.min(rect.right, drag.endX));
-  const y2 = Math.max(rect.top, Math.min(rect.bottom, drag.endY));
-  clearSubjectLockDragSelect();
-  if (width <= 0 || height <= 0 || !rect.width || !rect.height) return;
-  const body = {
-    x: Math.round(((Math.min(x1, x2) - rect.left) / rect.width) * width),
-    y: Math.round(((Math.min(y1, y2) - rect.top) / rect.height) * height),
-    w: Math.round((Math.abs(x2 - x1) / rect.width) * width),
-    h: Math.round((Math.abs(y2 - y1) / rect.height) * height),
-  };
-  if (body.w < 8 || body.h < 8) return;
-  try {
-    const result = await postJson("/api/v1/vision/target/select", body);
-    $("#subjectLockTargetState").textContent = result.message || "主体已框选";
-    await refreshSubjectLockPreview();
-  } catch (error) {
-    showError(error);
-  }
-}
-
-function clearSubjectLockDragSelect() {
-  state.subjectLockDrag = null;
-  $("#subjectLockSelectionBox")?.remove();
 }
 
 function renderRobot() {
@@ -2986,14 +2516,14 @@ function showPage(name) {
   if (name === "follow") {
     refreshFollow();
     loadFollowConfig();
-    refreshVisionPreview();
+    refreshVisionProxyStatus();
   }
   if (name === "agent") loadAgentStatus();
   if (name === "cinematic") {
     loadSubjectLockStatus().then(() => {
       if (state.subjectLock?.running) startSubjectLockPolling();
     });
-    refreshSubjectLockPreview();
+    refreshSubjectLockTargetState();
   }
   if (name === "kinematics") {
     loadKinematicsStatus();

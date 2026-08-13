@@ -115,6 +115,7 @@ class ContinuousJointStreamTimingTest(unittest.TestCase):
 class SpyDriver:
     def __init__(self, delegate) -> None:
         self.delegate = delegate
+        self.read_one_count = 0
         self.read_all_count = 0
         self.write_count = 0
         self.enable_count = 0
@@ -126,6 +127,10 @@ class SpyDriver:
     def read_all_present_positions(self) -> dict[str, int]:
         self.read_all_count += 1
         return self.delegate.read_all_present_positions()
+
+    def read_present_position(self, joint_key: str) -> int:
+        self.read_one_count += 1
+        return self.delegate.read_present_position(joint_key)
 
     def write_goal_position(self, joint_key: str, goal_raw: int) -> None:
         self.write_count += 1
@@ -275,6 +280,17 @@ class RealControllerStreamTest(unittest.TestCase):
         self.assertTrue(result.成功, result.消息)
         self.assertEqual(self.spy.read_all_count, 1)
         self.assertEqual(self.save_count, 1)
+
+    def test_real_stream_caps_target_lead_from_present_position(self) -> None:
+        self.controller.config["transport"]["dry_run"] = False
+        self.controller.calibration_manager.data["_meta"] = {"robot_variant": "V2"}
+        self.spy.delegate.present_raw["j14"] = 0
+
+        result = self.controller.stream_joint_target("j14", 10.0, max_target_lead=0.5)
+
+        self.assertTrue(result.成功, result.消息)
+        self.assertEqual(self.spy.read_one_count, 1)
+        self.assertAlmostEqual(self.controller.runtime_state["goal_joint_targets_deg"]["j14"], 0.5)
 
     def test_stream_rejects_joint_limit_without_writing(self) -> None:
         result = self.controller.stream_joint_target("j14", 999.0)

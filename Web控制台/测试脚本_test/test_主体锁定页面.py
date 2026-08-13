@@ -19,7 +19,7 @@ class SubjectLockPageTest(unittest.TestCase):
 
     def test_exposes_complete_subject_lock_workflow(self) -> None:
         for element_id in (
-            "subjectLockPreviewFrame",
+            "cameraHubSubjectLink",
             "subjectLockName",
             "subjectLockStartMm",
             "subjectLockEndMm",
@@ -33,6 +33,28 @@ class SubjectLockPageTest(unittest.TestCase):
             "subjectLockCurve",
         ):
             self.assertIn(f'id="{element_id}"', self.html)
+
+    def test_live_preview_and_drag_selection_moved_to_camera_hub(self) -> None:
+        self.assertNotIn('id="subjectLockPreviewFrame"', self.html)
+        self.assertNotIn('id="visionPreviewFrame"', self.html)
+        self.assertNotIn("/api/v1/vision/frame.jpg?t=", self.js)
+        self.assertNotIn("setInterval(refreshVisionPreview", self.js)
+        self.assertNotIn("renderVisionPreviewUrl", self.js)
+        self.assertIn('id="cameraHubFollowLink"', self.html)
+        self.assertIn('id="cameraHubSubjectLink"', self.html)
+
+    def test_camera_hub_links_use_loaded_public_config(self) -> None:
+        self.assertIn("updateCameraHubLinks();", self.js)
+        self.assertIn("state.config?.camera_hub?.public_port || 8020", self.js)
+        self.assertIn('["#cameraHubFollowLink", "#cameraHubSubjectLink", "#cameraHubSettingsLink"]', self.js)
+        self.assertNotIn("`${location.protocol}//${location.hostname || \"127.0.0.1\"}:8020/`", self.js)
+
+    def test_visual_status_refreshes_manually_and_at_low_frequency(self) -> None:
+        self.assertIn('$("#refreshFollowBtn").addEventListener("click", refreshFollowPageStatus);', self.js)
+        self.assertIn('$("#refreshSubjectLockBtn").addEventListener("click", refreshSubjectLockPageStatus);', self.js)
+        self.assertIn("window.setInterval(refreshActiveVisionStatus, 2000)", self.js)
+        self.assertIn("if (followActive) requests.push(refreshVisionProxyStatus());", self.js)
+        self.assertIn("if (subjectLockActive) requests.push(refreshSubjectLockTargetState());", self.js)
 
     def test_frontend_uses_only_new_subject_lock_api(self) -> None:
         self.assertIn("/api/v1/subject-lock/calibration/start", self.js)

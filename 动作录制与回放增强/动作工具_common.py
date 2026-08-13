@@ -251,14 +251,56 @@ def append_sequence_pose(sequence: dict[str, Any], pose: dict[str, Any]) -> dict
     return refresh_sequence_pose_count(sequence)
 
 
-def summarize_sequence_payload(sequence: Mapping[str, Any]) -> dict[str, Any]:
+def estimate_sequence_duration(
+    sequence: Mapping[str, Any],
+    playback_config: Mapping[str, Any] | None = None,
+) -> float:
+    """Estimate speed-1 real replay time, excluding travel to the first pose."""
+
     poses = sequence.get("poses", []) if isinstance(sequence, Mapping) else []
     poses = poses if isinstance(poses, list) else []
-    total = sum(
-        float(pose.get("duration_sec", 0)) + float(pose.get("hold_sec", 0))
-        for pose in poses
-        if isinstance(pose, Mapping)
+    stored_playback = sequence.get("playback", {}) if isinstance(sequence, Mapping) else {}
+    stored_playback = stored_playback if isinstance(stored_playback, Mapping) else {}
+    playback = playback_config if isinstance(playback_config, Mapping) else {}
+    default_duration = float(
+        stored_playback.get("default_duration_sec", playback.get("default_duration_sec", 1.5))
     )
+    default_hold = float(
+        stored_playback.get("default_interval_sec", playback.get("default_interval_sec", 0.3))
+    )
+    real_min_duration = max(0.0, float(playback.get("real_mode_min_duration_sec", 0.0)))
+    speed_limits = playback.get("joint_speed_limits", {})
+    speed_limits = speed_limits if isinstance(speed_limits, Mapping) else {}
+
+    total = 0.0
+    previous_targets: dict[str, float] | None = None
+    for pose in poses:
+        if not isinstance(pose, Mapping):
+            continue
+        configured_duration = float(pose.get("duration_sec", 0.0))
+        duration = configured_duration if configured_duration > 0 else default_duration
+        targets = normalize_joint_targets(
+            pose.get("replay_joint_targets_deg") or pose.get("joint_targets_deg"),
+            sequence.get("joint_order", JOINT_ORDER),
+        )
+        if previous_targets is not None:
+            for joint, target in targets.items():
+                limit = float(speed_limits.get(joint, DEFAULT_JOINT_SPEED_LIMITS.get(joint, 45.0)))
+                if limit > 0 and joint in previous_targets:
+                    duration = max(duration, abs(float(target) - previous_targets[joint]) / limit)
+        duration = max(duration, real_min_duration)
+        total += duration + max(0.0, float(pose.get("hold_sec", default_hold)))
+        previous_targets = {joint: float(value) for joint, value in targets.items()}
+    return total
+
+
+def summarize_sequence_payload(
+    sequence: Mapping[str, Any],
+    playback_config: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    poses = sequence.get("poses", []) if isinstance(sequence, Mapping) else []
+    poses = poses if isinstance(poses, list) else []
+    total = estimate_sequence_duration(sequence, playback_config)
     tcp_points = [
         pose.get("tcp_pose", {}).get("xyz")
         for pose in poses
@@ -273,6 +315,7 @@ def summarize_sequence_payload(sequence: Mapping[str, Any]) -> dict[str, Any]:
         "pose_count": len(poses),
         "创建时间": sequence.get("created_at") if isinstance(sequence, Mapping) else None,
         "总时长": round(total, 3),
+        "时长说明": "预计回放时长，不含前往首帧",
         "是否包含 raw": any(pose.get("raw_present_position") for pose in poses if isinstance(pose, Mapping)),
         "是否包含 tcp_pose": any(pose.get("tcp_pose") for pose in poses if isinstance(pose, Mapping)),
         "是否包含 gripper": any((pose.get("gripper") or {}).get("available") for pose in poses if isinstance(pose, Mapping)),
@@ -416,6 +459,15 @@ def call_move_joints(controller: Any, target_deg_by_joint: Mapping[str, float], 
         result = controller.移动到关节角度([target[joint] for joint in JOINT_ORDER])
         return result_to_tuple(result)
     return False, "控制器不支持 move_joints / 移动到关节角度。"
+
+
+def call_stream_joint_targets(controller: Any, target_deg_by_joint: Mapping[str, float]) -> tuple[bool, str]:
+    """Write one synchronized trajectory frame without per-frame state reads or persistence."""
+
+    target = {key: float(value) for key, value in target_deg_by_joint.items()}
+    if hasattr(controller, "stream_joint_targets"):
+        return result_to_tuple(controller.stream_joint_targets(target))
+    return call_move_joints(controller, target)
 
 
 def call_set_gripper(controller: Any, gripper_payload: Mapping[str, Any]) -> tuple[bool, str]:

@@ -62,7 +62,7 @@ class SubjectLockPageTest(unittest.TestCase):
         self.assertNotIn('getJson("/api/v1/cinematic/status"', self.js)
 
     def test_page_names_the_two_controlled_joints(self) -> None:
-        self.assertIn("J10 导轨 + J11 底座旋转", self.html)
+        self.assertIn("J10 导轨 + J11 水平旋转 + J13 竖直俯仰", self.html)
 
     def test_failed_validation_is_not_mislabeled_as_speed_only(self) -> None:
         self.assertIn('needs_speed: "检查未通过"', self.js)

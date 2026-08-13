@@ -133,6 +133,9 @@ class SubjectLockWebTest(unittest.TestCase):
             controller = service._get_subject_lock_controller()
 
             self.assertEqual(controller.config["control_update_hz"], 40.0)
+            self.assertEqual(controller.config["center_error_norm"], 0.012)
+            self.assertEqual(controller.config["stable_sec"], 1.5)
+            self.assertEqual(controller.config["center_timeout_sec"], 20.0)
 
 
 if __name__ == "__main__":

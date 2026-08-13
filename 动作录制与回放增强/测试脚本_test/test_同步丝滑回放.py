@@ -1,0 +1,69 @@
+"""所有关节共用同一时间参数，并优先走批量连续位置流。"""
+
+from typing import Any, Mapping
+import unittest
+
+import 动作测试路径_test_paths  # noqa: F401
+
+from 动作回放器_sequence_player import SequencePlayer
+from 动作工具_common import JOINT_ORDER, build_empty_sequence, load_config
+
+
+class StreamController:
+    def __init__(self) -> None:
+        self.current = {joint: 0.0 for joint in JOINT_ORDER}
+        self.frames: list[dict[str, float]] = []
+        self.move_calls = 0
+
+    def is_dry_run(self) -> bool:
+        return True
+
+    def get_state(self) -> dict[str, Any]:
+        return {"模式": "dry-run", "已连接": True, "关节角度": dict(self.current)}
+
+    def stream_joint_targets(self, targets: Mapping[str, float]):
+        self.current = {joint: float(targets[joint]) for joint in JOINT_ORDER}
+        self.frames.append(dict(self.current))
+        return True, "streamed"
+
+    def move_joints(self, targets: Mapping[str, float], **_kwargs: Any):
+        self.move_calls += 1
+        return True, "moved"
+
+    def stop(self):
+        return True, "stopped"
+
+
+class NoSleepPlayer(SequencePlayer):
+    def _sleep_with_controls(self, _seconds: float) -> None:
+        return
+
+
+class SynchronizedPlaybackTest(unittest.TestCase):
+    def test_all_joints_share_eased_progress_and_stream_batch_writes(self) -> None:
+        config = load_config()
+        config["playback"]["update_hz"] = 4.0
+        config["playback"]["auto_duration_from_distance"] = False
+        config["playback"]["continuous_interpolation_default"] = True
+        config["playback"]["synchronized_segment_timing"] = True
+        config["safety"]["max_single_step_deg"] = 1000.0
+        controller = StreamController()
+        player = NoSleepPlayer(controller, config)
+        sequence = build_empty_sequence("同步", source="test", config=config)
+        target = {"j10": 100.0, "j11": 20.0, "j12": -40.0, "j13": 0.0, "j14": 10.0, "j15": 5.0}
+        sequence["poses"] = [{"index": 1, "duration_sec": 1.0, "hold_sec": 0.0, "joint_targets_deg": target}]
+
+        self.assertTrue(player.play(sequence))
+        self.assertEqual(len(controller.frames), 4)
+        self.assertEqual(controller.move_calls, 0)
+        for frame in controller.frames:
+            progress = frame["j10"] / target["j10"]
+            self.assertAlmostEqual(frame["j11"] / target["j11"], progress)
+            self.assertAlmostEqual(frame["j12"] / target["j12"], progress)
+            self.assertAlmostEqual(frame["j14"] / target["j14"], progress)
+        self.assertLess(controller.frames[0]["j10"], 25.0)
+        self.assertEqual(controller.frames[-1], target)
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -381,7 +381,7 @@
                   <span>轨迹名称</span>
                   <input id="subjectLockName" value="主体锁定_01" maxlength="64" />
                 </label>
-                <div class="inline-status">参与关节：J10 导轨 + J11 底座旋转</div>
+                <div class="inline-status">参与关节：J10 导轨 + J11 水平旋转 + J13 竖直俯仰</div>
                 <div class="input-grid three">
                   <label class="field"><span>起点 mm</span><input id="subjectLockStartMm" type="number" min="-140" max="140" step="0.5" value="-50" /></label>
                   <label class="field"><span>终点 mm</span><input id="subjectLockEndMm" type="number" min="-140" max="140" step="0.5" value="50" /></label>
@@ -403,6 +403,7 @@
                   <dt>轨迹</dt><dd id="subjectLockCurrentProfile">--</dd>
                   <dt>标定点</dt><dd id="subjectLockPointState">0 / 11</dd>
                   <dt>水平误差</dt><dd id="subjectLockErrorState">--</dd>
+                  <dt>竖直误差</dt><dd id="subjectLockVerticalErrorState">--</dd>
                   <dt>视觉年龄</dt><dd id="subjectLockVisionAge">--</dd>
                   <dt>保持原因</dt><dd id="subjectLockHoldReason">--</dd>
                   <dt>控制频率</dt><dd id="subjectLockFrequency">--</dd>
@@ -448,6 +449,7 @@
                 <dl class="kv wide">
                   <dt>J10</dt><dd id="subjectLockTargetJ10">--</dd>
                   <dt>J11</dt><dd id="subjectLockTargetJ11">--</dd>
+                  <dt>J13</dt><dd id="subjectLockTargetJ13">--</dd>
                   <dt>写入</dt><dd id="subjectLockWriteCount">--</dd>
                 </dl>
               </section>
@@ -702,6 +704,6 @@
     </dialog>
 
     <script src="/static/audio-recorder.js?v=20260724-web-cloud-stt"></script>
-    <script src="/static/app.js?v=20260716-continuous-follow-j10-mm-ai-confirm-mobile-joint-hold-agent-layout-recording-unnamed-two-frame-guard-20260812-action-camera-recording-camera-hub-vision-v3"></script>
+    <script src="/static/app.js?v=20260716-continuous-follow-j10-mm-ai-confirm-mobile-joint-hold-agent-layout-recording-unnamed-two-frame-guard-20260812-action-camera-recording-camera-hub-vision-v3-lan-retry-duration-estimate-subject-lock-3axis"></script>
   </body>
 </html>

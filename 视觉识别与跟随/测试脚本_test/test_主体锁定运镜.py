@@ -268,6 +268,61 @@ class FineCenterPlannerTest(unittest.TestCase):
 
 
 class SubjectLockControllerTest(unittest.TestCase):
+    def test_calibration_move_keeps_correcting_pan_from_live_vision(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            writes: list[dict[str, float]] = []
+            frame_id = 0
+
+            def latest() -> dict:
+                nonlocal frame_id
+                frame_id += 1
+                return {
+                    "frame_id": frame_id,
+                    "detected": True,
+                    "has_target": True,
+                    "smoothed_offset": {"valid": True, "ndx": 0.2, "ndy": -0.2},
+                }
+
+            controller = SubjectLockController(
+                Path(directory),
+                latest_provider=latest,
+                state_provider=lambda: {"j10": 0.0, "j11": 0.0},
+                stream_writer=lambda targets: writes.append(dict(targets)) or {"ok": True},
+                stream_sync=lambda: {"ok": True},
+                dry_run=False,
+            )
+            pan_planner = FineCenterPlanner(
+                initial_j11_deg=0.0,
+                sign=1.0,
+                max_speed_deg_s=5.0,
+                max_accel_deg_s2=15.0,
+                min_j11_deg=-360.0,
+                max_j11_deg=360.0,
+            )
+            tilt_planner = FineCenterPlanner(
+                initial_j11_deg=0.0,
+                sign=1.0,
+                max_speed_deg_s=5.0,
+                max_accel_deg_s2=15.0,
+                min_j11_deg=-180.0,
+                max_j11_deg=180.0,
+            )
+
+            controller._run_plan(
+                [
+                    {"time_sec": 0.0, "targets_deg": {"j10": 0.0, "j11": 0.0}},
+                    {"time_sec": 0.001, "targets_deg": {"j10": 0.1, "j11": 0.0}},
+                ],
+                require_vision=True,
+                center_planners={"j11": pan_planner, "j13": tilt_planner},
+            )
+
+            self.assertTrue(writes)
+            self.assertTrue(all(write["j11"] > 0.0 for write in writes))
+            self.assertGreater(writes[-1]["j11"], writes[0]["j11"])
+            self.assertTrue(all(write["j13"] < 0.0 for write in writes))
+            self.assertLess(writes[-1]["j13"], writes[0]["j13"])
+
     def test_calibration_records_eleven_points_and_saves_blockable_profile(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             current = {"j10": 0.0, "j11": 0.0, "j12": 10.0, "j13": 20.0, "j14": 30.0, "j15": 40.0}
@@ -317,11 +372,14 @@ class SubjectLockControllerTest(unittest.TestCase):
             self.assertEqual(status["phase"], "ready")
             self.assertEqual(status["calibration_point_count"], 11)
             self.assertEqual(sync_count, 1)
-            self.assertTrue(all(set(item).issubset({"j10", "j11"}) for item in writes))
+            self.assertTrue(all(set(item).issubset({"j10", "j11", "j13"}) for item in writes))
             profiles = controller.list_profiles()
             self.assertEqual(len(profiles), 1)
             self.assertEqual(profiles[0]["schema"], "subject_lock_v1")
             self.assertEqual(profiles[0]["name"], "玩偶轨迹")
+            profile = controller.load_profile(profiles[0]["profile_id"])
+            self.assertEqual(profile["controlled_joints"], ["j10", "j11", "j13"])
+            self.assertIn("tilt_curve", profile)
             current.update({"j10": 0.0, "j11": 0.0, "j12": 15.0})
             with self.assertRaisesRegex(ValueError, "参考姿态"):
                 controller.play(profiles[0]["profile_id"])

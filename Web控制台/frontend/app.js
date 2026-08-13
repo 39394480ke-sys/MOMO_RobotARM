@@ -155,29 +155,42 @@ function bindEvents() {
 }
 
 async function requestJson(path, options = {}) {
-  const timeout = options.timeout ?? 5000;
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeout);
-  try {
-    const response = await fetch(API_BASE + path, {
-      method: options.method || "GET",
-      headers: { "Content-Type": "application/json" },
-      body: options.body === undefined ? undefined : JSON.stringify(options.body),
-      signal: controller.signal,
-    });
-    const payload = await response.json();
-    if (!payload.ok) {
-      const err = payload.error || { code: "HTTP_ERROR", message: `HTTP ${response.status}` };
-      throw new ApiError(err.code, err.message);
+  const method = options.method || "GET";
+  const timeout = options.timeout ?? 10000;
+  const retries = options.retries ?? (method === "GET" ? 1 : 0);
+
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeout);
+    try {
+      const response = await fetch(API_BASE + path, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: options.body === undefined ? undefined : JSON.stringify(options.body),
+        signal: controller.signal,
+      });
+      const payload = await response.json();
+      if (!payload.ok) {
+        const err = payload.error || { code: "HTTP_ERROR", message: `HTTP ${response.status}` };
+        throw new ApiError(err.code, err.message);
+      }
+      return payload.data;
+    } catch (error) {
+      const transient = error.name === "AbortError" || error instanceof TypeError;
+      if (transient && attempt < retries) {
+        await new Promise((resolve) => setTimeout(resolve, 350));
+        continue;
+      }
+      if (error.name === "AbortError") {
+        throw new ApiError("TIMEOUT", "请求超时，请检查局域网连接后重试。");
+      }
+      if (error instanceof TypeError) {
+        throw new ApiError("NETWORK_ERROR", "网络连接中断，请确认设备仍连接同一局域网。");
+      }
+      throw error;
+    } finally {
+      clearTimeout(timer);
     }
-    return payload.data;
-  } catch (error) {
-    if (error.name === "AbortError") {
-      throw new ApiError("TIMEOUT", "请求超时。");
-    }
-    throw error;
-  } finally {
-    clearTimeout(timer);
   }
 }
 
@@ -1634,6 +1647,7 @@ function renderSubjectLockStatus() {
   $("#subjectLockCurrentProfile").textContent = data.profile_name || data.profile_id || "--";
   $("#subjectLockPointState").textContent = `${data.calibration_point_index || 0} / ${data.calibration_point_count || 11}`;
   $("#subjectLockErrorState").textContent = data.horizontal_error_norm == null ? "--" : formatNum(data.horizontal_error_norm, 4);
+  $("#subjectLockVerticalErrorState").textContent = data.vertical_error_norm == null ? "--" : formatNum(data.vertical_error_norm, 4);
   $("#subjectLockVisionAge").textContent = data.latest_vision_age_ms == null ? "--" : `${formatNum(data.latest_vision_age_ms, 1)} ms`;
   $("#subjectLockHoldReason").textContent = data.hold_reason || "--";
   $("#subjectLockFrequency").textContent = data.actual_update_hz ? `${formatNum(data.actual_update_hz, 2)} Hz` : "--";
@@ -1644,6 +1658,7 @@ function renderSubjectLockStatus() {
   const targets = data.targets_deg || {};
   $("#subjectLockTargetJ10").textContent = targets.j10 == null ? "--" : `${formatNum(targets.j10, 3)} mm`;
   $("#subjectLockTargetJ11").textContent = targets.j11 == null ? "--" : `${formatNum(targets.j11, 3)}°`;
+  $("#subjectLockTargetJ13").textContent = targets.j13 == null ? "--" : `${formatNum(targets.j13, 3)}°`;
   $("#subjectLockWriteCount").textContent = String(data.write_count || 0);
   const running = Boolean(data.running);
   $("#startSubjectLockCalibrationBtn").disabled = running;
@@ -2028,7 +2043,7 @@ function renderActions(actions) {
       return `
         <article class="item-card">
           <h3>${escapeHtml(item.name)}</h3>
-          <p>姿态数：${s.pose_count ?? "--"}，总时长：${s["总时长"] ?? "--"} 秒</p>
+          <p>姿态数：${s.pose_count ?? "--"}，预计时长：${s["总时长"] ?? "--"} 秒（不含前往首帧）</p>
           <div class="tag-row">
             <span class="tag ${s["是否包含 gripper"] ? "on" : ""}">gripper</span>
             <span class="tag ${s["是否包含 tcp_pose"] ? "on" : ""}">tcp_pose</span>

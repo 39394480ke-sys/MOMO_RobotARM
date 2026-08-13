@@ -13,6 +13,7 @@ class RecordingController:
         self.current = {joint: 0.0 for joint in JOINT_ORDER}
         self.current.update({"j10": -40.0, "j11": -4.0})
         self.frames: list[dict[str, float]] = []
+        self.stream_calls = 0
 
     def is_dry_run(self) -> bool:
         return True
@@ -28,6 +29,10 @@ class RecordingController:
         self.current = {joint: float(target_deg_by_joint[joint]) for joint in JOINT_ORDER}
         self.frames.append(dict(self.current))
         return True, "ok"
+
+    def stream_joint_targets(self, target_deg_by_joint: Mapping[str, float]):
+        self.stream_calls += 1
+        return self.move_joints(target_deg_by_joint)
 
     def stop(self):
         return True, "stopped"
@@ -89,8 +94,8 @@ assert player.play_pose_calls == 0
 assert all(call < 0.3 for call in player.sleep_calls), player.sleep_calls
 
 first_segment_frames = controller.frames[:4]
-assert first_segment_frames[0]["j10"] == -30.0
-assert first_segment_frames[0]["j11"] == -3.0
+assert -40.0 < first_segment_frames[0]["j10"] < 0.0
+assert -4.0 < first_segment_frames[0]["j11"] < 0.0
 assert first_segment_frames[-1]["j10"] == 0.0
 assert first_segment_frames[-1]["j11"] == 0.0
 
@@ -102,6 +107,7 @@ for frame in ab_frames:
     assert abs(j10_ratio - j11_ratio) < 1e-9, frame
 assert ab_frames[-1]["j10"] == 100.0
 assert ab_frames[-1]["j11"] == 10.0
+assert controller.stream_calls == len(controller.frames)
 
 recording_controller = RecordingController()
 recording_player = NoSleepSequencePlayer(recording_controller, config)

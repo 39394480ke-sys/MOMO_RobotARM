@@ -73,16 +73,23 @@ class SubjectLockController:
         "center_max_speed_deg_s": 5.0,
         "center_max_accel_deg_s2": 15.0,
         "center_gain_deg_s_per_norm": 20.0,
-        "center_error_norm": 0.02,
-        "stable_sec": 0.5,
-        "center_timeout_sec": 10.0,
+        "tilt_center_max_speed_deg_s": 5.0,
+        "tilt_center_max_accel_deg_s2": 15.0,
+        "tilt_center_gain_deg_s_per_norm": 20.0,
+        "center_error_norm": 0.012,
+        "vertical_center_error_norm": 0.015,
+        "stable_sec": 1.5,
+        "center_timeout_sec": 20.0,
         "vision_stale_timeout_sec": 0.25,
         "vision_loss_abort_sec": 1.0,
         "pan_sign": 1.0,
+        "tilt_sign": 1.0,
         "j10_min_mm": -140.0,
         "j10_max_mm": 140.0,
         "j11_min_deg": -360.0,
         "j11_max_deg": 360.0,
+        "j13_min_deg": -180.0,
+        "j13_max_deg": 180.0,
         "max_j11_speed_deg_s": 12.0,
         "max_j11_accel_deg_s2": 30.0,
         "move_to_start_j10_speed_mm_s": 3.0,
@@ -135,6 +142,7 @@ class SubjectLockController:
             "calibration_point_index": 0,
             "calibration_point_count": 0,
             "horizontal_error_norm": None,
+            "vertical_error_norm": None,
             "latest_vision_age_ms": None,
             "hold_reason": "",
             "targets_deg": {},
@@ -230,6 +238,7 @@ class SubjectLockController:
         self._check_idle()
         profile = self.load_profile(profile_id)
         curve = ShapePreservingHermiteCurve.from_dict(profile["curve"])
+        tilt_curve = self._tilt_curve(profile)
         validation = validate_playback_speed(
             curve,
             start_mm=float(profile["rail"]["start_mm"]),
@@ -247,6 +256,7 @@ class SubjectLockController:
             float(profile["rail"]["start_mm"]),
             float(profile["rail"]["end_mm"]),
             float(speed_mm_s),
+            tilt_curve=tilt_curve,
         )
         profile["rail"]["requested_speed_mm_s"] = abs(float(speed_mm_s))
         profile["validation"] = validation
@@ -267,7 +277,13 @@ class SubjectLockController:
         self._check_reference_pose(profile, state)
         start_j10 = float(profile["rail"]["start_mm"])
         start_j11 = float(ShapePreservingHermiteCurve.from_dict(profile["curve"]).evaluate(start_j10))
-        if abs(float(state.get("j10", 0.0)) - start_j10) > float(self.config["start_tolerance_j10_mm"]) or abs(float(state.get("j11", 0.0)) - start_j11) > float(self.config["start_tolerance_j11_deg"]):
+        tilt_curve = self._tilt_curve(profile)
+        start_j13 = float(tilt_curve.evaluate(start_j10)) if tilt_curve is not None else float(state.get("j13", 0.0))
+        if (
+            abs(float(state.get("j10", 0.0)) - start_j10) > float(self.config["start_tolerance_j10_mm"])
+            or abs(float(state.get("j11", 0.0)) - start_j11) > float(self.config["start_tolerance_j11_deg"])
+            or (tilt_curve is not None and abs(float(state.get("j13", 0.0)) - start_j13) > float(self.config["start_tolerance_j11_deg"]))
+        ):
             raise ValueError("机械臂尚未位于轨迹起点，请先执行“回到起点”。")
         self._assert_plan_targets(profile)
         return self._start_operation("playing", profile, self._play_worker)
@@ -291,6 +307,17 @@ class SubjectLockController:
             current = {str(key): float(value) for key, value in self.state_provider().items()}
             reference_state = dict(current)
             positions = calibration_positions(start, end)
+            self._set_status(phase="centering", message="正在居中主体，然后开始标定。")
+            centered, latest = self._center_at_point(current)
+            if not centered:
+                raise RuntimeError("自动标定开始前无法将主体稳定居中。")
+            camera = dict(latest.get("camera", {})) if isinstance(latest.get("camera"), Mapping) else camera
+            measured = {str(key): float(value) for key, value in self.state_provider().items()}
+            current.update({
+                "j10": float(measured.get("j10", current.get("j10", 0.0))),
+                "j11": float(measured.get("j11", current.get("j11", 0.0))),
+                "j13": float(measured.get("j13", current.get("j13", 0.0))),
+            })
             for index, position in enumerate(positions):
                 if self._stop_event.is_set():
                     break
@@ -303,20 +330,41 @@ class SubjectLockController:
                     j11_speed=float(self.config["center_max_speed_deg_s"]),
                     update_hz=float(self.config["control_update_hz"]),
                 )
-                self._run_plan(plan, require_vision=True)
+                self._run_plan(
+                    plan,
+                    require_vision=True,
+                    center_planners=self._center_planners(current),
+                )
                 current["j10"] = position
+                streamed = self._status.get("targets_deg", {})
+                if isinstance(streamed, Mapping) and "j11" in streamed:
+                    current["j11"] = float(streamed["j11"])
+                if isinstance(streamed, Mapping) and "j13" in streamed:
+                    current["j13"] = float(streamed["j13"])
                 centered, latest = self._center_at_point(current)
                 camera = dict(latest.get("camera", {})) if isinstance(latest.get("camera"), Mapping) else camera
                 if not centered:
                     raise RuntimeError("主体在标定点无法稳定居中。")
                 measured = {str(key): float(value) for key, value in self.state_provider().items()}
-                current.update({"j10": float(measured.get("j10", current["j10"])), "j11": float(measured.get("j11", current["j11"]))})
-                samples.append({"index": index, "j10_mm": current["j10"], "j11_deg": current["j11"], "horizontal_error_norm": float(self._status.get("horizontal_error_norm") or 0.0)})
+                current.update({
+                    "j10": float(measured.get("j10", current["j10"])),
+                    "j11": float(measured.get("j11", current["j11"])),
+                    "j13": float(measured.get("j13", current.get("j13", 0.0))),
+                })
+                samples.append({
+                    "index": index,
+                    "j10_mm": current["j10"],
+                    "j11_deg": current["j11"],
+                    "j13_deg": current["j13"],
+                    "horizontal_error_norm": float(self._status.get("horizontal_error_norm") or 0.0),
+                    "vertical_error_norm": float(self._status.get("vertical_error_norm") or 0.0),
+                })
             if self._stop_event.is_set():
                 self._set_status(running=False, phase="stopped", message="主体锁定标定已停止。")
                 return
             samples = validate_calibration_samples(samples)
             curve = ShapePreservingHermiteCurve.from_points(samples)
+            tilt_curve = ShapePreservingHermiteCurve.from_points(samples, "j13_deg")
             validation = validate_playback_speed(
                 curve,
                 start_mm=start,
@@ -328,7 +376,7 @@ class SubjectLockController:
                 j10_limits=(float(self.config["j10_min_mm"]), float(self.config["j10_max_mm"])),
                 j11_limits=(float(self.config["j11_min_deg"]), float(self.config["j11_max_deg"])),
             )
-            validation = self._apply_target_validation(validation, curve, start, end, requested_speed)
+            validation = self._apply_target_validation(validation, curve, start, end, requested_speed, tilt_curve=tilt_curve)
             profile = {
                 "schema": "subject_lock_v1",
                 "profile_id": profile_id,
@@ -337,9 +385,10 @@ class SubjectLockController:
                 "updated_at": datetime.now().isoformat(timespec="seconds"),
                 "direction": "start_to_end",
                 "rail": {"joint": "j10", "start_mm": start, "end_mm": end, "requested_speed_mm_s": requested_speed},
-                "controlled_joints": ["j10", "j11"],
+                "controlled_joints": ["j10", "j11", "j13"],
                 "calibration_points": samples,
                 "curve": curve.to_dict(),
+                "tilt_curve": tilt_curve.to_dict(),
                 "reference": {"joints_deg": reference_state, "camera": camera},
                 "validation": validation,
             }
@@ -357,16 +406,30 @@ class SubjectLockController:
         finally:
             self._sync_once()
 
+    def _center_planners(self, current: Mapping[str, float]) -> dict[str, FineCenterPlanner]:
+        return {
+            "j11": FineCenterPlanner(
+                initial_j11_deg=float(current.get("j11", 0.0)),
+                sign=float(self.config["pan_sign"]),
+                max_speed_deg_s=float(self.config["center_max_speed_deg_s"]),
+                max_accel_deg_s2=float(self.config["center_max_accel_deg_s2"]),
+                min_j11_deg=float(self.config["j11_min_deg"]),
+                max_j11_deg=float(self.config["j11_max_deg"]),
+                gain_deg_s_per_norm=float(self.config["center_gain_deg_s_per_norm"]),
+            ),
+            "j13": FineCenterPlanner(
+                initial_j11_deg=float(current.get("j13", 0.0)),
+                sign=float(self.config["tilt_sign"]),
+                max_speed_deg_s=float(self.config["tilt_center_max_speed_deg_s"]),
+                max_accel_deg_s2=float(self.config["tilt_center_max_accel_deg_s2"]),
+                min_j11_deg=float(self.config["j13_min_deg"]),
+                max_j11_deg=float(self.config["j13_max_deg"]),
+                gain_deg_s_per_norm=float(self.config["tilt_center_gain_deg_s_per_norm"]),
+            ),
+        }
+
     def _center_at_point(self, current: dict[str, float]) -> tuple[bool, dict[str, Any]]:
-        planner = FineCenterPlanner(
-            initial_j11_deg=float(current.get("j11", 0.0)),
-            sign=float(self.config["pan_sign"]),
-            max_speed_deg_s=float(self.config["center_max_speed_deg_s"]),
-            max_accel_deg_s2=float(self.config["center_max_accel_deg_s2"]),
-            min_j11_deg=float(self.config["j11_min_deg"]),
-            max_j11_deg=float(self.config["j11_max_deg"]),
-            gain_deg_s_per_norm=float(self.config["center_gain_deg_s_per_norm"]),
-        )
+        planners = self._center_planners(current)
         period = 1.0 / float(self.config["control_update_hz"])
         started = time.monotonic()
         deadline = started
@@ -393,7 +456,8 @@ class SubjectLockController:
             stale = age > float(self.config["vision_stale_timeout_sec"])
             if stale or not has_target or offset is None:
                 missing_since = missing_since or now
-                planner.step(0.0, dt=period, hold=True)
+                for planner in planners.values():
+                    planner.step(0.0, dt=period, hold=True)
                 reason = "vision_stale" if stale else "target_lost"
                 self._set_status(hold_reason=reason, latest_vision_age_ms=None if not latest_at else round(age * 1000.0, 3), message="视觉不可用，标定保持。")
                 if now - missing_since >= float(self.config["vision_loss_abort_sec"]):
@@ -401,23 +465,35 @@ class SubjectLockController:
                 continue
             missing_since = None
             ndx = float(offset[0])
-            self._set_status(horizontal_error_norm=ndx, latest_vision_age_ms=round(age * 1000.0, 3), hold_reason="")
-            if abs(ndx) <= float(self.config["center_error_norm"]):
-                planner.step(0.0, dt=period, hold=True)
+            ndy = float(offset[1])
+            self._set_status(horizontal_error_norm=ndx, vertical_error_norm=ndy, latest_vision_age_ms=round(age * 1000.0, 3), hold_reason="")
+            centered_x = abs(ndx) <= float(self.config["center_error_norm"])
+            centered_y = abs(ndy) <= float(self.config["vertical_center_error_norm"])
+            if centered_x and centered_y:
+                for planner in planners.values():
+                    planner.step(0.0, dt=period, hold=True)
                 stable_since = stable_since or now
                 if now - stable_since >= float(self.config["stable_sec"]):
-                    current["j11"] = planner.target
+                    current["j11"] = planners["j11"].target
+                    current["j13"] = planners["j13"].target
                     return True, latest
             else:
                 stable_since = None
-                frame = planner.step(ndx, dt=period)
-                if frame["at_limit"]:
-                    raise RuntimeError("J11 已到限位但主体仍未居中。")
-                response = self.stream_writer({"j10": float(current["j10"]), "j11": float(frame["target_deg"])})
+                pan = planners["j11"].step(ndx, dt=period, hold=centered_x)
+                tilt = planners["j13"].step(ndy, dt=period, hold=centered_y)
+                if pan["at_limit"] or tilt["at_limit"]:
+                    joint = "J11" if pan["at_limit"] else "J13"
+                    raise RuntimeError(f"{joint} 已到限位但主体仍未居中。")
+                response = self.stream_writer({
+                    "j10": float(current["j10"]),
+                    "j11": float(pan["target_deg"]),
+                    "j13": float(tilt["target_deg"]),
+                })
                 if not bool(response.get("ok", False)):
                     raise RuntimeError(str(response.get("message") or "精细居中写入失败。"))
-                current["j11"] = float(frame["target_deg"])
-                self._set_status(targets_deg={"j10": current["j10"], "j11": current["j11"]})
+                current["j11"] = float(pan["target_deg"])
+                current["j13"] = float(tilt["target_deg"])
+                self._set_status(targets_deg={"j10": current["j10"], "j11": current["j11"], "j13": current["j13"]})
             if now - started >= float(self.config["center_timeout_sec"]):
                 raise RuntimeError("单个标定点居中超时。")
         return False, latest
@@ -426,10 +502,13 @@ class SubjectLockController:
         try:
             current = {str(key): float(value) for key, value in self.state_provider().items()}
             curve = ShapePreservingHermiteCurve.from_dict(profile["curve"])
+            tilt_curve = self._tilt_curve(profile)
             start = float(profile["rail"]["start_mm"])
             target = {"j10": start, "j11": curve.evaluate(start)}
+            if tilt_curve is not None:
+                target["j13"] = tilt_curve.evaluate(start)
             plan = _build_move_plan(
-                {"j10": current.get("j10", 0.0), "j11": current.get("j11", 0.0)},
+                {joint: current.get(joint, 0.0) for joint in target},
                 target,
                 j10_speed=float(self.config["move_to_start_j10_speed_mm_s"]),
                 j11_speed=float(self.config["move_to_start_j11_speed_deg_s"]),
@@ -441,9 +520,22 @@ class SubjectLockController:
                 return
             latest = unwrap_vision_payload(dict(self.latest_provider()))
             offset = read_smoothed_offset(latest)
-            if not latest.get("has_target", latest.get("detected", False)) or offset is None or abs(float(offset[0])) > float(self.config["start_vision_error_norm"]):
+            if (
+                not latest.get("has_target", latest.get("detected", False))
+                or offset is None
+                or abs(float(offset[0])) > float(self.config["start_vision_error_norm"])
+                or abs(float(offset[1])) > float(self.config["start_vision_error_norm"])
+            ):
                 raise RuntimeError("已到轨迹起点，但主体未处于中心，请重新标定或调整主体。")
-            self._set_status(running=False, phase="at_start", at_start=True, progress=1.0, horizontal_error_norm=float(offset[0]), message="已到轨迹起点，可以正式播放。")
+            self._set_status(
+                running=False,
+                phase="at_start",
+                at_start=True,
+                progress=1.0,
+                horizontal_error_norm=float(offset[0]),
+                vertical_error_norm=float(offset[1]),
+                message="已到轨迹起点，可以正式播放。",
+            )
         except Exception as exc:
             self._set_status(running=False, phase="error", last_error=str(exc), message=f"回到起点失败：{exc}")
         finally:
@@ -452,13 +544,7 @@ class SubjectLockController:
     def _play_worker(self, profile: dict[str, Any]) -> None:
         try:
             curve = ShapePreservingHermiteCurve.from_dict(profile["curve"])
-            plan = build_playback_plan(
-                curve,
-                start_mm=float(profile["rail"]["start_mm"]),
-                end_mm=float(profile["rail"]["end_mm"]),
-                speed_mm_s=float(profile["rail"]["requested_speed_mm_s"]),
-                update_hz=float(self.config["control_update_hz"]),
-            )
+            plan = self._build_profile_plan(profile, curve)
             stats = self._run_plan(plan)
             if self._stop_event.is_set():
                 self._set_status(running=False, phase="stopped", message="主体锁定播放已停止。", **stats)
@@ -469,7 +555,14 @@ class SubjectLockController:
         finally:
             self._sync_once()
 
-    def _run_plan(self, plan: list[Mapping[str, Any]], *, require_vision: bool = False) -> dict[str, Any]:
+    def _run_plan(
+        self,
+        plan: list[Mapping[str, Any]],
+        *,
+        require_vision: bool = False,
+        center_planner: FineCenterPlanner | None = None,
+        center_planners: Mapping[str, FineCenterPlanner] | None = None,
+    ) -> dict[str, Any]:
         total = max(1, len(plan))
         writes_before = int(self._status.get("write_count", 0))
 
@@ -477,6 +570,22 @@ class SubjectLockController:
             if self._stop_event.is_set():
                 return {"ok": False, "message": "主体锁定会话已停止。"}
             pause_sec = self._wait_for_fresh_target() if require_vision else 0.0
+            targets = dict(targets)
+            active_planners = dict(center_planners or ({"j11": center_planner} if center_planner is not None else {}))
+            if active_planners:
+                latest = unwrap_vision_payload(dict(self.latest_provider()))
+                offset = read_smoothed_offset(latest)
+                if offset is None or not latest.get("has_target", latest.get("detected", False)):
+                    raise RuntimeError("导轨移动期间视觉目标丢失。")
+                ndx = float(offset[0])
+                ndy = float(offset[1])
+                for joint, planner in active_planners.items():
+                    error = ndx if joint == "j11" else ndy
+                    centered_frame = planner.step(error, dt=1.0 / float(self.config["control_update_hz"]))
+                    if centered_frame["at_limit"]:
+                        raise RuntimeError(f"{joint.upper()} 已到限位但主体仍未居中。")
+                    targets[joint] = float(centered_frame["target_deg"])
+                self._set_status(horizontal_error_norm=ndx, vertical_error_norm=ndy)
             response = self.stream_writer(targets)
             if bool(response.get("ok", False)):
                 current_write = int(self._status.get("write_count", 0)) + 1
@@ -504,7 +613,12 @@ class SubjectLockController:
             has_target = bool(latest.get("has_target", latest.get("detected", False)))
             stale = age > float(self.config["vision_stale_timeout_sec"])
             if has_target and offset is not None and not stale:
-                self._set_status(hold_reason="", latest_vision_age_ms=round(age * 1000.0, 3), horizontal_error_norm=float(offset[0]))
+                self._set_status(
+                    hold_reason="",
+                    latest_vision_age_ms=round(age * 1000.0, 3),
+                    horizontal_error_norm=float(offset[0]),
+                    vertical_error_norm=float(offset[1]),
+                )
                 return now - started
             reason = "vision_stale" if stale else "target_lost"
             self._set_status(hold_reason=reason, latest_vision_age_ms=None if not self._vision_at else round(age * 1000.0, 3), message="视觉不可用，运动保持。")
@@ -538,6 +652,8 @@ class SubjectLockController:
         start_mm: float,
         end_mm: float,
         speed_mm_s: float,
+        *,
+        tilt_curve: ShapePreservingHermiteCurve | None = None,
     ) -> dict[str, Any]:
         result = dict(validation)
         if not result.get("valid") or self.target_validator is None:
@@ -550,6 +666,9 @@ class SubjectLockController:
             speed_mm_s=speed_mm_s,
             update_hz=float(self.config["control_update_hz"]),
         )
+        if tilt_curve is not None:
+            for frame in plan:
+                frame["targets_deg"]["j13"] = tilt_curve.evaluate(float(frame["targets_deg"]["j10"]))
         for frame in plan:
             response = self.target_validator(dict(frame["targets_deg"]))
             if not bool(response.get("ok", False)):
@@ -567,12 +686,14 @@ class SubjectLockController:
         if self.target_validator is None:
             return
         curve = ShapePreservingHermiteCurve.from_dict(profile["curve"])
+        tilt_curve = self._tilt_curve(profile)
         validation = self._apply_target_validation(
             {"valid": True},
             curve,
             float(profile["rail"]["start_mm"]),
             float(profile["rail"]["end_mm"]),
             float(profile["rail"]["requested_speed_mm_s"]),
+            tilt_curve=tilt_curve,
         )
         if not validation.get("valid"):
             raise ValueError(f"轨迹安全检查失败：{validation.get('message', '未知错误')}")
@@ -583,11 +704,35 @@ class SubjectLockController:
         tolerance = float(self.config["reference_joint_tolerance_deg"])
         mismatched = [
             joint
-            for joint in ("j12", "j13", "j14", "j15")
+            for joint in ("j12", "j14", "j15")
             if joint in joints and abs(float(state.get(joint, 0.0)) - float(joints[joint])) > tolerance
         ]
         if mismatched:
             raise ValueError(f"机械臂参考姿态已变化（{', '.join(mismatched)}），请重新标定主体锁定轨迹。")
+
+    @staticmethod
+    def _tilt_curve(profile: Mapping[str, Any]) -> ShapePreservingHermiteCurve | None:
+        payload = profile.get("tilt_curve")
+        return ShapePreservingHermiteCurve.from_dict(payload) if isinstance(payload, Mapping) else None
+
+    def _build_profile_plan(
+        self,
+        profile: Mapping[str, Any],
+        curve: ShapePreservingHermiteCurve | None = None,
+    ) -> list[dict[str, Any]]:
+        pan_curve = curve or ShapePreservingHermiteCurve.from_dict(profile["curve"])
+        plan = build_playback_plan(
+            pan_curve,
+            start_mm=float(profile["rail"]["start_mm"]),
+            end_mm=float(profile["rail"]["end_mm"]),
+            speed_mm_s=float(profile["rail"]["requested_speed_mm_s"]),
+            update_hz=float(self.config["control_update_hz"]),
+        )
+        tilt_curve = self._tilt_curve(profile)
+        if tilt_curve is not None:
+            for frame in plan:
+                frame["targets_deg"]["j13"] = round(tilt_curve.evaluate(float(frame["targets_deg"]["j10"])), 6)
+        return plan
 
     def _check_idle(self) -> None:
         if self._thread and self._thread.is_alive():
@@ -639,7 +784,13 @@ def _build_move_plan(
 ) -> list[dict[str, Any]]:
     j10_delta = abs(float(target["j10"]) - float(current["j10"]))
     j11_delta = abs(float(target["j11"]) - float(current["j11"]))
-    duration = max(0.05, j10_delta / max(0.05, float(j10_speed)), j11_delta / max(0.1, float(j11_speed)))
+    j13_delta = abs(float(target.get("j13", 0.0)) - float(current.get("j13", target.get("j13", 0.0))))
+    duration = max(
+        0.05,
+        j10_delta / max(0.05, float(j10_speed)),
+        j11_delta / max(0.1, float(j11_speed)),
+        j13_delta / max(0.1, float(j11_speed)),
+    )
     steps = max(2, int(round(duration * max(2.0, float(update_hz)))) + 1)
     interval = duration / (steps - 1)
     plan: list[dict[str, Any]] = []
@@ -647,7 +798,7 @@ def _build_move_plan(
         progress = smoothstep01(index / (steps - 1))
         targets = {
             joint: float(current[joint]) + (float(target[joint]) - float(current[joint])) * progress
-            for joint in ("j10", "j11")
+            for joint in target
         }
         plan.append({"index": index, "time_sec": index * interval, "targets_deg": targets})
     return plan

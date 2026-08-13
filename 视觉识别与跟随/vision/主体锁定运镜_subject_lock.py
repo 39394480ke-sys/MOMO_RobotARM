@@ -27,8 +27,12 @@ class ShapePreservingHermiteCurve:
     slopes: tuple[float, ...]
 
     @classmethod
-    def from_points(cls, points: Iterable[Mapping[str, Any]]) -> "ShapePreservingHermiteCurve":
-        pairs = sorted((float(point["j10_mm"]), float(point["j11_deg"])) for point in points)
+    def from_points(
+        cls,
+        points: Iterable[Mapping[str, Any]],
+        value_key: str = "j11_deg",
+    ) -> "ShapePreservingHermiteCurve":
+        pairs = sorted((float(point["j10_mm"]), float(point[value_key])) for point in points)
         unique: list[tuple[float, float]] = []
         for x_value, y_value in pairs:
             if unique and abs(x_value - unique[-1][0]) <= 1e-9:

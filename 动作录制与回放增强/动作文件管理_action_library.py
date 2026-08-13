@@ -62,7 +62,7 @@ class ActionLibrary:
 
     def summarize_action(self, name_or_payload: str | dict[str, Any]) -> dict[str, Any]:
         payload = self.load_action(name_or_payload) if isinstance(name_or_payload, str) else name_or_payload
-        return summarize_sequence_payload(payload)
+        return summarize_sequence_payload(payload, self.config.get("playback", {}))
 
     def validate_action(self, payload: dict[str, Any]) -> bool:
         if not isinstance(payload, dict):

@@ -15,6 +15,7 @@ from 动作工具_common import (
     SCHEMA_VERSION,
     action_variant_report,
     call_move_joints,
+    call_stream_joint_targets,
     call_set_gripper,
     call_stop,
     extract_state,
@@ -242,7 +243,11 @@ class SequencePlayer:
             if self.stopped:
                 return False
             use_multi = multi_to_send if frame_index == len(frames) else None
-            ok, message = call_move_joints(self.controller, frame, use_multi)
+            ok, message = (
+                call_move_joints(self.controller, frame, use_multi)
+                if use_multi
+                else call_stream_joint_targets(self.controller, frame)
+            )
             self.logger.log(
                 "play_pose",
                 mode=self._mode_name(),
@@ -336,7 +341,7 @@ class SequencePlayer:
                 if self.stopped:
                     return False
                 frame_index += 1
-                ratio = step / max(1, steps)
+                ratio = smoothstep01(step / max(1, steps))
                 frame = {
                     joint: float(start_targets.get(joint, end_targets[joint]))
                     + (float(end_targets[joint]) - float(start_targets.get(joint, end_targets[joint]))) * ratio
@@ -352,7 +357,11 @@ class SequencePlayer:
                             for joint in self.multi_turn_joints
                             if joint in multi_raw and multi_raw[joint] is not None
                         }
-                ok, message = call_move_joints(self.controller, frame, use_multi)
+                ok, message = (
+                    call_move_joints(self.controller, frame, use_multi)
+                    if use_multi
+                    else call_stream_joint_targets(self.controller, frame)
+                )
                 self.logger.log(
                     "play_continuous",
                     mode=self._mode_name(),
@@ -468,7 +477,11 @@ class SequencePlayer:
                             for joint in self.multi_turn_joints
                             if joint in multi_raw and multi_raw[joint] is not None
                         }
-                ok, message = call_move_joints(self.controller, frame, use_multi)
+                ok, message = (
+                    call_move_joints(self.controller, frame, use_multi)
+                    if use_multi
+                    else call_stream_joint_targets(self.controller, frame)
+                )
                 self.logger.log(
                     "play_cinematic",
                     mode=self._mode_name(),
@@ -500,7 +513,7 @@ class SequencePlayer:
         return True
 
     def print_summary(self, sequence: Mapping[str, Any]) -> None:
-        summary = summarize_sequence_payload(sequence)
+        summary = summarize_sequence_payload(sequence, self.config.get("playback", {}))
         print("动作摘要：")
         print(f"  名称：{summary.get('动作名称')}")
         print(f"  姿态数：{summary.get('pose_count', 0)}")
@@ -527,7 +540,8 @@ class SequencePlayer:
         targets: Mapping[str, float] | None = None,
     ) -> float:
         playback_cfg = self.config.get("playback", {})
-        duration = float(pose.get("duration_sec", playback_cfg.get("default_duration_sec", 1.5)))
+        configured_duration = float(pose.get("duration_sec", 0.0))
+        duration = configured_duration if configured_duration > 0 else float(playback_cfg.get("default_duration_sec", 1.5))
         if bool(playback_cfg.get("auto_duration_from_distance", True)) and current is not None and targets is not None:
             duration = max(duration, self._distance_based_duration(current, targets))
         duration = duration / normalize_playback_speed(speed)

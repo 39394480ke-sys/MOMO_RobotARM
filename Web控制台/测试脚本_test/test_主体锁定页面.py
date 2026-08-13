@@ -24,6 +24,7 @@ class SubjectLockPageTest(unittest.TestCase):
             "subjectLockStartMm",
             "subjectLockEndMm",
             "subjectLockSpeedMmS",
+            "subjectLockPlaybackSpeedMmS",
             "startSubjectLockCalibrationBtn",
             "validateSubjectLockBtn",
             "moveSubjectLockToStartBtn",
@@ -67,6 +68,11 @@ class SubjectLockPageTest(unittest.TestCase):
     def test_failed_validation_is_not_mislabeled_as_speed_only(self) -> None:
         self.assertIn('needs_speed: "检查未通过"', self.js)
         self.assertNotIn('needs_speed: "速度超限"', self.js)
+
+    def test_playback_speed_is_revalidated_before_play(self) -> None:
+        self.assertIn("function subjectLockPlaybackSpeed()", self.js)
+        self.assertIn("const speedMmS = subjectLockPlaybackSpeed();", self.js)
+        self.assertIn("SUBJECT_LOCK_SPEED_UNSAFE", self.js)
 
 
 if __name__ == "__main__":

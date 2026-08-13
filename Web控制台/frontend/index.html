@@ -385,7 +385,7 @@
                 <div class="input-grid three">
                   <label class="field"><span>起点 mm</span><input id="subjectLockStartMm" type="number" min="-140" max="140" step="0.5" value="-50" /></label>
                   <label class="field"><span>终点 mm</span><input id="subjectLockEndMm" type="number" min="-140" max="140" step="0.5" value="50" /></label>
-                  <label class="field"><span>拍摄速度 mm/s</span><input id="subjectLockSpeedMmS" type="number" min="0.2" max="20" step="0.2" value="2" /></label>
+                  <label class="field"><span>默认播放速度 mm/s</span><input id="subjectLockSpeedMmS" type="number" min="0.2" max="20" step="0.2" value="2" /></label>
                 </div>
                 <div class="button-row">
                   <button id="startSubjectLockCalibrationBtn" class="primary">开始自动标定</button>
@@ -433,6 +433,10 @@
                   <dt>J11 最大速度</dt><dd id="subjectLockJ11Speed">--</dd>
                   <dt>J11 最大加速度</dt><dd id="subjectLockJ11Accel">--</dd>
                 </dl>
+                <label class="field">
+                  <span>本次播放速度 mm/s</span>
+                  <input id="subjectLockPlaybackSpeedMmS" type="number" min="0.2" max="20" step="0.2" value="2" />
+                </label>
                 <div class="button-row">
                   <button id="moveSubjectLockToStartBtn">回到起点</button>
                   <button id="playSubjectLockBtn" class="primary">正式播放</button>
@@ -704,6 +708,6 @@
     </dialog>
 
     <script src="/static/audio-recorder.js?v=20260724-web-cloud-stt"></script>
-    <script src="/static/app.js?v=20260716-continuous-follow-j10-mm-ai-confirm-mobile-joint-hold-agent-layout-recording-unnamed-two-frame-guard-20260812-action-camera-recording-camera-hub-vision-v3-lan-retry-duration-estimate-subject-lock-3axis"></script>
+    <script src="/static/app.js?v=20260813-subject-lock-playback-speed"></script>
   </body>
 </html>

@@ -459,7 +459,7 @@ async function validateSubjectLockProfile() {
   try {
     state.subjectLockProfile = await postJson(
       `/api/v1/subject-lock/profiles/${encodeURIComponent(profileId)}/validate`,
-      { speed_mm_s: Number($("#subjectLockSpeedMmS").value) },
+      { speed_mm_s: subjectLockPlaybackSpeed() },
       { timeout: 15000 }
     );
     renderSubjectLockProfile();
@@ -474,7 +474,32 @@ async function moveSubjectLockToStart() {
 }
 
 async function playSubjectLockProfile() {
-  await runSubjectLockProfileAction("play", "正式播放");
+  const profileId = currentSubjectLockProfileId();
+  if (!profileId) return showError(new ApiError("SUBJECT_LOCK_PROFILE_REQUIRED", "请先选择一条轨迹。"));
+  try {
+    const speedMmS = subjectLockPlaybackSpeed();
+    state.subjectLockProfile = await postJson(
+      `/api/v1/subject-lock/profiles/${encodeURIComponent(profileId)}/validate`,
+      { speed_mm_s: speedMmS },
+      { timeout: 15000 }
+    );
+    renderSubjectLockProfile();
+    if (!state.subjectLockProfile.validation?.valid) {
+      throw new ApiError("SUBJECT_LOCK_SPEED_UNSAFE", state.subjectLockProfile.validation?.message || "当前播放速度未通过安全检查。");
+    }
+    await runSubjectLockProfileAction("play", `以 ${formatNum(speedMmS, 2)} mm/s 正式播放`);
+  } catch (error) {
+    showError(error);
+  }
+}
+
+function subjectLockPlaybackSpeed() {
+  const input = $("#subjectLockPlaybackSpeedMmS");
+  const speed = Number(input?.value);
+  if (!Number.isFinite(speed) || speed < 0.2 || speed > 20) {
+    throw new ApiError("SUBJECT_LOCK_SPEED_INVALID", "播放速度必须在 0.2 到 20 mm/s 之间。");
+  }
+  return speed;
 }
 
 async function runSubjectLockProfileAction(action, label) {
@@ -1698,6 +1723,7 @@ function renderSubjectLockProfile() {
     $("#subjectLockStartMm").value = rail.start_mm ?? -50;
     $("#subjectLockEndMm").value = rail.end_mm ?? 50;
     $("#subjectLockSpeedMmS").value = rail.requested_speed_mm_s ?? 2;
+    $("#subjectLockPlaybackSpeedMmS").value = rail.requested_speed_mm_s ?? 2;
   }
   $("#subjectLockValidation").textContent = validation.valid ? "检查通过" : validation.message ? "检查未通过" : "未检查";
   $("#subjectLockValidation").className = `status-pill ${validation.valid ? "good" : validation.message ? "bad" : "warn"}`;

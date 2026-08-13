@@ -233,6 +233,7 @@ def test_motion_tuning_normalization_helpers() -> None:
 
 def test_joint_target_normalization_helpers() -> None:
     assert normalize_joint_targets({"J11": 12.0, "j10": 3.0})["j11"] == 12.0
+    assert normalize_joint_targets({"J12": 7.0}, fill_missing=False) == {"j12": 7.0}
     assert normalize_joint_targets([1, 2, 3]) == {
         "j10": 1.0,
         "j11": 2.0,

@@ -658,7 +658,7 @@ def normalize_joint_targets(
 ) -> dict[str, float]:
     order = list(joint_order or JOINT_ORDER)
     if isinstance(targets, Mapping):
-        normalized = {joint: 0.0 for joint in order}
+        normalized = {joint: 0.0 for joint in order} if fill_missing else {}
         for key, value in targets.items():
             try:
                 joint = normalize_joint_key(str(key))
@@ -666,7 +666,7 @@ def normalize_joint_targets(
                 if ignore_unknown:
                     continue
                 raise
-            if joint in normalized:
+            if joint in order:
                 normalized[joint] = float(value)
             elif not ignore_unknown:
                 raise ValueError(f"关节 {joint} 不在目标关节序列中。")

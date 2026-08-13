@@ -831,7 +831,9 @@ class ControllerBridge:
         try:
             self._ensure_connected_for_motion()
             self._ensure_controller()
-            targets = normalize_joint_targets(targets_deg)
+            # A mapping may intentionally address only one joint. Filling omitted
+            # joints with zero would turn a partial command into an implicit Home.
+            targets = normalize_joint_targets(targets_deg, fill_missing=False)
             if self.mode in {"dry_run", "real"} and hasattr(self.controller, "move_joints"):
                 result = self.controller.move_joints(targets)
             elif hasattr(self.controller, "移动到关节角度"):

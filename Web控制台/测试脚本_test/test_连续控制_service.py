@@ -248,13 +248,13 @@ class WebServiceContinuousWorkerTest(unittest.TestCase):
         self.assertFalse(result["jog"]["running"])
         self.assertGreaterEqual(service.bridge.stream_count, 3)
         self.assertEqual(service.bridge.full_move_count, 0)
-        self.assertTrue(all(lead == 0.3 for lead in service.bridge.max_target_leads))
+        self.assertTrue(all(lead == 5.0 for lead in service.bridge.max_target_leads))
         self.assertEqual(service.bridge.sync_count, 1)
         self.assertGreater(result["jog"]["actual_update_hz"], 0.0)
         self.assertIn("skipped_tick_count", result["jog"])
         self.assertIn("write_count", result["jog"])
 
-    def test_target_lead_scales_with_requested_speed(self) -> None:
+    def test_target_lead_uses_manual_step_limit_to_clear_servo_deadband(self) -> None:
         slow = self.make_service()
         slow.start_continuous_jog(ContinuousJogStartRequest(joint_key="j11", direction=1, speed_deg_s=2.0))
         time.sleep(0.03)
@@ -265,8 +265,8 @@ class WebServiceContinuousWorkerTest(unittest.TestCase):
         time.sleep(0.03)
         fast.stop_continuous_jog(join_timeout=1.0)
 
-        self.assertTrue(all(lead == 0.06 for lead in slow.bridge.max_target_leads))
-        self.assertTrue(all(lead == 0.6 for lead in fast.bridge.max_target_leads))
+        self.assertTrue(all(lead == 5.0 for lead in slow.bridge.max_target_leads))
+        self.assertTrue(all(lead == 5.0 for lead in fast.bridge.max_target_leads))
 
     def test_communication_failure_terminates_stream_and_still_syncs(self) -> None:
         service = self.make_service()

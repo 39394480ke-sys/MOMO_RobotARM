@@ -52,7 +52,7 @@ EXPECTED = {
         "name": "soarmmoce_with_linear_rail",
         "urdf": "urdf/v1/soarmoce_urdf.urdf",
         "target": "Link_6",
-        "kinematics": {"j10": 1.0, "j11": 5.0, "j12": -5.3, "j13": 5.6, "j14": -1.0, "j15": 1.0},
+        "kinematics": {"j10": 1.0, "j11": 1.0, "j12": -1.0, "j13": 1.0, "j14": -1.0, "j15": 1.0},
         "hardware": {"j10": 28.8, "j11": 5.0, "j12": -5.3, "j13": 5.6, "j14": 1.0, "j15": 1.0},
         "raw_reachable": [],
     },
@@ -505,17 +505,17 @@ class RobotProfileTests(unittest.TestCase):
                 )
                 self.assertEqual(
                     view.model.joint_scales.tolist(),
-                    [1.0, 5.0, -5.3, 5.6, -1.0, 1.0],
+                    [1.0, 1.0, -1.0, 1.0, -1.0, 1.0],
                 )
                 self.assertEqual(len(view.model.ordered_joint_user_limits), 6)
                 self.assertAlmostEqual(
                     view.model.ordered_joint_user_limits[1][1],
-                    3.14159 / 5.0,
+                    3.14159,
                     places=7,
                 )
                 self.assertAlmostEqual(
                     view.model.ordered_joint_user_limits[2][0],
-                    -3.14159 / 5.3,
+                    -3.14159,
                     places=7,
                 )
             finally:

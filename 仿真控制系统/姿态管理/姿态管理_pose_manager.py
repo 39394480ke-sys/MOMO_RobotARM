@@ -100,6 +100,27 @@ class 姿态管理器:
         self.保存全部姿态()
         return True
 
+    def 重命名姿态(self, 原名称: str, 新名称: str) -> bool:
+        """重命名姿态；原姿态不存在时返回 False，同名目标则拒绝覆盖。"""
+
+        新名称 = str(新名称).strip()
+        if not 新名称:
+            raise ValueError("姿态名称不能为空。")
+        if len(新名称) > 64:
+            raise ValueError("姿态名称不能超过 64 个字符。")
+        if 原名称 not in self.姿态库:
+            return False
+        if 原名称 == 新名称:
+            return True
+        if 新名称 in self.姿态库:
+            raise FileExistsError(f"姿态名称已存在：{新名称}")
+
+        更新后姿态库 = dict(self.姿态库)
+        更新后姿态库[新名称] = 更新后姿态库.pop(原名称)
+        atomic_write_json(self.姿态库路径, 更新后姿态库)
+        self.姿态库 = 更新后姿态库
+        return True
+
     def 列出姿态(self) -> list[str]:
         """返回姿态名称列表。"""
 

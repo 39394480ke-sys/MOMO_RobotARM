@@ -155,6 +155,10 @@ class SavePoseRequest(BaseModel):
     description: str = ""
 
 
+class RenameLibraryItemRequest(BaseModel):
+    new_name: str = Field(..., min_length=1, max_length=64)
+
+
 class GotoPoseRequest(BaseModel):
     name: str
     speed_percent: int = Field(50, ge=1, le=100)

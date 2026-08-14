@@ -44,6 +44,7 @@ from .schemas import (
     MoveJointsRequest,
     MovePoseRequest,
     PlayActionRequest,
+    RenameLibraryItemRequest,
     SavePoseRequest,
     SubjectLockCalibrationStartRequest,
     SubjectLockProfileActionRequest,
@@ -517,6 +518,11 @@ async def poses_delete(name: str) -> dict[str, Any]:
     return await _call(service.delete_pose, name)
 
 
+@app.post("/api/v1/poses/{name}/rename")
+async def poses_rename(name: str, request: RenameLibraryItemRequest) -> dict[str, Any]:
+    return await _call(service.rename_pose, name, request.new_name)
+
+
 # ----------------------------------------------------------------------
 # 动作
 # ----------------------------------------------------------------------
@@ -558,6 +564,11 @@ async def action_detail(name: str) -> dict[str, Any]:
 @app.delete("/api/v1/actions/{name}")
 async def action_delete(name: str) -> dict[str, Any]:
     return await _call(service.delete_action, name)
+
+
+@app.post("/api/v1/actions/{name}/rename")
+async def action_rename(name: str, request: RenameLibraryItemRequest) -> dict[str, Any]:
+    return await _call(service.rename_action, name, request.new_name)
 
 
 @app.post("/api/v1/actions/play")

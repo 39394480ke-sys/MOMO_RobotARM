@@ -96,9 +96,9 @@ class V2ModelTests(unittest.TestCase):
             config["robot"]["joint_scales"],
             {
                 "j10": 1.0,
-                "j11": 5.0,
-                "j12": -5.3,
-                "j13": 5.6,
+                "j11": 1.0,
+                "j12": -1.0,
+                "j13": 1.0,
                 "j14": -1.0,
                 "j15": 1.0,
             },

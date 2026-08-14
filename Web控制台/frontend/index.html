@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>机械臂 Web 控制台</title>
-    <link rel="stylesheet" href="/static/styles.css?v=20260716-continuous-follow-j10-mm-ai-confirm-mobile-joint-hold-agent-layout-recording-unnamed-two-frame-guard-20260812-action-camera-recording-camera-hub-vision-v3" />
+    <link rel="stylesheet" href="/static/styles.css?v=20260716-continuous-follow-j10-mm-ai-confirm-mobile-joint-hold-agent-layout-recording-unnamed-two-frame-guard-20260812-action-camera-recording-camera-hub-vision-v3-20260814-library-item-rename" />
   </head>
   <body>
     <div id="app">
@@ -693,6 +693,22 @@
       </div>
     </dialog>
 
+    <dialog id="libraryRenameDialog" class="library-rename-dialog" aria-labelledby="libraryRenameTitle">
+      <form id="libraryRenameForm" class="library-rename-dialog-body">
+        <h3 id="libraryRenameTitle">改名</h3>
+        <p id="libraryRenameCurrent" class="library-rename-current"></p>
+        <label class="field">
+          <span>新名称</span>
+          <input id="libraryRenameInput" maxlength="64" autocomplete="off" required />
+        </label>
+        <p id="libraryRenameError" class="library-rename-error" role="alert"></p>
+        <div class="library-rename-actions">
+          <button id="libraryRenameCancel" type="button">取消</button>
+          <button id="libraryRenameSubmit" class="primary" type="submit">保存</button>
+        </div>
+      </form>
+    </dialog>
+
     <dialog id="actionVideoDialog" class="action-video-dialog" aria-labelledby="actionVideoTitle">
       <div class="action-video-dialog-body">
         <div class="action-video-success" aria-hidden="true">✓</div>
@@ -708,6 +724,6 @@
     </dialog>
 
     <script src="/static/audio-recorder.js?v=20260724-web-cloud-stt"></script>
-    <script src="/static/app.js?v=20260813-subject-lock-playback-speed"></script>
+    <script src="/static/app.js?v=20260716-continuous-follow-j10-mm-lan-retry-20260813-subject-lock-playback-speed-20260814-library-item-rename-gripper-silent"></script>
   </body>
 </html>

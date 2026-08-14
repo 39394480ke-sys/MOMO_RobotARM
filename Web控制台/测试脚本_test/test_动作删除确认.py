@@ -18,7 +18,7 @@ class ActionDeleteConfirmationTest(unittest.TestCase):
     def test_frontend_asset_version_is_updated(self) -> None:
         index = (WEB_ROOT / "frontend" / "index.html").read_text(encoding="utf-8")
 
-        self.assertIn('/static/app.js?v=20260716-', index)
+        self.assertIn('20260814-library-item-rename', index)
         self.assertNotIn('/static/app.js?v=20260628-kinematics-ui', index)
 
 

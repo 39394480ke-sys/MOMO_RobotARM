@@ -49,9 +49,14 @@ class ActionLibrary:
 
     def rename_action(self, old_name: str, new_name: str) -> Path:
         old_path = self.action_path(old_name)
-        new_path = self.action_path(new_name)
+        normalized_name = self._normalize_action_name(new_name)
+        new_path = self.action_path(normalized_name)
         if not old_path.exists():
             raise FileNotFoundError(f"动作不存在：{old_name}")
+        if old_path == new_path:
+            return old_path
+        if new_path.exists():
+            raise FileExistsError(f"动作名称已存在：{normalized_name}")
         old_path.rename(new_path)
         return new_path
 
@@ -94,6 +99,19 @@ class ActionLibrary:
         prepared = self._prepare_action_payload(payload)
         atomic_write_json(path, prepared)
         return path
+
+    @staticmethod
+    def _normalize_action_name(name: str) -> str:
+        normalized = str(name).strip()
+        if normalized.lower().endswith(".json"):
+            raise ValueError("动作名称无需包含 .json 后缀。")
+        if not normalized:
+            raise ValueError("动作名称不能为空。")
+        if len(normalized) > 64:
+            raise ValueError("动作名称不能超过 64 个字符。")
+        if normalized in {".", ".."} or "/" in normalized or "\\" in normalized or "\x00" in normalized:
+            raise ValueError("动作名称不能包含路径字符。")
+        return normalized
 
 
 动作文件管理 = ActionLibrary

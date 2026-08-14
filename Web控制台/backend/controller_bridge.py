@@ -1070,6 +1070,17 @@ class ControllerBridge:
         except Exception as exc:
             return self._exception("删除姿态失败", exc)
 
+    def rename_pose(self, old_name: str, new_name: str) -> dict[str, Any]:
+        try:
+            normalized_name = str(new_name).strip()
+            renamed = self._get_pose_manager().重命名姿态(old_name, normalized_name)
+            if not renamed:
+                return bridge_fail(f"姿态不存在：{old_name}")
+            self._log("info", "rename_pose", f"姿态已改名：{old_name} → {normalized_name}", old_name=old_name, new_name=normalized_name)
+            return bridge_ok(f"姿态已改名：{old_name} → {normalized_name}", {"old_name": old_name, "new_name": normalized_name})
+        except Exception as exc:
+            return self._exception("姿态改名失败", exc)
+
     # ------------------------------------------------------------------
     # 动作库
     # ------------------------------------------------------------------
@@ -1092,6 +1103,15 @@ class ControllerBridge:
             return bridge_ok(f"已删除动作：{name}")
         except Exception as exc:
             return self._exception("删除动作失败", exc)
+
+    def rename_action(self, old_name: str, new_name: str) -> dict[str, Any]:
+        try:
+            path = self._get_action_library().rename_action(old_name, new_name)
+            normalized_name = path.stem
+            self._log("info", "rename_action", f"动作已改名：{old_name} → {normalized_name}", old_name=old_name, new_name=normalized_name)
+            return bridge_ok(f"动作已改名：{old_name} → {normalized_name}", {"old_name": old_name, "new_name": normalized_name})
+        except Exception as exc:
+            return self._exception("动作改名失败", exc)
 
     def play_action(
         self,

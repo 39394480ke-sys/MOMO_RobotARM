@@ -52,6 +52,7 @@ const state = {
   continuousJogButton: null,
   batchDiagnostics: null,
   modeSelectDirty: false,
+  libraryRenameTarget: null,
 };
 
 document.addEventListener("DOMContentLoaded", init);
@@ -98,6 +99,8 @@ function bindEvents() {
   $("#cancelRecordingBtn").addEventListener("click", cancelActionRecording);
   $("#recordingFrameWarningClose").addEventListener("click", () => $("#recordingFrameWarningDialog").close());
   $("#actionVideoClose").addEventListener("click", () => $("#actionVideoDialog").close());
+  $("#libraryRenameCancel").addEventListener("click", closeLibraryRenameDialog);
+  $("#libraryRenameForm").addEventListener("submit", submitLibraryRename);
   $("#refreshFollowBtn").addEventListener("click", refreshFollowPageStatus);
   $("#startFollowBtn").addEventListener("click", startFollow);
   $("#stopFollowBtn").addEventListener("click", stopFollow);
@@ -770,7 +773,6 @@ function clearContinuousJogPointer() {
 
 async function setGripper(openRatio) {
   if (state.robot?.gripper?.available === false) {
-    showError(new ApiError("GRIPPER_UNAVAILABLE", "当前没有安装夹爪舵机。"));
     return;
   }
   updateGripperLabel(openRatio * 100);
@@ -834,6 +836,65 @@ async function deletePose(name) {
     await loadPoses();
   } catch (error) {
     showError(error);
+  }
+}
+
+function openLibraryRenameDialog(kind, name) {
+  const label = kind === "pose" ? "姿态" : "动作";
+  state.libraryRenameTarget = { kind, name };
+  $("#libraryRenameTitle").textContent = `${label}改名`;
+  $("#libraryRenameCurrent").textContent = `当前名称：${name}`;
+  $("#libraryRenameInput").value = name;
+  $("#libraryRenameError").textContent = "";
+  const dialog = $("#libraryRenameDialog");
+  dialog.showModal();
+  window.setTimeout(() => $("#libraryRenameInput").select(), 0);
+}
+
+function closeLibraryRenameDialog() {
+  state.libraryRenameTarget = null;
+  $("#libraryRenameDialog").close();
+}
+
+async function submitLibraryRename(event) {
+  event.preventDefault();
+  const target = state.libraryRenameTarget;
+  if (!target) return;
+  const newName = $("#libraryRenameInput").value.trim();
+  const errorNode = $("#libraryRenameError");
+  if (!newName) {
+    errorNode.textContent = "名称不能为空。";
+    return;
+  }
+  if (newName === target.name) {
+    errorNode.textContent = "请输入一个不同的新名称。";
+    return;
+  }
+
+  const collection = target.kind === "pose" ? "poses" : "actions";
+  const label = target.kind === "pose" ? "姿态" : "动作";
+  const submitButton = $("#libraryRenameSubmit");
+  submitButton.disabled = true;
+  try {
+    await postJson(`/api/v1/${collection}/${encodeURIComponent(target.name)}/rename`, { new_name: newName });
+    log("info", `${label}已改名：${target.name} → ${newName}`);
+    closeLibraryRenameDialog();
+    if (target.kind === "pose") {
+      $("#poseDetailName").textContent = "未选择";
+      $("#poseDetailSummary").textContent = "请选择一个姿态。";
+      $("#poseDetailResult").textContent = "";
+      await loadPoses();
+    } else {
+      $("#actionDetailName").textContent = "未选择";
+      $("#actionDetailSummary").textContent = "请选择一个动作。";
+      $("#actionDetailResult").textContent = "";
+      await loadActions();
+    }
+  } catch (error) {
+    errorNode.textContent = error.message || "改名失败。";
+    showError(error);
+  } finally {
+    submitButton.disabled = false;
   }
 }
 
@@ -1989,6 +2050,7 @@ function renderPoses(poses) {
           <div class="button-row">
             <button data-pose-detail="${escapeAttr(item.name)}">详情</button>
             <button data-pose-goto="${escapeAttr(item.name)}">前往</button>
+            <button data-pose-rename="${escapeAttr(item.name)}">改名</button>
             <button data-pose-delete="${escapeAttr(item.name)}">删除</button>
           </div>
         </article>`;
@@ -1997,9 +2059,11 @@ function renderPoses(poses) {
   $("#posesList").onclick = (event) => {
     const detailBtn = event.target.closest("button[data-pose-detail]");
     const gotoBtn = event.target.closest("button[data-pose-goto]");
+    const renameBtn = event.target.closest("button[data-pose-rename]");
     const delBtn = event.target.closest("button[data-pose-delete]");
     if (detailBtn) showPoseDetail(detailBtn.dataset.poseDetail);
     if (gotoBtn) gotoPose(gotoBtn.dataset.poseGoto);
+    if (renameBtn) openLibraryRenameDialog("pose", renameBtn.dataset.poseRename);
     if (delBtn) deletePose(delBtn.dataset.poseDelete);
   };
 }
@@ -2078,6 +2142,7 @@ function renderActions(actions) {
           <div class="button-row">
             <button data-action-play="${escapeAttr(item.name)}">播放</button>
             <button data-action-detail="${escapeAttr(item.name)}">详情</button>
+            <button data-action-rename="${escapeAttr(item.name)}">改名</button>
             <button data-action-delete="${escapeAttr(item.name)}">删除</button>
           </div>
         </article>`;
@@ -2086,9 +2151,11 @@ function renderActions(actions) {
   $("#actionsList").onclick = async (event) => {
     const playBtn = event.target.closest("button[data-action-play]");
     const detailBtn = event.target.closest("button[data-action-detail]");
+    const renameBtn = event.target.closest("button[data-action-rename]");
     const deleteBtn = event.target.closest("button[data-action-delete]");
     if (playBtn) playAction(playBtn.dataset.actionPlay);
     if (detailBtn) showActionDetail(detailBtn.dataset.actionDetail);
+    if (renameBtn) openLibraryRenameDialog("action", renameBtn.dataset.actionRename);
     if (deleteBtn) deleteAction(deleteBtn.dataset.actionDelete);
   };
 }
@@ -2581,6 +2648,7 @@ function showPage(name) {
 
 function showError(error) {
   const code = error.code || "ERROR";
+  if (code === "GRIPPER_UNAVAILABLE") return;
   const rawMessage = error.message || String(error);
   const message = isRealServoCommError(code, rawMessage)
     ? `真实舵机通信/写入失败，已停止真实动作。请先运行轻量 SDK 只读总线扫描：诊断舵机总线_lightweight_sdk.py --port /dev/momo-servo --no-gripper；再检查对应 ID 的电源、负载、线序、USB/串口稳定性。原始错误：${rawMessage}`

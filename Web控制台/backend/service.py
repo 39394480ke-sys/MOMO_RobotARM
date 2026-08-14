@@ -1273,7 +1273,11 @@ class WebControlService:
             update_hz = max(2.0, float(tuning.get("continuous_update_hz", 50.0)))
             max_step = self._manual_step_limit()
             speed = min(abs(float(request.speed_deg_s)), max_step * update_hz)
-            max_target_lead = min(max_step, max(0.05, speed * 0.03))
+            # Keep enough distance between the servo's present position and its
+            # streamed goal to overcome position quantization/deadband.  The old
+            # 30 ms horizon was only 0.15 deg at 5 deg/s, so J14 received a goal
+            # just one or two raw counts away and could remain stationary.
+            max_target_lead = max_step
             state_result = self.bridge.get_state()
             state_data = self._unwrap_bridge(state_result, code="CONTINUOUS_JOG_STATE_FAILED")
             current_joints = state_data.get("joints_deg", {})
@@ -1608,6 +1612,10 @@ class WebControlService:
     def delete_pose(self, name: str) -> dict[str, Any]:
         return self._unwrap_bridge(self.bridge.delete_pose(name), code="POSE_DELETE_FAILED")
 
+    def rename_pose(self, name: str, new_name: str) -> dict[str, Any]:
+        with self._lock:
+            return self._unwrap_bridge(self.bridge.rename_pose(name, new_name), code="POSE_RENAME_FAILED")
+
     # ------------------------------------------------------------------
     # 动作
     # ------------------------------------------------------------------
@@ -1626,6 +1634,13 @@ class WebControlService:
                 if self._action_thread and self._action_thread.is_alive():
                     self._action_thread.join(timeout=0.5)
             return self._unwrap_bridge(self.bridge.delete_action(name), code="ACTION_DELETE_FAILED")
+
+    def rename_action(self, name: str, new_name: str) -> dict[str, Any]:
+        with self._lock:
+            current = self.bridge.action_status
+            if current.get("state") == "playing" and current.get("name") == name:
+                raise WebAPIError("ACTION_RENAME_BUSY", "该动作正在播放，请停止后再改名。", status_code=409)
+            return self._unwrap_bridge(self.bridge.rename_action(name, new_name), code="ACTION_RENAME_FAILED")
 
     def action_recording_status(self) -> dict[str, Any]:
         return self._unwrap_bridge(self.bridge.get_recording_status(), code="ACTION_RECORDING_STATUS_FAILED")

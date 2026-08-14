@@ -101,12 +101,12 @@ assert first_segment_frames[-1]["j11"] == 0.0
 
 ab_frames = controller.frames[4:8]
 assert len(ab_frames) >= 3, ab_frames
-for frame in ab_frames:
-    j10_ratio = frame["j10"] / 100.0
-    j11_ratio = frame["j11"] / 10.0
-    assert abs(j10_ratio - j11_ratio) < 1e-9, frame
+assert all(ab_frames[index]["j10"] < ab_frames[index + 1]["j10"] for index in range(len(ab_frames) - 1))
+assert all(ab_frames[index]["j11"] <= ab_frames[index + 1]["j11"] for index in range(len(ab_frames) - 1))
 assert ab_frames[-1]["j10"] == 100.0
 assert ab_frames[-1]["j11"] == 10.0
+assert controller.frames[8]["j10"] < 100.0
+assert controller.frames[8]["j11"] < 10.0
 assert controller.stream_calls == len(controller.frames)
 
 recording_controller = RecordingController()

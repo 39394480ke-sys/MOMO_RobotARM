@@ -162,7 +162,7 @@ class SequencePlayer:
 
         if continuous_playback:
             while True:
-                completed = self._play_synchronized_pass_through(poses, start_index, speed, source="continuous_interpolation")
+                completed = self._play_cinematic_pass_through(poses, start_index, speed)
                 if not completed:
                     return False
                 if not loop or self.stopped:
@@ -454,9 +454,11 @@ class SequencePlayer:
                 if self.stopped:
                     return False
                 frame_index += 1
+                # Catmull-Rom already gives adjacent segments a shared tangent.
+                # Applying smoothstep to every segment forced that tangent to
+                # zero at each waypoint, which looked like a short stop at every
+                # recorded keyframe.
                 t = step / max(1, steps)
-                if segment_index == 0 or segment_index == len(segment_steps) - 1:
-                    t = smoothstep01(t)
                 frame = {
                     joint: bounded_catmull_rom(
                         float(p0.get(joint, p1[joint])),

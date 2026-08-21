@@ -268,6 +268,7 @@ class ActionComposerTest(unittest.TestCase):
         self.assertIn("handleComposerDrop", app_js)
         self.assertIn("scheduleComposerPreview(300)", app_js)
         self.assertIn("confirmDiscardComposerDraft", app_js)
+        self.assertIn("hold_sec: 0.0", app_js)
         self.assertIn("Math.max(0, (now - state.composer.previewStartedAt) / 1000)", app_js)
         self.assertIn("t: safeElapsed.toFixed(3)", app_js)
         self.assertIn("/api/v1/action-composer/preview", backend)

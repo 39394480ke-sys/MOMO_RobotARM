@@ -1414,7 +1414,6 @@ function workbenchActionFrames(action) {
 
 function workbenchFrameFromSource(kind, sourceName, source) {
   const duration = Number(source.duration_sec);
-  const hold = Number(source.hold_sec);
   return {
     instanceId: composerInstanceId(),
     source_kind: kind,
@@ -1422,7 +1421,7 @@ function workbenchFrameFromSource(kind, sourceName, source) {
     source_frame_index: kind === "action" ? Number(source.frame_index) : null,
     label: source.name || sourceName,
     duration_sec: Number.isFinite(duration) && duration > 0 ? duration : 2.0,
-    hold_sec: Number.isFinite(hold) && hold >= 0 ? hold : 0.0,
+    hold_sec: 0.0,
     joints_deg: { ...(source.joints_deg || {}) },
     legacy_variant_assumed: Boolean(source.legacy_variant_assumed),
   };

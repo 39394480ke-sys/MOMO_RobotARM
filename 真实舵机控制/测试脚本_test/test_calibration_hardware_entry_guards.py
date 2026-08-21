@@ -38,7 +38,7 @@ def config_for(variant: str = "V2") -> dict[str, object]:
                 "j10": 28.8,
                 "j11": 5.0,
                 "j12": -28.0 if variant == "V2" else -1.0,
-                "j13": 13.0 if variant == "V2" else 1.0,
+                "j13": 14.0 if variant == "V2" else 1.0,
                 "j14": 1.0,
                 "j15": 1.0,
             },

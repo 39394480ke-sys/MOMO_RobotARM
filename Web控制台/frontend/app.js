@@ -1461,7 +1461,9 @@ function pauseComposerPreview() {
 
 function tickComposerPreview(now) {
   if (!state.composer.previewPlaying) return;
-  let elapsed = (now - state.composer.previewStartedAt) / 1000;
+  // The first RAF timestamp can precede performance.now() from the click handler
+  // by a few milliseconds, so never send that transient negative time to the API.
+  let elapsed = Math.max(0, (now - state.composer.previewStartedAt) / 1000);
   if (elapsed >= state.composer.previewDuration) {
     if (state.composer.previewLoop && state.composer.previewDuration > 0) {
       elapsed %= state.composer.previewDuration;
@@ -1490,14 +1492,18 @@ function scrubComposerPreview() {
 
 async function renderComposerPreviewFrame(elapsed) {
   if (!state.composer.previewId) return;
+  const safeElapsed = Math.min(
+    Math.max(0, Number(elapsed) || 0),
+    Math.max(0, Number(state.composer.previewDuration) || 0),
+  );
   if (state.composer.previewRenderPending) {
-    state.composer.previewQueuedTime = elapsed;
+    state.composer.previewQueuedTime = safeElapsed;
     return;
   }
   state.composer.previewRenderPending = true;
   const previewId = state.composer.previewId;
   try {
-    const params = new URLSearchParams({ t: Number(elapsed).toFixed(3), width: "640", height: "420", nonce: String(Date.now()) });
+    const params = new URLSearchParams({ t: safeElapsed.toFixed(3), width: "640", height: "420", nonce: String(Date.now()) });
     const response = await fetch(`/api/v1/action-composer/preview/${encodeURIComponent(previewId)}/frame.jpg?${params}`, { cache: "no-store" });
     if (!response.ok) {
       let message = `仿真帧请求失败：HTTP ${response.status}`;
@@ -1518,7 +1524,7 @@ async function renderComposerPreviewFrame(elapsed) {
     state.composer.previewRenderPending = false;
     const queued = state.composer.previewQueuedTime;
     state.composer.previewQueuedTime = null;
-    if (queued !== null && Math.abs(Number(queued) - Number(elapsed)) > 0.02) renderComposerPreviewFrame(queued);
+    if (queued !== null && Math.abs(Number(queued) - safeElapsed) > 0.02) renderComposerPreviewFrame(queued);
   }
 }
 

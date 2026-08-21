@@ -101,15 +101,15 @@
   <joint name="J10" type="prismatic">
     <parent link="base_link"/>
     <child link="Link_2"/>
-    <origin xyz="-0.13 -0.019 -0.022" rpy="1.57079633 0 1.57079633"/>
+    <origin xyz="0.025 0 0" rpy="1.57079633 0 1.57079633"/>
     <axis xyz="0 0 1"/>
     <limit lower="-0.1" upper="0.1" effort="100" velocity="0.1"/>
   </joint>
   <joint name="J11" type="revolute">
     <parent link="Link_2"/>
     <child link="Link_3"/>
-    <origin xyz="0.019145 0.107 0.12999495" rpy="0 -1.57079633 -1.57079633"/>
-    <axis xyz="0 0 1"/>
+    <origin xyz="0.000145 0.089 -0.02500505" rpy="0 -1.57079633 -1.57079633"/>
+    <axis xyz="0 0 -1"/>
     <limit lower="-3.14159" upper="3.14159" effort="10" velocity="1"/>
   </joint>
   <joint name="J12" type="revolute">
@@ -122,21 +122,21 @@
   <joint name="J13" type="revolute">
     <parent link="Link_4"/>
     <child link="Link_5"/>
-    <origin xyz="0 0.13000002 -0.0006" rpy="0 0 0"/>
+    <origin xyz="0 0.12999998 -5e-8" rpy="0 0 0"/>
     <axis xyz="0 0 1"/>
     <limit lower="-3.14159" upper="3.14159" effort="10" velocity="1"/>
   </joint>
   <joint name="J14" type="revolute">
     <parent link="Link_5"/>
     <child link="Link_6"/>
-    <origin xyz="0.14999994 3e-8 -0.05" rpy="0 0 0"/>
+    <origin xyz="0.14999991 3e-8 -0.063" rpy="0 0 0"/>
     <axis xyz="0 0 1"/>
     <limit lower="-3.14159" upper="3.14159" effort="10" velocity="1"/>
   </joint>
   <joint name="J15" type="revolute">
     <parent link="Link_6"/>
     <child link="Link_7"/>
-    <origin xyz="0.06139999 -0.00439984 0.03045014" rpy="1.57079633 0 -1.57079633"/>
+    <origin xyz="0.06139999 -0.00440002 0.03045014" rpy="1.57079633 0 -1.57079633"/>
     <axis xyz="0 0 1"/>
     <limit lower="-3.14159" upper="3.14159" effort="10" velocity="1"/>
   </joint>

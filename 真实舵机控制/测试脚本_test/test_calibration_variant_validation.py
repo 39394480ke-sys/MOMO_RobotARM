@@ -32,7 +32,7 @@ def config_for(variant: str, *, dry_run: bool) -> dict[str, object]:
                 "j10": 28.8,
                 "j11": 5.0,
                 "j12": -28.0 if variant == "V2" else -1.0,
-                "j13": 13.0 if variant == "V2" else 1.0,
+                "j13": 14.0 if variant == "V2" else 1.0,
                 "j14": 1.0,
                 "j15": 1.0,
             },
@@ -152,6 +152,7 @@ class CalibrationVariantValidationTests(unittest.TestCase):
             self.assertEqual(meta["format_version"], CALIBRATION_FORMAT_VERSION)
             self.assertIsInstance(meta["generated_at_unix_s"], float)
             self.assertRegex(str(meta["generated_at_utc"]), r"Z$")
+            self.assertIn("J13 为 1:14", meta["notes"]["absolute_raw"])
 
             preview = build_dry_run_preview(
                 complete_calibration({"robot_variant": "V1"}),

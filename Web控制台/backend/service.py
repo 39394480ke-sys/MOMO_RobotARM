@@ -1873,8 +1873,20 @@ class WebControlService:
                         video.update(started)
                         time.sleep(max(0.0, float(self.config.get("camera_hub", {}).get("preroll_sec", 0.4))))
                     except Exception as exc:
-                        video.update({"state": "error", "finished_at": time.time(), "error": str(exc)})
-                        raise
+                        video.update(
+                            {
+                                "state": "error",
+                                "finished_at": time.time(),
+                                "error": str(exc),
+                                "message": "Camera Hub 录像失败，动作已继续执行。",
+                            }
+                        )
+                        self.logger.log(
+                            "warning",
+                            "action_video_start_failed",
+                            f"Camera Hub 录像失败，动作继续执行：{exc}",
+                            action_name=request.name,
+                        )
 
                 try:
                     if video is not None:

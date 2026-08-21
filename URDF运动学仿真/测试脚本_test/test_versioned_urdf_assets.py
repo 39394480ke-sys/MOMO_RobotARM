@@ -9,7 +9,7 @@ from pathlib import Path
 KINEMATICS_ROOT = Path(__file__).resolve().parents[1]
 EXPECTED_URDF_CONTENT_HASHES = {
     "v1": "1678172c914c4d6b63178b1ff92ce8de5a86378d27fe4ee17a7edde220e3fe1e",
-    "v2": "b4ac76157d4aa287aa3e9197e412d72ad881e8b4f7b9ebad95e170253de98c42",
+    "v2": "7940164342c4c11e92eae8ea7b3fd4bd611dce2781b905f5e2bdb69ab03f3a7a",
 }
 EXPECTED_MESH_HASHES = {
     "v1": {
@@ -22,13 +22,13 @@ EXPECTED_MESH_HASHES = {
         "Link_6.stl": "7c6d45ffafe235ba5b5853e5917fd9e9ca77700fb0092ad12ecb715e64ef8114",
     },
     "v2": {
-        "base_link.stl": "d7752eb16190809dc816691a1dad59cd0617a739da004da597b610f9319e325f",
-        "Link_2.stl": "f9a189af048a957d02189a797d5ddbd70930cbf99b24174def4fb028ce8f05c1",
-        "Link_3.stl": "b4cf07243fb0586d32feeb8e99c27c4894b2fa4076613a79f3867c72ed428bad",
-        "Link_4.stl": "0e9efe0788afd19ae30f95fee901f4df42f7ca70791e0c24a045478996b9ab98",
-        "Link_5.stl": "2223883637875f7dfeaae1c8997447d84b40931df7cf76f08c41107c7a294073",
-        "Link_6.stl": "6f102f98367119ada784c9e0621bc8dbc6a911560572d1385c07403279af9684",
-        "Link_7.stl": "8b71ad05a385af595e7ee3a6172171e69f028ed22bf61990948e65f615967d49",
+        "base_link.stl": "8de59b1b2fa2207dcaa1427bf9ba5dcead9fcfc8d1ed520808fa6e2d6d482e67",
+        "Link_2.stl": "5ac523cd4723055d38320b83c2a70b72b8233cafd141f97ad0cf1109fe4f3e17",
+        "Link_3.stl": "fc2f2cea3ff5f1449a9d5c495eaccdb2cce86b0d276790a255a753ba712099dd",
+        "Link_4.stl": "7c3252133180f772479de3af81b7b027877bdc87ee2e1c51ac160f6f217c5c62",
+        "Link_5.stl": "375155bf0f47ff4f0a363709cc841f971d0611c04a6101ce8c68934211ba9526",
+        "Link_6.stl": "4046d2513ee572b286ac226d1297aac9ca5d150e3c0718674403b7b089bfe996",
+        "Link_7.stl": "a75abef799eec297d9d9bde8b81b9aec006060f594a7b5a4fcfb339b6d2447cc",
     },
 }
 
@@ -87,6 +87,11 @@ class VersionedUrdfAssetsTest(unittest.TestCase):
                     joint.find("child").attrib["link"] for joint in movable_joints
                 }
                 self.assertEqual(child_links - parent_links, {expected_tip})
+
+    def test_v2_j11_axis_matches_real_positive_rotation(self) -> None:
+        _, robot = self.load_version("v2")
+        j11 = next(joint for joint in robot.findall("joint") if joint.attrib.get("name") == "J11")
+        self.assertEqual(j11.find("axis").attrib["xyz"], "0 0 -1")
 
     def test_v1_and_v2_are_distinct_assets(self) -> None:
         v1_path, v1_robot = self.load_version("v1")

@@ -13,7 +13,7 @@ from 动作路径工具_motion_path_utils import ensure_project_root_on_path
 ensure_project_root_on_path()
 
 from 控制桥接_common import bounded_catmull_rom  # noqa: E402
-from 动作工具_common import DEFAULT_JOINT_SPEED_LIMITS  # noqa: E402
+from 动作工具_common import DEFAULT_JOINT_SPEED_LIMITS, motor_raw_speed_required_duration  # noqa: E402
 
 
 def effective_segment_duration(
@@ -40,6 +40,7 @@ def effective_segment_duration(
             if limit <= 0:
                 continue
             required = max(required, abs(float(target) - float(current.get(joint, target))) / limit)
+        required = max(required, motor_raw_speed_required_duration(current, targets, playback_config))
         duration = max(duration, required)
 
     duration /= normalized_speed

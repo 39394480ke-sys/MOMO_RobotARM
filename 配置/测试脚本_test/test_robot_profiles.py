@@ -61,7 +61,7 @@ EXPECTED = {
         "urdf": "urdf/v2/soarmoce_urdf.urdf",
         "target": "Link_7",
         "kinematics": {joint: 1.0 for joint in JOINTS},
-        "hardware": {"j10": 28.8, "j11": 5.0, "j12": -28.0, "j13": 13.0, "j14": 1.0, "j15": 1.0},
+        "hardware": {"j10": 28.8, "j11": 5.0, "j12": -28.0, "j13": 14.0, "j14": 1.0, "j15": 1.0},
         "raw_reachable": ["j12", "j13"],
     },
 }

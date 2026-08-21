@@ -16,7 +16,7 @@ for import_path in (PROJECT_ROOT, KINEMATICS_ROOT):
         sys.path.insert(0, str(import_path))
 
 from URDF检查_urdf_inspector import 检查URDF
-from 运动学模型_kinematics_model import 加载运动学配置
+from 运动学模型_kinematics_model import 创建运动学模型, 加载运动学配置
 
 
 JOINTS = [f"j{index}" for index in range(10, 16)]
@@ -78,6 +78,37 @@ class V2ModelTests(unittest.TestCase):
             ],
         )
         self.assertEqual(report["missing_meshes"], [])
+
+    def test_new_v2_geometry_preserves_sdk_order_and_fk_ik_round_trip(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, {}, clear=True):
+            real_path = write_real_config(Path(tmp), "V2")
+            model = 创建运动学模型(real_config_path=real_path, use_gui=False)
+
+        try:
+            self.assertEqual(
+                model.ordered_joint_urdf_names,
+                ["J10", "J11", "J12", "J13", "J14", "J15"],
+            )
+            self.assertEqual(model.target_frame, "Link_7")
+            self.assertEqual(model.joint_scales.tolist(), [1.0] * 6)
+
+            q_user = [0.01, 0.2, -0.3, 0.4, -0.1, 0.2]
+            pose = model.forward(q_user)
+            for actual, expected in zip(
+                pose["xyz"],
+                [0.05305778, 0.24554963, 0.29076877],
+            ):
+                self.assertAlmostEqual(actual, expected, places=6)
+
+            solved = model.inverse(
+                pose["xyz"],
+                target_rpy=pose["rpy"],
+                seed_q_user=q_user,
+            )
+            self.assertLess(solved["position_error_m"], 0.001)
+            self.assertLess(solved["orientation_error_rad"], 0.001)
+        finally:
+            model.close()
 
     def test_local_variant_selection_drives_kinematics_profile(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, {}, clear=True):

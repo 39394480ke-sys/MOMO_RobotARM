@@ -41,7 +41,7 @@ recording:
 playback:
   default_duration_sec: 1.5
   default_interval_sec: 0.3
-  update_hz: 25.0
+  update_hz: 40.0
   continuous_interpolation_default: true
   synchronized_segment_timing: true
   auto_duration_from_distance: true
@@ -52,6 +52,8 @@ playback:
     j13: 45.0
     j14: 45.0
     j15: 60.0
+  # STS3215 空载极限约 3400 raw/s。留出负载余量，避免高减速比的 J10/J12/J13 跟不上共享时间轴。
+  max_motor_raw_speed_per_sec: 2200.0
   real_mode_min_duration_sec: 2.0
   real_mode_wait_until_reached: true
   real_mode_reach_timeout_sec: 12.0

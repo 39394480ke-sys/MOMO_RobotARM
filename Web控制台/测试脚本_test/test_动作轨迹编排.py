@@ -250,6 +250,8 @@ class ActionComposerTest(unittest.TestCase):
         self.assertIn('id="composerTimeline"', html)
         self.assertIn("data-composer-duplicate", app_js)
         self.assertIn("handleComposerDrop", app_js)
+        self.assertIn("Math.max(0, (now - state.composer.previewStartedAt) / 1000)", app_js)
+        self.assertIn("t: safeElapsed.toFixed(3)", app_js)
         self.assertIn("/api/v1/action-composer/preview", backend)
         self.assertIn("/api/v1/action-composer/save", backend)
 

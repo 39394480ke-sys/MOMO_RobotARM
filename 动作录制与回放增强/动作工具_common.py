@@ -28,7 +28,7 @@ from 控制桥接_common import (  # noqa: E402
     targets_to_kinematics_q,
 )
 from 真实配置加载_real_config_loader import load_real_config  # noqa: E402
-from 机器人配置_profile_loader import SUPPORTED_VARIANTS, validate_robot_variant  # noqa: E402
+from 机器人配置_profile_loader import SUPPORTED_VARIANTS, load_robot_profile, validate_robot_variant  # noqa: E402
 from 通用_io import deep_merge, read_structured  # noqa: E402
 
 STAGE3_DIR = PROJECT_ROOT / "仿真控制系统"
@@ -55,6 +55,7 @@ DEFAULT_JOINT_SPEED_LIMITS = {
     "j14": 45.0,
     "j15": 60.0,
 }
+RAW_COUNTS_PER_REV = 4096.0
 
 
 DEFAULT_CONFIG: dict[str, Any] = {
@@ -87,6 +88,8 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "synchronized_segment_timing": True,
         "auto_duration_from_distance": True,
         "joint_speed_limits": dict(DEFAULT_JOINT_SPEED_LIMITS),
+        "max_motor_raw_speed_per_sec": 2200.0,
+        "joint_hardware_scales": {},
         "real_mode_min_duration_sec": 2.0,
         "real_mode_wait_until_reached": True,
         "real_mode_reach_timeout_sec": 12.0,
@@ -143,10 +146,34 @@ def load_config(
             effective_real_path = path.parent / effective_real_path
     effective_real_path = effective_real_path.resolve()
     variant = load_real_config(effective_real_path)["robot"]["variant"]
+    profile = load_robot_profile(variant)
     config.setdefault("robot", {})["variant"] = variant
     config.setdefault("hardware", {})["robot_variant"] = variant
+    config["hardware"]["joint_scales"] = deepcopy(profile["hardware"]["joint_scales"])
     config["hardware"]["real_config_path"] = str(effective_real_path)
+    config.setdefault("playback", {})["joint_hardware_scales"] = deepcopy(profile["hardware"]["joint_scales"])
     return config
+
+
+def motor_raw_speed_required_duration(
+    current: Mapping[str, float],
+    targets: Mapping[str, float],
+    playback_config: Mapping[str, Any],
+) -> float:
+    """Return the minimum duration that lets geared motors track the shared trajectory phase."""
+
+    raw_speed_limit = float(playback_config.get("max_motor_raw_speed_per_sec", 0.0) or 0.0)
+    scales = playback_config.get("joint_hardware_scales", {})
+    if raw_speed_limit <= 0 or not isinstance(scales, Mapping):
+        return 0.0
+    required = 0.0
+    for joint, target in targets.items():
+        if joint not in current:
+            continue
+        scale = abs(float(scales.get(joint, 1.0) or 1.0))
+        raw_distance = abs(float(target) - float(current[joint])) * scale * RAW_COUNTS_PER_REV / 360.0
+        required = max(required, raw_distance / raw_speed_limit)
+    return required
 
 
 def resolve_stage6_path(path_value: str | Path) -> Path:
@@ -293,6 +320,7 @@ def estimate_sequence_duration(
                 limit = float(speed_limits.get(joint, DEFAULT_JOINT_SPEED_LIMITS.get(joint, 45.0)))
                 if limit > 0 and joint in previous_targets:
                     duration = max(duration, abs(float(target) - previous_targets[joint]) / limit)
+            duration = max(duration, motor_raw_speed_required_duration(previous_targets, targets, playback))
         duration = max(duration, real_min_duration)
         total += duration + max(0.0, float(pose.get("hold_sec", default_hold)))
         previous_targets = {joint: float(value) for joint, value in targets.items()}

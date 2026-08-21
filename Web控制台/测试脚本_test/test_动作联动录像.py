@@ -104,7 +104,7 @@ class ActionCameraRecordingTest(unittest.TestCase):
         self.assertEqual(events, ["position_first_pose", "play_action_frames"])
         self.assertNotIn("video_recording", service.current_action_status())
 
-    def test_camera_start_failure_stops_after_first_pose(self) -> None:
+    def test_camera_start_failure_does_not_abort_robot_action(self) -> None:
         events: list[str] = []
         service = make_service(events)
 
@@ -116,8 +116,10 @@ class ActionCameraRecordingTest(unittest.TestCase):
         service.play_action(PlayActionRequest(name="挥手", record_video=True))
         service._action_thread.join(timeout=1.0)
 
-        self.assertEqual(events, ["position_first_pose"])
-        self.assertEqual(service.current_action_status()["video_recording"]["state"], "error")
+        self.assertEqual(events, ["position_first_pose", "play_action_frames"])
+        video = service.current_action_status()["video_recording"]
+        self.assertEqual(video["state"], "error")
+        self.assertIn("动作已继续执行", video["message"])
 
 
 if __name__ == "__main__":

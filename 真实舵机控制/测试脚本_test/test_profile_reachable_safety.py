@@ -103,7 +103,7 @@ class ProfileReachableSafetyTests(unittest.TestCase):
     def test_v1_and_v2_reduced_joint_ratios_round_trip_with_signed_scales(self) -> None:
         expected_scales = {
             "V1": {"j12": -5.3, "j13": 5.6},
-            "V2": {"j12": -28.0, "j13": 13.0},
+            "V2": {"j12": -28.0, "j13": 14.0},
         }
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

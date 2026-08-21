@@ -466,6 +466,7 @@ class SequencePlayer:
             segment_steps.append((steps, duration))
 
         frame_total = sum(steps for steps, _duration in segment_steps)
+        segment_durations = [duration for _steps, duration in segment_steps]
         frame_index = 0
         last_frame: dict[str, float] | None = None
         for segment_index, (steps, duration) in enumerate(segment_steps):
@@ -475,12 +476,13 @@ class SequencePlayer:
                 if self.stopped:
                     return False
                 frame_index += 1
-                # Catmull-Rom already gives adjacent segments a shared tangent.
-                # Applying smoothstep to every segment forced that tangent to
-                # zero at each waypoint, which looked like a short stop at every
-                # recorded keyframe.
                 t = step / max(1, steps)
-                frame = sample_bounded_cinematic(targets_by_waypoint, segment_index, t)
+                frame = sample_bounded_cinematic(
+                    targets_by_waypoint,
+                    segment_index,
+                    t,
+                    segment_durations,
+                )
                 use_multi = None
                 if segment_index == len(segment_steps) - 1 and step == steps:
                     final_pose = waypoints[-1]

@@ -280,7 +280,12 @@ class ActionComposer:
             index = int(segment["index"])
             if t < arrival:
                 ratio = (t - start) / max(1e-6, float(segment["duration_sec"]))
-                return sample_bounded_cinematic(session.targets, index, ratio)
+                return sample_bounded_cinematic(
+                    session.targets,
+                    index,
+                    ratio,
+                    [float(item["duration_sec"]) for item in session.segments],
+                )
             if t <= arrival + float(segment["hold_sec"]):
                 return dict(session.targets[index + 1])
         return dict(session.targets[-1])

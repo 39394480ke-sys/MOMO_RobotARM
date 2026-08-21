@@ -6,6 +6,7 @@ import unittest
 import 动作测试路径_test_paths  # noqa: F401
 
 from 动作回放器_sequence_player import SequencePlayer
+from 动作轨迹采样_trajectory_sampling import sample_bounded_cinematic
 from 动作工具_common import JOINT_ORDER, build_empty_sequence, load_config
 
 
@@ -49,6 +50,19 @@ class RecordingSleepPlayer(SequencePlayer):
 
 
 class SynchronizedPlaybackTest(unittest.TestCase):
+    def test_time_parameterized_curve_keeps_velocity_across_unequal_segments(self) -> None:
+        points = [{"j11": 0.0}, {"j11": 20.0}, {"j11": 80.0}]
+        durations = [1.0, 3.0]
+        epsilon = 0.001
+        before = sample_bounded_cinematic(points, 0, 1.0 - epsilon, durations)["j11"]
+        waypoint = sample_bounded_cinematic(points, 0, 1.0, durations)["j11"]
+        after = sample_bounded_cinematic(points, 1, epsilon / 3.0, durations)["j11"]
+
+        velocity_before = (waypoint - before) / epsilon
+        velocity_after = (after - waypoint) / epsilon
+        self.assertAlmostEqual(velocity_before, velocity_after, delta=0.1)
+        self.assertGreater(velocity_before, 1.0)
+
     def test_all_joints_share_eased_progress_and_stream_batch_writes(self) -> None:
         config = load_config()
         config["playback"]["update_hz"] = 4.0

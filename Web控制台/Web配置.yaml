@@ -22,6 +22,10 @@ camera_hub:
   preroll_sec: 0.4
   request_timeout_sec: 5.0
   finalize_timeout_sec: 90.0
+community:
+  seed_catalog_path: community_seed/catalog.json
+  runtime_dir: runtime/community
+  local_author: MOMO Studio
 agent_demo:
   enabled: true
   trigger_text: 帮我生成一个环绕主体运镜的轨迹

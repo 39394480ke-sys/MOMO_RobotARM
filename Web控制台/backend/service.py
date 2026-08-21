@@ -46,12 +46,23 @@ from 通用_io import read_json_object, read_structured_section, update_structur
 from 真实舵机控制.连续关节流_continuous_joint_stream import run_continuous_joint_stream  # noqa: E402
 
 from .controller_bridge import ControllerBridge
+from .action_composer import ActionComposer, ActionComposerError
+from .community_store import (
+    COMMUNITY_CATEGORIES,
+    CommunityItemNotFoundError,
+    CommunityStore,
+    CommunityStoreError,
+    normalize_asset_name,
+    validate_media_id,
+)
 from .agent_pending_action import PendingActionError, PendingActionStore
 from .errors import WebAPIError
 from .logger import JsonLineLogger
 from .schemas import (
     ActionRecordingCaptureRequest,
     ActionRecordingStartRequest,
+    ActionComposerPreviewRequest,
+    ActionComposerSaveRequest,
     AgentAskRequest,
     CalibrationBatchCurrentAngleRequest,
     CalibrationCurrentAngleRequest,
@@ -75,6 +86,8 @@ from .schemas import (
     SubjectLockCalibrationStartRequest,
     SubjectLockProfileActionRequest,
     SubjectLockValidateRequest,
+    CommunityPublishRequest,
+    CommunityImportRequest,
 )
 from .state_manager import SessionStateManager
 from .websocket_manager import WebSocketManager
@@ -96,6 +109,13 @@ class WebControlService:
             default_mode=self.default_mode,
         )
         self.bridge = ControllerBridge(config, base_dir=self.base_dir, logger=self.logger)
+        self.action_composer = ActionComposer(self.bridge)
+        community_config = config.get("community", {}) if isinstance(config.get("community", {}), dict) else {}
+        self.community = CommunityStore(
+            self._resolve_app_path(community_config.get("seed_catalog_path", "community_seed/catalog.json")),
+            self._resolve_app_path(community_config.get("runtime_dir", "runtime/community")),
+            local_author=str(community_config.get("local_author") or "MOMO Studio"),
+        )
         self._lock = threading.RLock()
         self._action_thread: threading.Thread | None = None
         self._action_video: dict[str, Any] | None = None
@@ -108,6 +128,9 @@ class WebControlService:
         self._agent_app: Any | None = None
         self._agent_demo_pending_action: dict[str, Any] | None = None
         self._agent_pending = PendingActionStore(ttl_sec=30.0)
+
+    def close(self) -> None:
+        self.action_composer.close()
 
     # ------------------------------------------------------------------
     # 基础信息
@@ -141,6 +164,7 @@ class WebControlService:
             },
             "follow": self.config.get("follow", {}),
             "camera_hub": self._camera_hub_public_config(),
+            "community": {"enabled": True, "categories": list(COMMUNITY_CATEGORIES), "node": "local"},
             "agent_demo": self._agent_demo_public_config(),
             "poster_demo": self._poster_demo_public_config(),
         }
@@ -1591,6 +1615,117 @@ class WebControlService:
             return {"message": "视觉跟随已停止。", "follow": status}
 
     # ------------------------------------------------------------------
+    # MOMO 开源社区（本地节点）
+    # ------------------------------------------------------------------
+    def community_items(
+        self,
+        query: str = "",
+        kind: str = "all",
+        category: str = "all",
+        sort: str = "popular",
+        favorite_only: bool = False,
+    ) -> dict[str, Any]:
+        try:
+            return self.community.list_items(
+                query=query,
+                kind=kind,
+                category=category,
+                sort=sort,
+                favorite_only=favorite_only,
+            )
+        except CommunityStoreError as exc:
+            raise WebAPIError("COMMUNITY_INVALID", str(exc)) from exc
+
+    def community_detail(self, item_id: str) -> dict[str, Any]:
+        try:
+            return {"item": self.community.get_public(item_id)}
+        except CommunityItemNotFoundError as exc:
+            raise WebAPIError("COMMUNITY_NOT_FOUND", str(exc), status_code=404) from exc
+
+    def community_publish(self, request: CommunityPublishRequest) -> dict[str, Any]:
+        try:
+            if request.kind == "action":
+                source = self.get_action(request.source_name).get("action", {})
+            else:
+                source = self.get_pose(request.source_name).get("pose", {})
+            media = self._community_media_by_id(request.media_id) if request.media_id else None
+            item = self.community.publish(
+                kind=request.kind,
+                source_name=request.source_name,
+                title=request.title,
+                category=request.category,
+                description=request.description,
+                tags=request.tags,
+                payload=source,
+                media=media,
+            )
+            return {"message": "资产已发布到本地社区。", "item": item}
+        except CommunityStoreError as exc:
+            raise WebAPIError("COMMUNITY_INVALID", str(exc)) from exc
+
+    def community_favorite(self, item_id: str, favorite: bool) -> dict[str, Any]:
+        try:
+            return {"message": "收藏状态已更新。", "item": self.community.set_favorite(item_id, favorite)}
+        except CommunityItemNotFoundError as exc:
+            raise WebAPIError("COMMUNITY_NOT_FOUND", str(exc), status_code=404) from exc
+
+    def community_import(self, item_id: str, request: CommunityImportRequest) -> dict[str, Any]:
+        try:
+            item = self.community.get_raw(item_id)
+            if item.get("robot_variant") != "V2":
+                raise WebAPIError("COMMUNITY_INCOMPATIBLE", "该资产不兼容 V2 机械臂。")
+            target_name = normalize_asset_name(request.target_name or item["title"])
+            if item["kind"] == "action":
+                existing = {entry.get("name") for entry in self.list_actions().get("actions", [])}
+                if target_name in existing:
+                    raise WebAPIError("COMMUNITY_NAME_CONFLICT", f"动作库中已存在“{target_name}”，请换一个名称。", status_code=409)
+                result = self._unwrap_bridge(
+                    self.bridge.import_action_asset(target_name, item["payload"]),
+                    code="COMMUNITY_IMPORT_FAILED",
+                )
+            else:
+                existing = {entry.get("name") for entry in self.list_poses().get("poses", [])}
+                if target_name in existing:
+                    raise WebAPIError("COMMUNITY_NAME_CONFLICT", f"姿态库中已存在“{target_name}”，请换一个名称。", status_code=409)
+                result = self._unwrap_bridge(
+                    self.bridge.import_pose_asset(target_name, item["payload"]),
+                    code="COMMUNITY_IMPORT_FAILED",
+                )
+            updated = self.community.record_import(item_id)
+            return {"message": result.get("message", "资产已加入本机库。"), "name": target_name, "kind": item["kind"], "item": updated}
+        except CommunityItemNotFoundError as exc:
+            raise WebAPIError("COMMUNITY_NOT_FOUND", str(exc), status_code=404) from exc
+        except CommunityStoreError as exc:
+            raise WebAPIError("COMMUNITY_INVALID", str(exc)) from exc
+
+    def community_camera_media(self) -> dict[str, Any]:
+        config = self.config.get("camera_hub", {})
+        base_url = str(config.get("base_url") or "http://127.0.0.1:8020").rstrip("/")
+        try:
+            with urllib.request.urlopen(f"{base_url}/api/v1/media?limit=50", timeout=2.5) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+            items = payload.get("items", []) if isinstance(payload, dict) else []
+            return {"available": True, "items": [item for item in items if item.get("status") == "ready"]}
+        except Exception:
+            return {"available": False, "items": [], "message": "Camera Hub 当前离线，发布时将使用分类默认封面。"}
+
+    def _community_media_by_id(self, media_id: str) -> dict[str, Any] | None:
+        normalized_id = validate_media_id(media_id)
+        media = self.community_camera_media()
+        if not media.get("available"):
+            return None
+        for item in media.get("items", []):
+            if str(item.get("id")) == normalized_id:
+                return {
+                    "id": normalized_id,
+                    "type": item.get("type"),
+                    "content_url": item.get("content_url"),
+                    "thumbnail_url": item.get("thumbnail_url"),
+                    "duration_sec": item.get("duration_sec"),
+                }
+        raise WebAPIError("COMMUNITY_MEDIA_NOT_FOUND", "所选 Camera Hub 素材不存在或尚未完成。", status_code=404)
+
+    # ------------------------------------------------------------------
     # 姿态
     # ------------------------------------------------------------------
     def list_poses(self) -> dict[str, Any]:
@@ -1619,6 +1754,47 @@ class WebControlService:
     # ------------------------------------------------------------------
     # 动作
     # ------------------------------------------------------------------
+    def action_composer_sources(self) -> dict[str, Any]:
+        return self._action_composer_call(self.action_composer.sources)
+
+    def action_composer_preview(self, request: ActionComposerPreviewRequest) -> dict[str, Any]:
+        with self._lock:
+            return self._action_composer_call(self.action_composer.create_preview, request)
+
+    def action_composer_preview_frame(
+        self,
+        preview_id: str,
+        elapsed_sec: float,
+        width: int = 640,
+        height: int = 420,
+    ) -> tuple[bytes, str]:
+        try:
+            return self.action_composer.render_preview(preview_id, elapsed_sec, width, height)
+        except ActionComposerError as exc:
+            raise WebAPIError(exc.code, exc.message, status_code=exc.status_code) from exc
+
+    def action_composer_delete_preview(self, preview_id: str) -> dict[str, Any]:
+        return self.action_composer.delete_preview(preview_id)
+
+    def action_composer_save(self, request: ActionComposerSaveRequest) -> dict[str, Any]:
+        with self._lock:
+            result = self._action_composer_call(self.action_composer.save, request)
+            self.logger.log(
+                "info",
+                "action_composer_save",
+                str(result.get("message") or "轨迹编排动作已保存。"),
+                name=result.get("name"),
+                pose_count=result.get("pose_count"),
+            )
+            return result
+
+    @staticmethod
+    def _action_composer_call(fn: Any, *args: Any) -> dict[str, Any]:
+        try:
+            return fn(*args)
+        except ActionComposerError as exc:
+            raise WebAPIError(exc.code, exc.message, status_code=exc.status_code) from exc
+
     def list_actions(self) -> dict[str, Any]:
         with self._lock:
             return self._unwrap_bridge(self.bridge.list_actions(), code="ACTION_LIST_FAILED")

@@ -1,0 +1,114 @@
+- generic [ref=e2]:
+  - banner [ref=e3]:
+    - generic [ref=e4]:
+      - generic [ref=e5]: A
+      - generic [ref=e6]:
+        - heading "机械臂 Web 控制台" [level=1] [ref=e7]
+        - paragraph [ref=e8]: "API: http://127.0.0.1:18110"
+    - generic [ref=e9]:
+      - generic [ref=e10]: 模式 --
+      - generic [ref=e11]: 未连接
+      - generic [ref=e12]: WS 离线
+      - button "急停" [ref=e13] [cursor=pointer]
+  - generic [ref=e14]:
+    - navigation "主导航" [ref=e15]:
+      - button "快速控制" [ref=e16] [cursor=pointer]
+      - button "姿态" [ref=e17] [cursor=pointer]
+      - button "动作" [ref=e18] [cursor=pointer]
+      - button "社区广场" [ref=e19] [cursor=pointer]
+      - button "视觉跟随" [ref=e20] [cursor=pointer]
+      - button "AI 对话" [ref=e21] [cursor=pointer]
+      - button "主体锁定运镜" [ref=e22] [cursor=pointer]
+      - button "运动学" [ref=e23] [cursor=pointer]
+      - button "标定" [ref=e24] [cursor=pointer]
+      - button "设置" [ref=e25] [cursor=pointer]
+      - button "日志" [ref=e26] [cursor=pointer]
+    - main [ref=e27]:
+      - generic [ref=e28]:
+        - generic [ref=e29]:
+          - heading "快速控制" [level=2] [ref=e30]
+          - generic [ref=e31]:
+            - button "刷新状态" [ref=e32] [cursor=pointer]
+            - button "Home" [ref=e33] [cursor=pointer]
+            - button "急停" [ref=e34] [cursor=pointer]
+        - generic [ref=e35]:
+          - generic [ref=e36]:
+            - generic [ref=e37]:
+              - heading "J10-J15 关节" [level=3] [ref=e38]
+              - generic [ref=e39]:
+                - generic "控制模式" [ref=e40]:
+                  - button "步进" [ref=e41] [cursor=pointer]
+                  - button "连续" [ref=e42] [cursor=pointer]
+                - generic [ref=e43]:
+                  - generic [ref=e44]: 步长
+                  - combobox "步长" [ref=e45]:
+                    - option "0.5 deg/mm"
+                    - option "1 deg/mm"
+                    - option "2 deg/mm" [selected]
+                    - option "3 deg/mm"
+                    - option "5 deg/mm"
+                - generic [ref=e46]:
+                  - generic [ref=e47]: 连续速度
+                  - spinbutton "连续速度" [ref=e48]: "5"
+            - generic [ref=e49]: 连续控制：停止
+            - generic [ref=e50]: 未运行
+            - generic [ref=e51]:
+              - generic [ref=e52]:
+                - generic [ref=e53]: J10 底盘导轨
+                - button "-" [ref=e54] [cursor=pointer]
+                - generic [ref=e55]: "-- mm"
+                - button "+" [ref=e56] [cursor=pointer]
+              - generic [ref=e57]:
+                - generic [ref=e58]: J11 底座旋转
+                - button "-" [ref=e59] [cursor=pointer]
+                - generic [ref=e60]: "--°"
+                - button "+" [ref=e61] [cursor=pointer]
+              - generic [ref=e62]:
+                - generic [ref=e63]: J12 肩部抬升
+                - button "-" [ref=e64] [cursor=pointer]
+                - generic [ref=e65]: "--°"
+                - button "+" [ref=e66] [cursor=pointer]
+              - generic [ref=e67]:
+                - generic [ref=e68]: J13 肘部弯曲
+                - button "-" [ref=e69] [cursor=pointer]
+                - generic [ref=e70]: "--°"
+                - button "+" [ref=e71] [cursor=pointer]
+              - generic [ref=e72]:
+                - generic [ref=e73]: J14 腕部俯仰
+                - button "-" [ref=e74] [cursor=pointer]
+                - generic [ref=e75]: "--°"
+                - button "+" [ref=e76] [cursor=pointer]
+              - generic [ref=e77]:
+                - generic [ref=e78]: J15 腕部旋转
+                - button "-" [ref=e79] [cursor=pointer]
+                - generic [ref=e80]: "--°"
+                - button "+" [ref=e81] [cursor=pointer]
+          - generic [ref=e82]:
+            - generic [ref=e83]:
+              - heading "夹爪" [level=3] [ref=e84]
+              - strong [ref=e85]: "--%"
+            - slider [ref=e86]: "50"
+            - generic [ref=e87]:
+              - button "张开" [ref=e88] [cursor=pointer]
+              - button "闭合" [ref=e89] [cursor=pointer]
+              - button "应用" [ref=e90] [cursor=pointer]
+          - generic [ref=e91]:
+            - generic [ref=e92]:
+              - heading "TCP" [level=3] [ref=e93]
+              - generic [ref=e94]: "--"
+            - generic [ref=e95]:
+              - term [ref=e96]: X
+              - definition [ref=e97]: "--"
+              - term [ref=e98]: "Y"
+              - definition [ref=e99]: "--"
+              - term [ref=e100]: Z
+              - definition [ref=e101]: "--"
+              - term [ref=e102]: Roll
+              - definition [ref=e103]: "--"
+              - term [ref=e104]: Pitch
+              - definition [ref=e105]: "--"
+              - term [ref=e106]: Yaw
+              - definition [ref=e107]: "--"
+          - generic [ref=e109]:
+            - heading "最近日志" [level=3] [ref=e110]
+            - button "清空" [ref=e111] [cursor=pointer]

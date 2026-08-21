@@ -62,7 +62,7 @@ follow:
   poll_interval_sec: 0.05
   control_update_hz: 40.0
   vision_stale_timeout_sec: 0.25
-  max_pan_speed_deg_s: 7.6
+  max_pan_speed_deg_s: 15.0
   max_tilt_speed_deg_s: 7.6
   pan_accel_deg_s2: 35.1
   tilt_accel_deg_s2: 35.1

@@ -39,6 +39,15 @@ class NoSleepPlayer(SequencePlayer):
         return
 
 
+class RecordingSleepPlayer(SequencePlayer):
+    def __init__(self, controller, config):
+        super().__init__(controller, config)
+        self.sleep_calls: list[float] = []
+
+    def _sleep_with_controls(self, seconds: float) -> None:
+        self.sleep_calls.append(float(seconds))
+
+
 class SynchronizedPlaybackTest(unittest.TestCase):
     def test_all_joints_share_eased_progress_and_stream_batch_writes(self) -> None:
         config = load_config()
@@ -93,6 +102,37 @@ class SynchronizedPlaybackTest(unittest.TestCase):
         self.assertGreater(after, 40.0)
         self.assertGreater(40.0 - before, 1.0)
         self.assertGreater(after - 40.0, 1.0)
+
+    def test_composed_action_honors_holds_without_changing_legacy_actions(self) -> None:
+        config = load_config()
+        config["playback"]["update_hz"] = 2.0
+        config["playback"]["auto_duration_from_distance"] = False
+        config["playback"]["continuous_interpolation_default"] = True
+        config["playback"]["synchronized_segment_timing"] = True
+        config["safety"]["max_single_step_deg"] = 1000.0
+
+        def make_sequence(honor_holds: bool):
+            sequence = build_empty_sequence("编排停留", source="test", config=config)
+            sequence["playback"].update({"position_before_replay": True, "entry_duration_sec": 1.0})
+            sequence["cinematic"] = {"pass_through": True, "honor_keyframe_holds": honor_holds}
+            sequence["poses"] = []
+            for index, (value, hold) in enumerate(((0.0, 0.37), (20.0, 0.43), (40.0, 0.51)), 1):
+                joints = {joint: 0.0 for joint in JOINT_ORDER}
+                joints["j11"] = value
+                sequence["poses"].append(
+                    {"index": index, "duration_sec": 1.0, "hold_sec": hold, "joint_targets_deg": joints}
+                )
+            return sequence
+
+        composed = RecordingSleepPlayer(StreamController(), config)
+        self.assertTrue(composed.play(make_sequence(True)))
+        for hold in (0.37, 0.43, 0.51):
+            self.assertIn(hold, composed.sleep_calls)
+
+        legacy = RecordingSleepPlayer(StreamController(), config)
+        self.assertTrue(legacy.play(make_sequence(False)))
+        for hold in (0.37, 0.43, 0.51):
+            self.assertNotIn(hold, legacy.sleep_calls)
 
 
 if __name__ == "__main__":

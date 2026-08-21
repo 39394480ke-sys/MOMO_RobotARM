@@ -1,0 +1,434 @@
+- generic [ref=e1]:
+  - generic [ref=e2]:
+    - banner [ref=e3]:
+      - generic [ref=e4]:
+        - generic [ref=e5]: A
+        - generic [ref=e6]:
+          - heading "机械臂 Web 控制台" [level=1] [ref=e7]
+          - paragraph [ref=e8]: "API: http://127.0.0.1:18110"
+      - generic [ref=e9]:
+        - generic [ref=e10]: 模式 dry_run
+        - generic [ref=e11]: 未连接
+        - generic [ref=e12]: WS 在线
+        - button "急停" [ref=e13] [cursor=pointer]
+    - generic [ref=e14]:
+      - navigation "主导航" [ref=e15]:
+        - button "快速控制" [ref=e16] [cursor=pointer]
+        - button "姿态" [ref=e17] [cursor=pointer]
+        - button "动作" [ref=e18] [cursor=pointer]
+        - button "社区广场" [ref=e19] [cursor=pointer]
+        - button "视觉跟随" [ref=e20] [cursor=pointer]
+        - button "AI 对话" [ref=e21] [cursor=pointer]
+        - button "主体锁定运镜" [ref=e22] [cursor=pointer]
+        - button "运动学" [ref=e23] [cursor=pointer]
+        - button "标定" [ref=e24] [cursor=pointer]
+        - button "设置" [ref=e25] [cursor=pointer]
+        - button "日志" [ref=e26] [cursor=pointer]
+      - main [ref=e27]:
+        - generic [ref=e114]:
+          - generic [ref=e115]:
+            - generic [ref=e116]:
+              - generic [ref=e117]: 本地节点在线
+              - heading "MOMO 开源社区" [level=2] [ref=e119]
+              - paragraph [ref=e120]: 为同型号 V2 机械臂准备的拍摄动作与构图姿态。
+            - button "发布资产" [ref=e121] [cursor=pointer]
+          - generic "社区统计" [ref=e122]:
+            - generic [ref=e123]:
+              - strong [ref=e124]: "24"
+              - generic [ref=e125]: 精选资产
+            - generic [ref=e126]:
+              - strong [ref=e127]: "10"
+              - generic [ref=e128]: 创作者
+            - generic [ref=e129]:
+              - strong [ref=e130]: "5964"
+              - generic [ref=e131]: 累计复用
+            - generic [ref=e132]:
+              - strong [ref=e133]: "0"
+              - generic [ref=e134]: 我的收藏
+          - generic [ref=e135]:
+            - generic [ref=e136]:
+              - generic [ref=e137]: 搜索社区
+              - searchbox "搜索社区" [ref=e138]
+            - generic "资产类型" [ref=e139]:
+              - button "全部" [ref=e140] [cursor=pointer]
+              - button "动作" [ref=e141] [cursor=pointer]
+              - button "姿态" [ref=e142] [cursor=pointer]
+            - combobox "分类" [ref=e143]:
+              - option "全部分类" [selected]
+              - option "美妆"
+              - option "食品饮品"
+              - option "电商产品"
+              - option "人物拍摄"
+              - option "创意运镜"
+            - combobox "排序" [ref=e144]:
+              - option "热门优先" [selected]
+              - option "最新发布"
+            - generic [ref=e145]:
+              - checkbox "只看收藏" [ref=e146]
+              - generic [ref=e147]: 只看收藏
+          - generic [ref=e148]:
+            - article [ref=e149] [cursor=pointer]:
+              - generic [ref=e150]:
+                - img "俯视下降揭示封面" [ref=e151]
+                - generic [ref=e152]: 动作
+                - button "收藏" [ref=e153]: ♡
+              - generic [ref=e154]:
+                - generic [ref=e155]:
+                  - generic [ref=e156]: 创意运镜
+                  - generic [ref=e157]: 5 姿态 · 6.8s
+                - heading "俯视下降揭示" [level=3] [ref=e158]
+                - paragraph [ref=e159]: 由高位俯视缓慢下降，逐步揭示主体和场景。
+                - generic [ref=e160]:
+                  - generic [ref=e161]: 食刻 Studio
+                  - generic [ref=e162]: ↓ 444 · ♥ 360
+            - article [ref=e163] [cursor=pointer]:
+              - generic [ref=e164]:
+                - img "低机位推近起点封面" [ref=e165]
+                - generic [ref=e166]: 姿态
+                - button "收藏" [ref=e167]: ♡
+              - generic [ref=e168]:
+                - generic [ref=e169]:
+                  - generic [ref=e170]: 创意运镜
+                  - generic [ref=e171]: V2 · 6 关节
+                - heading "低机位推近起点" [level=3] [ref=e172]
+                - paragraph [ref=e173]: 低机位推近镜头的安全起始姿态。
+                - generic [ref=e174]:
+                  - generic [ref=e175]: 产品镜头社
+                  - generic [ref=e176]: ↓ 427 · ♥ 347
+            - article [ref=e177] [cursor=pointer]:
+              - generic [ref=e178]:
+                - img "桌面 180 度环绕封面" [ref=e179]
+                - generic [ref=e180]: 动作
+                - button "收藏" [ref=e181]: ♡
+              - generic [ref=e182]:
+                - generic [ref=e183]:
+                  - generic [ref=e184]: 创意运镜
+                  - generic [ref=e185]: 5 姿态 · 6.8s
+                - heading "桌面 180 度环绕" [level=3] [ref=e186]
+                - paragraph [ref=e187]: 适合小型主体的半圆环绕轨迹，起止点稳定。
+                - generic [ref=e188]:
+                  - generic [ref=e189]: 一格影像
+                  - generic [ref=e190]: ↓ 410 · ♥ 334
+            - article [ref=e191] [cursor=pointer]:
+              - generic [ref=e192]:
+                - img "轨道左至右平移封面" [ref=e193]
+                - generic [ref=e194]: 动作
+                - button "收藏" [ref=e195]: ♡
+              - generic [ref=e196]:
+                - generic [ref=e197]:
+                  - generic [ref=e198]: 创意运镜
+                  - generic [ref=e199]: 4 姿态 · 5.3s
+                - heading "轨道左至右平移" [level=3] [ref=e200]
+                - paragraph [ref=e201]: 通用匀速轨道平移，可用于片头、转场和空间建立。
+                - generic [ref=e202]:
+                  - generic [ref=e203]: 光场研究所
+                  - generic [ref=e204]: ↓ 393 · ♥ 321
+            - article [ref=e205] [cursor=pointer]:
+              - generic [ref=e206]:
+                - img "人物出场跟随封面" [ref=e207]
+                - generic [ref=e208]: 动作
+                - button "收藏" [ref=e209]: ♡
+              - generic [ref=e210]:
+                - generic [ref=e211]:
+                  - generic [ref=e212]: 人物拍摄
+                  - generic [ref=e213]: 5 姿态 · 6.8s
+                - heading "人物出场跟随" [level=3] [ref=e214]
+                - paragraph [ref=e215]: 人物从画外进入时完成短距离横移与回中。
+                - generic [ref=e216]:
+                  - generic [ref=e217]: MOMO 精选
+                  - generic [ref=e218]: ↓ 376 · ♥ 308
+            - article [ref=e219] [cursor=pointer]:
+              - generic [ref=e220]:
+                - img "桌面讲解跟拍封面" [ref=e221]
+                - generic [ref=e222]: 动作
+                - button "收藏" [ref=e223]: ♡
+              - generic [ref=e224]:
+                - generic [ref=e225]:
+                  - generic [ref=e226]: 人物拍摄
+                  - generic [ref=e227]: 4 姿态 · 5.3s
+                - heading "桌面讲解跟拍" [level=3] [ref=e228]
+                - paragraph [ref=e229]: 在人物与桌面产品之间平滑切换焦点位置。
+                - generic [ref=e230]:
+                  - generic [ref=e231]: 台前幕后
+                  - generic [ref=e232]: ↓ 359 · ♥ 295
+            - article [ref=e233] [cursor=pointer]:
+              - generic [ref=e234]:
+                - img "人脸自然视角封面" [ref=e235]
+                - generic [ref=e236]: 姿态
+                - button "收藏" [ref=e237]: ♡
+              - generic [ref=e238]:
+                - generic [ref=e239]:
+                  - generic [ref=e240]: 人物拍摄
+                  - generic [ref=e241]: V2 · 6 关节
+                - heading "人脸自然视角" [level=3] [ref=e242]
+                - paragraph [ref=e243]: 接近眼平的自然人像机位，适合短视频口播。
+                - generic [ref=e244]:
+                  - generic [ref=e245]: 小满视觉
+                  - generic [ref=e246]: ↓ 342 · ♥ 282
+            - article [ref=e247] [cursor=pointer]:
+              - generic [ref=e248]:
+                - img "半身采访机位封面" [ref=e249]
+                - generic [ref=e250]: 姿态
+                - button "收藏" [ref=e251]: ♡
+              - generic [ref=e252]:
+                - generic [ref=e253]:
+                  - generic [ref=e254]: 人物拍摄
+                  - generic [ref=e255]: V2 · 6 关节
+                - heading "半身采访机位" [level=3] [ref=e256]
+                - paragraph [ref=e257]: 保留眼神方向与头顶空间的半身采访构图。
+                - generic [ref=e258]:
+                  - generic [ref=e259]: 北岸片场
+                  - generic [ref=e260]: ↓ 325 · ♥ 269
+            - article [ref=e261] [cursor=pointer]:
+              - generic [ref=e262]:
+                - img "包装盒三段式展示封面" [ref=e263]
+                - generic [ref=e264]: 动作
+                - button "收藏" [ref=e265]: ♡
+              - generic [ref=e266]:
+                - generic [ref=e267]:
+                  - generic [ref=e268]: 电商产品
+                  - generic [ref=e269]: 5 姿态 · 6.8s
+                - heading "包装盒三段式展示" [level=3] [ref=e270]
+                - paragraph [ref=e271]: 正面、侧面和顶部三个观察角度平滑衔接。
+                - generic [ref=e272]:
+                  - generic [ref=e273]: 轨迹工坊
+                  - generic [ref=e274]: ↓ 308 · ♥ 256
+            - article [ref=e275] [cursor=pointer]:
+              - generic [ref=e276]:
+                - img "科技产品中心位封面" [ref=e277]
+                - generic [ref=e278]: 姿态
+                - button "收藏" [ref=e279]: ♡
+              - generic [ref=e280]:
+                - generic [ref=e281]:
+                  - generic [ref=e282]: 电商产品
+                  - generic [ref=e283]: V2 · 6 关节
+                - heading "科技产品中心位" [level=3] [ref=e284]
+                - paragraph [ref=e285]: 适合键盘、掌机和桌面设备的对称中心构图。
+                - generic [ref=e286]:
+                  - generic [ref=e287]: 美妆实验室
+                  - generic [ref=e288]: ↓ 291 · ♥ 243
+            - article [ref=e289] [cursor=pointer]:
+              - generic [ref=e290]:
+                - img "首饰微距姿态封面" [ref=e291]
+                - generic [ref=e292]: 姿态
+                - button "收藏" [ref=e293]: ♡
+              - generic [ref=e294]:
+                - generic [ref=e295]:
+                  - generic [ref=e296]: 电商产品
+                  - generic [ref=e297]: V2 · 6 关节
+                - heading "首饰微距姿态" [level=3] [ref=e298]
+                - paragraph [ref=e299]: 轻俯视的微距机位，避开镜头倒影。
+                - generic [ref=e300]:
+                  - generic [ref=e301]: 食刻 Studio
+                  - generic [ref=e302]: ↓ 274 · ♥ 230
+            - article [ref=e303] [cursor=pointer]:
+              - generic [ref=e304]:
+                - img "鞋款侧面扫拍封面" [ref=e305]
+                - generic [ref=e306]: 动作
+                - button "收藏" [ref=e307]: ♡
+              - generic [ref=e308]:
+                - generic [ref=e309]:
+                  - generic [ref=e310]: 电商产品
+                  - generic [ref=e311]: 4 姿态 · 5.3s
+                - heading "鞋款侧面扫拍" [level=3] [ref=e312]
+                - paragraph [ref=e313]: 沿鞋身侧面匀速平移，适合纹理与轮廓展示。
+                - generic [ref=e314]:
+                  - generic [ref=e315]: 产品镜头社
+                  - generic [ref=e316]: ↓ 257 · ♥ 217
+            - article [ref=e317] [cursor=pointer]:
+              - generic [ref=e318]:
+                - img "手表弧线运镜封面" [ref=e319]
+                - generic [ref=e320]: 动作
+                - button "收藏" [ref=e321]: ♡
+              - generic [ref=e322]:
+                - generic [ref=e323]:
+                  - generic [ref=e324]: 电商产品
+                  - generic [ref=e325]: 5 姿态 · 6.8s
+                - heading "手表弧线运镜" [level=3] [ref=e326]
+                - paragraph [ref=e327]: 围绕表盘完成短弧线，保持刻度和表冠清晰。
+                - generic [ref=e328]:
+                  - generic [ref=e329]: 一格影像
+                  - generic [ref=e330]: ↓ 240 · ♥ 204
+            - article [ref=e331] [cursor=pointer]:
+              - generic [ref=e332]:
+                - img "耳机盒开箱轨迹封面" [ref=e333]
+                - generic [ref=e334]: 动作
+                - button "收藏" [ref=e335]: ♡
+              - generic [ref=e336]:
+                - generic [ref=e337]:
+                  - generic [ref=e338]: 电商产品
+                  - generic [ref=e339]: 4 姿态 · 5.3s
+                - heading "耳机盒开箱轨迹" [level=3] [ref=e340]
+                - paragraph [ref=e341]: 从包装俯视切入产品正面，适合开箱转场。
+                - generic [ref=e342]:
+                  - generic [ref=e343]: 光场研究所
+                  - generic [ref=e344]: ↓ 223 · ♥ 191
+            - article [ref=e345] [cursor=pointer]:
+              - generic [ref=e346]:
+                - img "零食袋正面定帧封面" [ref=e347]
+                - generic [ref=e348]: 姿态
+                - button "收藏" [ref=e349]: ♡
+              - generic [ref=e350]:
+                - generic [ref=e351]:
+                  - generic [ref=e352]: 食品饮品
+                  - generic [ref=e353]: V2 · 6 关节
+                - heading "零食袋正面定帧" [level=3] [ref=e354]
+                - paragraph [ref=e355]: 包装正面不变形的电商定帧姿态。
+                - generic [ref=e356]:
+                  - generic [ref=e357]: MOMO 精选
+                  - generic [ref=e358]: ↓ 206 · ♥ 178
+            - article [ref=e359] [cursor=pointer]:
+              - generic [ref=e360]:
+                - img "气泡饮料瓶环绕封面" [ref=e361]
+                - generic [ref=e362]: 动作
+                - button "收藏" [ref=e363]: ♡
+              - generic [ref=e364]:
+                - generic [ref=e365]:
+                  - generic [ref=e366]: 食品饮品
+                  - generic [ref=e367]: 5 姿态 · 6.8s
+                - heading "气泡饮料瓶环绕" [level=3] [ref=e368]
+                - paragraph [ref=e369]: 半环绕配合轻推近，适合透明瓶身和气泡饮料。
+                - generic [ref=e370]:
+                  - generic [ref=e371]: 台前幕后
+                  - generic [ref=e372]: ↓ 189 · ♥ 165
+            - article [ref=e373] [cursor=pointer]:
+              - generic [ref=e374]:
+                - img "甜点俯拍留白封面" [ref=e375]
+                - generic [ref=e376]: 姿态
+                - button "收藏" [ref=e377]: ♡
+              - generic [ref=e378]:
+                - generic [ref=e379]:
+                  - generic [ref=e380]: 食品饮品
+                  - generic [ref=e381]: V2 · 6 关节
+                - heading "甜点俯拍留白" [level=3] [ref=e382]
+                - paragraph [ref=e383]: 为餐盘、餐具和标题文字保留均衡留白。
+                - generic [ref=e384]:
+                  - generic [ref=e385]: 小满视觉
+                  - generic [ref=e386]: ↓ 172 · ♥ 152
+            - article [ref=e387] [cursor=pointer]:
+              - generic [ref=e388]:
+                - img "汉堡层次展示封面" [ref=e389]
+                - generic [ref=e390]: 动作
+                - button "收藏" [ref=e391]: ♡
+              - generic [ref=e392]:
+                - generic [ref=e393]:
+                  - generic [ref=e394]: 食品饮品
+                  - generic [ref=e395]: 4 姿态 · 5.3s
+                - heading "汉堡层次展示" [level=3] [ref=e396]
+                - paragraph [ref=e397]: 低机位横移并微抬镜头，依次展示食材层次。
+                - generic [ref=e398]:
+                  - generic [ref=e399]: 北岸片场
+                  - generic [ref=e400]: ↓ 155 · ♥ 139
+            - article [ref=e401] [cursor=pointer]:
+              - generic [ref=e402]:
+                - img "咖啡杯侧逆光封面" [ref=e403]
+                - generic [ref=e404]: 姿态
+                - button "收藏" [ref=e405]: ♡
+              - generic [ref=e406]:
+                - generic [ref=e407]:
+                  - generic [ref=e408]: 食品饮品
+                  - generic [ref=e409]: V2 · 6 关节
+                - heading "咖啡杯侧逆光" [level=3] [ref=e410]
+                - paragraph [ref=e411]: 留出蒸汽和杯把空间的侧逆光构图。
+                - generic [ref=e412]:
+                  - generic [ref=e413]: 轨迹工坊
+                  - generic [ref=e414]: ↓ 138 · ♥ 126
+            - article [ref=e415] [cursor=pointer]:
+              - generic [ref=e416]:
+                - img "护肤瓶缓慢推近封面" [ref=e417]
+                - generic [ref=e418]: 动作
+                - button "收藏" [ref=e419]: ♡
+              - generic [ref=e420]:
+                - generic [ref=e421]:
+                  - generic [ref=e422]: 美妆
+                  - generic [ref=e423]: 4 姿态 · 5.3s
+                - heading "护肤瓶缓慢推近" [level=3] [ref=e424]
+                - paragraph [ref=e425]: 正面缓慢推近并轻微抬升，突出泵头与品牌字样。
+                - generic [ref=e426]:
+                  - generic [ref=e427]: 美妆实验室
+                  - generic [ref=e428]: ↓ 121 · ♥ 113
+            - article [ref=e429] [cursor=pointer]:
+              - generic [ref=e430]:
+                - img "眼影盘俯拍构图封面" [ref=e431]
+                - generic [ref=e432]: 姿态
+                - button "收藏" [ref=e433]: ♡
+              - generic [ref=e434]:
+                - generic [ref=e435]:
+                  - generic [ref=e436]: 美妆
+                  - generic [ref=e437]: V2 · 6 关节
+                - heading "眼影盘俯拍构图" [level=3] [ref=e438]
+                - paragraph [ref=e439]: 适合眼影盘和刷具平铺的轻俯拍机位。
+                - generic [ref=e440]:
+                  - generic [ref=e441]: 食刻 Studio
+                  - generic [ref=e442]: ↓ 104 · ♥ 100
+            - article [ref=e443] [cursor=pointer]:
+              - generic [ref=e444]:
+                - img "香水高光扫拍封面" [ref=e445]
+                - generic [ref=e446]: 动作
+                - button "收藏" [ref=e447]: ♡
+              - generic [ref=e448]:
+                - generic [ref=e449]:
+                  - generic [ref=e450]: 美妆
+                  - generic [ref=e451]: 4 姿态 · 5.3s
+                - heading "香水高光扫拍" [level=3] [ref=e452]
+                - paragraph [ref=e453]: 从瓶肩滑向标签的慢速侧向扫拍。
+                - generic [ref=e454]:
+                  - generic [ref=e455]: 产品镜头社
+                  - generic [ref=e456]: ↓ 87 · ♥ 87
+            - article [ref=e457] [cursor=pointer]:
+              - generic [ref=e458]:
+                - img "粉底液英雄位封面" [ref=e459]
+                - generic [ref=e460]: 姿态
+                - button "收藏" [ref=e461]: ♡
+              - generic [ref=e462]:
+                - generic [ref=e463]:
+                  - generic [ref=e464]: 美妆
+                  - generic [ref=e465]: V2 · 6 关节
+                - heading "粉底液英雄位" [level=3] [ref=e466]
+                - paragraph [ref=e467]: 略低机位配合瓶身正面标签，保留肩部高光空间。
+                - generic [ref=e468]:
+                  - generic [ref=e469]: 一格影像
+                  - generic [ref=e470]: ↓ 70 · ♥ 74
+            - article [ref=e471] [cursor=pointer]:
+              - generic [ref=e472]:
+                - img "口红 360 环绕封面" [ref=e473]
+                - generic [ref=e474]: 动作
+                - button "收藏" [ref=e475]: ♡
+              - generic [ref=e476]:
+                - generic [ref=e477]:
+                  - generic [ref=e478]: 美妆
+                  - generic [ref=e479]: 5 姿态 · 6.8s
+                - heading "口红 360 环绕" [level=3] [ref=e480]
+                - paragraph [ref=e481]: 围绕口红完成一圈均匀的英雄镜头，适合金属和镜面包装。
+                - generic [ref=e482]:
+                  - generic [ref=e483]: 光场研究所
+                  - generic [ref=e484]: ↓ 53 · ♥ 61
+  - dialog [ref=e485]:
+    - generic [ref=e486]:
+      - button "关闭" [active] [ref=e487] [cursor=pointer]: ×
+      - img "俯视下降揭示" [ref=e489]
+      - generic [ref=e490]:
+        - generic [ref=e491]:
+          - generic [ref=e492]: 动作
+          - generic [ref=e493]: 创意运镜
+          - generic [ref=e494]: V2 已适配
+        - heading "俯视下降揭示" [level=3] [ref=e495]
+        - paragraph [ref=e496]: 食刻 Studio @foodmoment
+        - paragraph [ref=e497]: 由高位俯视缓慢下降，逐步揭示主体和场景。
+        - generic [ref=e498]:
+          - generic [ref=e499]: 俯视
+          - generic [ref=e500]: 下降
+          - generic [ref=e501]: 揭示
+        - generic [ref=e502]:
+          - term [ref=e503]: 兼容型号
+          - definition [ref=e504]: 机械臂 V2
+          - term [ref=e505]: 轨迹
+          - definition [ref=e506]: 5 个姿态 / 6.8 秒
+          - term [ref=e507]: 关节范围
+          - definition [ref=e508]: J10 -11.0°~7.0° · J11 -23.0°~-5.0° · J12 13.0°~23.0° · J13 1.0°~11.0° · J14 -11.0°~-1.0° · J15 -23.0°~-13.0°
+          - term [ref=e509]: 社区数据
+          - definition [ref=e510]: 360 赞 · 4 评论 · 444 复用
+        - paragraph [ref=e511]: 加入本机资产库后仍需通过机械臂现有连接确认、限位和停止机制。
+        - generic [ref=e512]:
+          - button "收藏" [ref=e513] [cursor=pointer]
+          - button "加入动作库" [ref=e514] [cursor=pointer]

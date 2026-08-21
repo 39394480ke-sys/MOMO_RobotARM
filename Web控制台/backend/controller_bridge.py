@@ -1035,7 +1035,16 @@ class ControllerBridge:
             if not state_result.get("ok"):
                 return state_result
             state = state_result["data"]
-            payload = save_pose_from_state(self._get_pose_manager(), name, state, description or "Web 控制台保存的当前姿态")
+            from 动作工具_common import active_robot_variant
+
+            variant = active_robot_variant(self._get_action_library().config)
+            payload = save_pose_from_state(
+                self._get_pose_manager(),
+                name,
+                state,
+                description or "Web 控制台保存的当前姿态",
+                robot_variant=variant,
+            )
             self._log("info", "save_pose", f"已保存姿态：{name}", name=name)
             return bridge_ok(f"已保存姿态：{name}", {"pose": payload})
         except Exception as exc:
@@ -1081,6 +1090,19 @@ class ControllerBridge:
         except Exception as exc:
             return self._exception("姿态改名失败", exc)
 
+    def import_pose_asset(self, name: str, payload: dict[str, Any]) -> dict[str, Any]:
+        """把已验证的社区姿态写入本机库，且绝不覆盖同名姿态。"""
+
+        try:
+            manager = self._get_pose_manager()
+            if manager.获取姿态(name) is not None:
+                return bridge_fail(f"姿态名称已存在：{name}")
+            manager.保存姿态(name, payload, str(payload.get("说明") or "从 MOMO 开源社区导入"))
+            self._log("info", "import_community_pose", f"已导入社区姿态：{name}", name=name)
+            return bridge_ok(f"已加入姿态库：{name}", {"name": name})
+        except Exception as exc:
+            return self._exception("导入社区姿态失败", exc)
+
     # ------------------------------------------------------------------
     # 动作库
     # ------------------------------------------------------------------
@@ -1112,6 +1134,22 @@ class ControllerBridge:
             return bridge_ok(f"动作已改名：{old_name} → {normalized_name}", {"old_name": old_name, "new_name": normalized_name})
         except Exception as exc:
             return self._exception("动作改名失败", exc)
+
+    def import_action_asset(self, name: str, payload: dict[str, Any]) -> dict[str, Any]:
+        """把已验证的社区动作写入本机库，且绝不覆盖同名动作。"""
+
+        try:
+            library = self._get_action_library()
+            if name in library.list_actions():
+                return bridge_fail(f"动作名称已存在：{name}")
+            imported = dict(payload)
+            imported["name"] = name
+            imported["source"] = "momo_community"
+            library.save_action(name, imported)
+            self._log("info", "import_community_action", f"已导入社区动作：{name}", name=name)
+            return bridge_ok(f"已加入动作库：{name}", {"name": name})
+        except Exception as exc:
+            return self._exception("导入社区动作失败", exc)
 
     def play_action(
         self,
@@ -1522,6 +1560,14 @@ class ControllerBridge:
             real_config_path=self._resolve_config("real_config_path"),
         )
         return self.kinematics_model
+
+    def create_preview_kinematics_model(self) -> tuple[Any | None, str]:
+        """创建独立的 DIRECT PyBullet 模型，不复用当前控制器状态。"""
+
+        return load_kinematics_model(
+            self._resolve_config("kinematics_config_path"),
+            real_config_path=self._resolve_config("real_config_path"),
+        )
 
     def _current_visual_q_user(self, model: Any) -> list[float]:
         if self.controller is None:

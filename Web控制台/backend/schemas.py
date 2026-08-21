@@ -159,6 +159,43 @@ class RenameLibraryItemRequest(BaseModel):
     new_name: str = Field(..., min_length=1, max_length=64)
 
 
+class CommunityPublishRequest(BaseModel):
+    kind: Literal["action", "pose"]
+    source_name: str = Field(..., min_length=1, max_length=64)
+    title: str = Field(..., min_length=1, max_length=64)
+    category: Literal["美妆", "食品饮品", "电商产品", "人物拍摄", "创意运镜"]
+    description: str = Field("", max_length=400)
+    tags: list[str] = Field(default_factory=list, max_items=5)
+    media_id: str = ""
+
+
+class CommunityFavoriteRequest(BaseModel):
+    favorite: bool
+
+
+class CommunityImportRequest(BaseModel):
+    target_name: str | None = Field(None, max_length=64)
+
+
+class ActionComposerFrameRef(BaseModel):
+    source_kind: Literal["action", "pose"]
+    source_name: str = Field(..., min_length=1, max_length=64)
+    source_frame_index: int | None = Field(None, ge=0)
+    duration_sec: float = Field(1.5, ge=0.1, le=60.0)
+    hold_sec: float = Field(0.0, ge=0.0, le=60.0)
+    label: str = Field("", max_length=64)
+
+
+class ActionComposerPreviewRequest(BaseModel):
+    description: str = Field("", max_length=400)
+    entry_duration_sec: float = Field(2.0, ge=0.1, le=60.0)
+    frames: list[ActionComposerFrameRef] = Field(..., min_items=2, max_items=100)
+
+
+class ActionComposerSaveRequest(ActionComposerPreviewRequest):
+    name: str = Field(..., min_length=1, max_length=64)
+
+
 class GotoPoseRequest(BaseModel):
     name: str
     speed_percent: int = Field(50, ge=1, le=100)

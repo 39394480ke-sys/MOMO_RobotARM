@@ -138,4 +138,6 @@ class 姿态管理器:
             "夹爪": 状态.get("夹爪", 50),
             "说明": 说明 or 状态.get("说明", ""),
         }
+        if 状态.get("robot_variant"):
+            姿态["robot_variant"] = str(状态["robot_variant"])
         return 姿态

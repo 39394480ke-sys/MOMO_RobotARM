@@ -18,6 +18,8 @@ from .path_utils import PROJECT_ROOT, WEB_DIR, ensure_project_root_on_path
 from 控制桥接_common import api_error, api_success
 from .errors import WebAPIError
 from .schemas import (
+    ActionComposerPreviewRequest,
+    ActionComposerSaveRequest,
     ActionRecordingCaptureRequest,
     ActionRecordingStartRequest,
     AgentAskRequest,
@@ -29,6 +31,9 @@ from .schemas import (
     CinematicAnalyzeRequest,
     CinematicGenerateActionRequest,
     CinematicKeyframesRequest,
+    CommunityFavoriteRequest,
+    CommunityImportRequest,
+    CommunityPublishRequest,
     ConnectRequest,
     ContinuousJogStartRequest,
     FKRequest,
@@ -101,6 +106,11 @@ websocket_manager = WebSocketManager()
 service = WebControlService(CONFIG, BASE_DIR, websocket_manager)
 
 app = FastAPI(title=CONFIG.get("app", {}).get("title", "我的机械臂 Web 控制台"))
+
+
+@app.on_event("shutdown")
+async def shutdown_service() -> None:
+    service.close()
 
 server_cfg = CONFIG.get("server", {})
 if server_cfg.get("cors_enabled", True):
@@ -488,6 +498,79 @@ async def vision_target_reset() -> dict[str, Any]:
 async def vision_frame() -> Response:
     content, media_type = service.vision_frame()
     return Response(content=content, media_type=media_type)
+
+
+# ----------------------------------------------------------------------
+# MOMO 开源社区（本地节点）
+# ----------------------------------------------------------------------
+@app.get("/api/v1/community/items")
+async def community_items(
+    query: str = Query(default="", max_length=80),
+    kind: str = Query(default="all"),
+    category: str = Query(default="all"),
+    sort: str = Query(default="popular"),
+    favorite: bool = Query(default=False),
+) -> dict[str, Any]:
+    return api_success(service.community_items(query, kind, category, sort, favorite))
+
+
+@app.get("/api/v1/community/camera-media")
+async def community_camera_media() -> dict[str, Any]:
+    return api_success(service.community_camera_media())
+
+
+@app.get("/api/v1/community/items/{item_id}")
+async def community_detail(item_id: str) -> dict[str, Any]:
+    return api_success(service.community_detail(item_id))
+
+
+@app.post("/api/v1/community/items")
+async def community_publish(request: CommunityPublishRequest) -> dict[str, Any]:
+    return await _call(service.community_publish, request, broadcast=False)
+
+
+@app.post("/api/v1/community/items/{item_id}/favorite")
+async def community_favorite(item_id: str, request: CommunityFavoriteRequest) -> dict[str, Any]:
+    return await _call(service.community_favorite, item_id, request.favorite, broadcast=False)
+
+
+@app.post("/api/v1/community/items/{item_id}/import")
+async def community_import(item_id: str, request: CommunityImportRequest) -> dict[str, Any]:
+    return await _call(service.community_import, item_id, request, broadcast=False)
+
+
+# ----------------------------------------------------------------------
+# 动作轨迹编排
+# ----------------------------------------------------------------------
+@app.get("/api/v1/action-composer/sources")
+async def action_composer_sources() -> dict[str, Any]:
+    return api_success(service.action_composer_sources())
+
+
+@app.post("/api/v1/action-composer/preview")
+async def action_composer_preview(request: ActionComposerPreviewRequest) -> dict[str, Any]:
+    return await _call(service.action_composer_preview, request, broadcast=False)
+
+
+@app.get("/api/v1/action-composer/preview/{preview_id}/frame.jpg")
+async def action_composer_preview_frame(
+    preview_id: str,
+    t: float = Query(default=0.0, ge=0.0, le=3600.0),
+    width: int = Query(default=640, ge=320, le=960),
+    height: int = Query(default=420, ge=240, le=720),
+) -> Response:
+    content, media_type = service.action_composer_preview_frame(preview_id, t, width, height)
+    return Response(content=content, media_type=media_type, headers={"Cache-Control": "no-store"})
+
+
+@app.delete("/api/v1/action-composer/preview/{preview_id}")
+async def action_composer_delete_preview(preview_id: str) -> dict[str, Any]:
+    return api_success(service.action_composer_delete_preview(preview_id))
+
+
+@app.post("/api/v1/action-composer/save")
+async def action_composer_save(request: ActionComposerSaveRequest) -> dict[str, Any]:
+    return await _call(service.action_composer_save, request, broadcast=False)
 
 
 # ----------------------------------------------------------------------

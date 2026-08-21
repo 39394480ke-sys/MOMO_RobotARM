@@ -1,0 +1,95 @@
+- generic [ref=f2e2]:
+  - banner [ref=f2e3]:
+    - generic [ref=f2e4]:
+      - generic [ref=f2e5]: A
+      - generic [ref=f2e6]:
+        - heading "机械臂 Web 控制台" [level=1] [ref=f2e7]
+        - paragraph [ref=f2e8]: "API: http://127.0.0.1:8110"
+    - generic [ref=f2e9]:
+      - generic [ref=f2e10]: 模式 dry_run
+      - generic [ref=f2e11]: 未连接
+      - generic [ref=f2e12]: WS 在线
+      - button "急停" [ref=f2e13] [cursor=pointer]
+  - generic [ref=f2e14]:
+    - navigation "主导航" [ref=f2e15]:
+      - button "快速控制" [ref=f2e16] [cursor=pointer]
+      - button "姿态" [ref=f2e17] [cursor=pointer]
+      - button "动作" [ref=f2e18] [cursor=pointer]
+      - button "轨迹编排" [active] [ref=f2e19] [cursor=pointer]
+      - button "社区广场" [ref=f2e20] [cursor=pointer]
+      - button "视觉跟随" [ref=f2e21] [cursor=pointer]
+      - button "AI 对话" [ref=f2e22] [cursor=pointer]
+      - button "主体锁定运镜" [ref=f2e23] [cursor=pointer]
+      - button "运动学" [ref=f2e24] [cursor=pointer]
+      - button "标定" [ref=f2e25] [cursor=pointer]
+      - button "设置" [ref=f2e26] [cursor=pointer]
+      - button "日志" [ref=f2e27] [cursor=pointer]
+    - main [ref=f2e28]:
+      - generic [ref=f2e115]:
+        - generic [ref=f2e116]:
+          - generic [ref=f2e117]:
+            - heading "轨迹编排" [level=2] [ref=f2e118]
+            - paragraph [ref=f2e119]: V1 当前型号 · 仅显示兼容素材
+          - button "刷新素材" [ref=f2e120] [cursor=pointer]
+        - generic [ref=f2e121]:
+          - region "关键帧素材" [ref=f2e122]:
+            - generic [ref=f2e123]:
+              - heading "关键帧素材" [level=3] [ref=f2e124]
+              - generic [ref=f2e125]: 2 个动作
+            - generic [ref=f2e126]:
+              - generic "素材类型" [ref=f2e127]:
+                - button "动作帧" [ref=f2e128] [cursor=pointer]
+                - button "姿态库" [ref=f2e129] [cursor=pointer]
+              - searchbox "搜索关键帧素材" [ref=f2e130]
+            - generic [ref=f2e131]:
+              - group [ref=f2e132]:
+                - generic "动作演示 2 帧 全部加入" [ref=f2e133] [cursor=pointer]:
+                  - generic [ref=f2e134]:
+                    - strong [ref=f2e135]: 动作演示
+                    - generic [ref=f2e136]: 2 帧
+                  - button "全部加入" [ref=f2e137]
+              - group [ref=f2e138]:
+                - generic "环绕平移 2 帧 全部加入" [ref=f2e139] [cursor=pointer]:
+                  - generic [ref=f2e140]:
+                    - strong [ref=f2e141]: 环绕平移
+                    - generic [ref=f2e142]: 2 帧
+                  - button "全部加入" [ref=f2e143]
+          - region "轨迹仿真预览" [ref=f2e144]:
+            - generic [ref=f2e145]:
+              - heading "仿真预览" [level=3] [ref=f2e146]
+              - generic [ref=f2e147]: 未生成
+            - generic [ref=f2e148]: 选择至少两个关键帧
+            - generic [ref=f2e150]:
+              - button "生成预览" [disabled] [ref=f2e151]
+              - button "播放" [disabled] [ref=f2e152]
+              - button "暂停" [disabled] [ref=f2e153]
+              - generic [ref=f2e154]:
+                - checkbox "循环" [ref=f2e155]
+                - generic [ref=f2e156]: 循环
+            - generic [ref=f2e157]:
+              - slider "仿真预览时间轴" [disabled] [ref=f2e158]: "0"
+              - status [ref=f2e159]: 0.0 / 0.0s
+            - alert [ref=f2e160]
+        - region "关键帧时间线" [ref=f2e161]:
+          - generic [ref=f2e162]:
+            - generic [ref=f2e163]:
+              - heading "关键帧时间线" [level=3] [ref=f2e164]
+              - generic [ref=f2e165]: 0 帧
+            - button "清空" [disabled] [ref=f2e166]
+          - generic [ref=f2e168]: 从素材库加入关键帧后，在这里调整顺序和节奏。
+        - region "保存编排动作" [ref=f2e169]:
+          - generic [ref=f2e170]:
+            - generic [ref=f2e171]: 新动作名称
+            - textbox "新动作名称" [ref=f2e172]:
+              - /placeholder: 例如：口红往返环绕
+          - generic [ref=f2e173]:
+            - generic [ref=f2e174]: 说明
+            - textbox "说明" [ref=f2e175]:
+              - /placeholder: 适用主体或构图说明
+          - generic [ref=f2e176]:
+            - generic [ref=f2e177]: 前往起点
+            - generic [ref=f2e178]:
+              - spinbutton "前往起点 s" [ref=f2e179]: "2.0"
+              - generic [ref=f2e180]: s
+          - button "保存为新动作" [disabled] [ref=f2e181]
+          - alert [ref=f2e182]

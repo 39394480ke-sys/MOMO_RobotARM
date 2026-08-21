@@ -987,8 +987,16 @@ def build_pose_payload_from_state(state: Mapping[str, Any], default_gripper: flo
     }
 
 
-def save_pose_from_state(manager: Any, name: str, state: Mapping[str, Any], description: str) -> dict[str, Any]:
+def save_pose_from_state(
+    manager: Any,
+    name: str,
+    state: Mapping[str, Any],
+    description: str,
+    robot_variant: str | None = None,
+) -> dict[str, Any]:
     payload = build_pose_payload_from_state(state)
+    if robot_variant:
+        payload["robot_variant"] = str(robot_variant)
     manager.保存姿态(name, payload, description)
     return payload
 

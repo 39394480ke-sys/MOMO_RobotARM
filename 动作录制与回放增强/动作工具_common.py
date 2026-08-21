@@ -271,10 +271,11 @@ def estimate_sequence_duration(
     real_min_duration = max(0.0, float(playback.get("real_mode_min_duration_sec", 0.0)))
     speed_limits = playback.get("joint_speed_limits", {})
     speed_limits = speed_limits if isinstance(speed_limits, Mapping) else {}
+    position_before_replay = stored_playback.get("position_before_replay") is True
 
     total = 0.0
     previous_targets: dict[str, float] | None = None
-    for pose in poses:
+    for pose_index, pose in enumerate(poses):
         if not isinstance(pose, Mapping):
             continue
         configured_duration = float(pose.get("duration_sec", 0.0))
@@ -283,6 +284,10 @@ def estimate_sequence_duration(
             pose.get("replay_joint_targets_deg") or pose.get("joint_targets_deg"),
             sequence.get("joint_order", JOINT_ORDER),
         )
+        if pose_index == 0 and position_before_replay:
+            total += max(0.0, float(pose.get("hold_sec", default_hold)))
+            previous_targets = {joint: float(value) for joint, value in targets.items()}
+            continue
         if previous_targets is not None:
             for joint, target in targets.items():
                 limit = float(speed_limits.get(joint, DEFAULT_JOINT_SPEED_LIMITS.get(joint, 45.0)))
@@ -316,6 +321,9 @@ def summarize_sequence_payload(
         "创建时间": sequence.get("created_at") if isinstance(sequence, Mapping) else None,
         "总时长": round(total, 3),
         "时长说明": "预计回放时长，不含前往首帧",
+        "前往首帧时长": sequence.get("playback", {}).get("entry_duration_sec")
+        if isinstance(sequence.get("playback"), Mapping)
+        else None,
         "是否包含 raw": any(pose.get("raw_present_position") for pose in poses if isinstance(pose, Mapping)),
         "是否包含 tcp_pose": any(pose.get("tcp_pose") for pose in poses if isinstance(pose, Mapping)),
         "是否包含 gripper": any((pose.get("gripper") or {}).get("available") for pose in poses if isinstance(pose, Mapping)),

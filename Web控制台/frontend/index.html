@@ -3,8 +3,9 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" href="data:," />
     <title>机械臂 Web 控制台</title>
-    <link rel="stylesheet" href="/static/styles.css?v=20260716-continuous-follow-j10-mm-ai-confirm-mobile-joint-hold-agent-layout-recording-unnamed-two-frame-guard-20260812-action-camera-recording-camera-hub-vision-v3-20260814-library-item-rename" />
+    <link rel="stylesheet" href="/static/styles.css?v=20260716-continuous-follow-j10-mm-ai-confirm-mobile-joint-hold-agent-layout-recording-unnamed-two-frame-guard-20260812-action-camera-recording-camera-hub-vision-v3-20260814-library-item-rename-20260815-community-market-text-only-20260817-action-keyframe-composer" />
   </head>
   <body>
     <div id="app">
@@ -30,6 +31,8 @@
           <button class="nav-item active" data-page="quick">快速控制</button>
           <button class="nav-item" data-page="poses">姿态</button>
           <button class="nav-item" data-page="actions">动作</button>
+          <button class="nav-item" data-page="composer">轨迹编排</button>
+          <button class="nav-item community-nav" data-page="community">社区广场</button>
           <button class="nav-item" data-page="follow">视觉跟随</button>
           <button class="nav-item" data-page="agent">AI 对话</button>
           <button class="nav-item" data-page="cinematic">主体锁定运镜</button>
@@ -187,6 +190,104 @@
               <pre id="actionDetailResult" class="result-box action-detail-json"></pre>
             </section>
             <div id="actionsList" class="list-grid"></div>
+          </section>
+
+          <section id="pageComposer" class="page composer-page">
+            <div class="section-head composer-title-row">
+              <div>
+                <h2>轨迹编排</h2>
+                <p id="composerVariantLabel" class="composer-variant-label">正在读取当前机械臂型号</p>
+              </div>
+              <button id="composerRefreshSources" type="button">刷新素材</button>
+            </div>
+
+            <div class="composer-workspace">
+              <section class="composer-source-panel" aria-label="关键帧素材">
+                <div class="composer-panel-head">
+                  <h3>关键帧素材</h3>
+                  <span id="composerSourceCount" class="composer-count">0</span>
+                </div>
+                <div class="composer-source-tools">
+                  <div id="composerSourceTabs" class="segmented" aria-label="素材类型">
+                    <button class="active" type="button" data-composer-source-kind="action">动作帧</button>
+                    <button type="button" data-composer-source-kind="pose">姿态库</button>
+                  </div>
+                  <input id="composerSourceSearch" type="search" placeholder="搜索素材" aria-label="搜索关键帧素材" />
+                </div>
+                <div id="composerSourceList" class="composer-source-list"></div>
+              </section>
+
+              <section class="composer-preview-panel" aria-label="轨迹仿真预览">
+                <div class="composer-panel-head">
+                  <h3>仿真预览</h3>
+                  <span id="composerPreviewState" class="composer-preview-state">未生成</span>
+                </div>
+                <div class="composer-preview-stage">
+                  <img id="composerPreviewImage" alt="机械臂轨迹仿真预览" />
+                  <div id="composerPreviewEmpty" class="composer-preview-empty">选择至少两个关键帧</div>
+                </div>
+                <div class="composer-preview-controls">
+                  <button id="composerBuildPreview" class="primary" type="button" disabled>生成预览</button>
+                  <button id="composerPlayPreview" type="button" disabled>播放</button>
+                  <button id="composerPausePreview" type="button" disabled>暂停</button>
+                  <label class="check-inline"><input id="composerLoopPreview" type="checkbox" /><span>循环</span></label>
+                </div>
+                <div class="composer-scrubber-row">
+                  <input id="composerPreviewScrubber" type="range" min="0" max="1" step="0.01" value="0" disabled aria-label="仿真预览时间轴" />
+                  <output id="composerPreviewTime">0.0 / 0.0s</output>
+                </div>
+                <p id="composerPreviewError" class="composer-inline-error" role="alert"></p>
+              </section>
+            </div>
+
+            <section class="composer-timeline-section" aria-label="关键帧时间线">
+              <div class="composer-panel-head">
+                <div><h3>关键帧时间线</h3><span id="composerTimelineSummary">0 帧</span></div>
+                <button id="composerClearTimeline" type="button" disabled>清空</button>
+              </div>
+              <div id="composerTimeline" class="composer-timeline"></div>
+              <div id="composerTimelineEmpty" class="composer-timeline-empty">从素材库加入关键帧后，在这里调整顺序和节奏。</div>
+            </section>
+
+            <section class="composer-save-band" aria-label="保存编排动作">
+              <label class="field"><span>新动作名称</span><input id="composerActionName" maxlength="64" placeholder="例如：口红往返环绕" /></label>
+              <label class="field composer-description-field"><span>说明</span><input id="composerDescription" maxlength="400" placeholder="适用主体或构图说明" /></label>
+              <label class="field composer-entry-field"><span>前往起点</span><span class="composer-number-input"><input id="composerEntryDuration" type="number" min="0.1" max="60" step="0.1" value="2.0" /><b>s</b></span></label>
+              <button id="composerSaveAction" class="primary" type="button" disabled>保存为新动作</button>
+              <p id="composerSaveError" class="composer-inline-error" role="alert"></p>
+            </section>
+          </section>
+
+          <section id="pageCommunity" class="page community-page">
+            <div class="community-masthead">
+              <div>
+                <div class="community-kicker"><span class="node-dot"></span>本地节点在线</div>
+                <h2>MOMO 开源社区</h2>
+                <p>为同型号 V2 机械臂准备的拍摄动作与构图姿态。</p>
+              </div>
+              <button id="communityPublishBtn" class="primary">发布资产</button>
+            </div>
+            <div class="community-stats" aria-label="社区统计">
+              <div><strong id="communityAssetCount">24</strong><span>精选资产</span></div>
+              <div><strong id="communityCreatorCount">10</strong><span>创作者</span></div>
+              <div><strong id="communityReuseCount">--</strong><span>累计复用</span></div>
+              <div><strong id="communityFavoriteCount">0</strong><span>我的收藏</span></div>
+            </div>
+            <div class="community-toolbar">
+              <label class="community-search"><span class="sr-only">搜索社区</span><input id="communitySearch" type="search" placeholder="搜索口红、食品、轨道运镜…" /></label>
+              <div class="segmented" id="communityKindFilter" aria-label="资产类型">
+                <button class="active" data-community-kind="all">全部</button>
+                <button data-community-kind="action">动作</button>
+                <button data-community-kind="pose">姿态</button>
+              </div>
+              <select id="communityCategory" aria-label="分类">
+                <option value="all">全部分类</option><option>美妆</option><option>食品饮品</option><option>电商产品</option><option>人物拍摄</option><option>创意运镜</option>
+              </select>
+              <select id="communitySort" aria-label="排序"><option value="popular">热门优先</option><option value="latest">最新发布</option></select>
+              <label class="check-inline community-favorite-filter"><input id="communityFavoritesOnly" type="checkbox" /><span>只看收藏</span></label>
+            </div>
+            <div id="communityGrid" class="community-grid" aria-live="polite"></div>
+            <div id="communityEmpty" class="community-empty hidden">没有找到匹配的资产。</div>
           </section>
 
           <section id="pageFollow" class="page">
@@ -718,12 +819,60 @@
         </div>
         <div class="action-video-dialog-actions">
           <button id="actionVideoClose" type="button">关闭</button>
+          <button id="actionVideoShare" class="primary" type="button">分享到社区</button>
           <a id="actionVideoOpen" class="dialog-primary-link" target="_blank" rel="noreferrer">在 Camera Hub 查看</a>
         </div>
       </div>
     </dialog>
 
+    <dialog id="communityDetailDialog" class="community-dialog">
+      <div class="community-detail-shell">
+        <button id="communityDetailClose" class="dialog-close" type="button" aria-label="关闭">×</button>
+        <div class="community-detail-copy">
+          <div id="communityDetailMeta" class="community-detail-meta"></div>
+          <h3 id="communityDetailTitle"></h3>
+          <p id="communityDetailAuthor" class="community-author"></p>
+          <p id="communityDetailDescription"></p>
+          <div id="communityDetailTags" class="tag-row"></div>
+          <dl id="communityDetailSpecs" class="community-specs"></dl>
+          <p id="communityDetailSafety" class="community-safety"></p>
+          <div class="community-dialog-actions">
+            <button id="communityDetailFavorite" type="button">收藏</button>
+            <button id="communityDetailImport" class="primary" type="button">加入资产库</button>
+          </div>
+        </div>
+      </div>
+    </dialog>
+
+    <dialog id="communityPublishDialog" class="community-dialog community-form-dialog">
+      <form id="communityPublishForm">
+        <div class="dialog-title-row"><div><span class="community-kicker">本地发布</span><h3>分享到 MOMO 开源社区</h3></div><button id="communityPublishClose" class="dialog-close" type="button" aria-label="关闭">×</button></div>
+        <div class="input-grid two">
+          <label class="field"><span>资产类型</span><select id="communityPublishKind"><option value="action">动作</option><option value="pose">姿态</option></select></label>
+          <label class="field"><span>来源资产</span><select id="communityPublishSource" required></select></label>
+        </div>
+        <label class="field"><span>社区标题</span><input id="communityPublishTitle" maxlength="64" required /></label>
+        <label class="field"><span>分类</span><select id="communityPublishCategory"><option>美妆</option><option>食品饮品</option><option>电商产品</option><option>人物拍摄</option><option>创意运镜</option></select></label>
+        <label class="field"><span>创作说明</span><textarea id="communityPublishDescription" maxlength="400" rows="3" placeholder="适用主体、构图思路与使用建议"></textarea></label>
+        <label class="field"><span>标签</span><input id="communityPublishTags" placeholder="用逗号分隔，最多 5 个" /></label>
+        <label class="field"><span>Camera Hub 素材（可选）</span><select id="communityPublishMedia"><option value="">不关联素材</option></select></label>
+        <p id="communityPublishMediaStatus" class="inline-status"></p>
+        <p id="communityPublishError" class="library-rename-error" role="alert"></p>
+        <div class="community-dialog-actions"><button id="communityPublishCancel" type="button">取消</button><button id="communityPublishSubmit" class="primary" type="submit">发布到本地节点</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="communityImportDialog" class="community-dialog community-import-dialog">
+      <form id="communityImportForm">
+        <h3>换个名称再加入</h3>
+        <p>本机资产库已有同名内容，社区不会覆盖它。</p>
+        <label class="field"><span>新名称</span><input id="communityImportName" maxlength="64" required /></label>
+        <p id="communityImportError" class="library-rename-error" role="alert"></p>
+        <div class="community-dialog-actions"><button id="communityImportCancel" type="button">取消</button><button class="primary" type="submit">确认加入</button></div>
+      </form>
+    </dialog>
+
     <script src="/static/audio-recorder.js?v=20260724-web-cloud-stt"></script>
-    <script src="/static/app.js?v=20260716-continuous-follow-j10-mm-lan-retry-20260813-subject-lock-playback-speed-20260814-library-item-rename-gripper-silent"></script>
+    <script src="/static/app.js?v=20260716-continuous-follow-j10-mm-ai-confirm-mobile-joint-hold-agent-layout-recording-unnamed-two-frame-guard-lan-retry-20260813-subject-lock-playback-speed-20260814-library-item-rename-gripper-silent-20260815-community-market-text-only-20260817-action-keyframe-composer"></script>
   </body>
 </html>

@@ -1,0 +1,151 @@
+- generic [ref=e2]:
+  - banner [ref=e3]:
+    - generic [ref=e4]:
+      - generic [ref=e5]: A
+      - generic [ref=e6]:
+        - heading "机械臂 Web 控制台" [level=1] [ref=e7]
+        - paragraph [ref=e8]: "API: http://127.0.0.1:8110"
+    - generic [ref=e9]:
+      - generic [ref=e10]: 模式 dry_run
+      - generic [ref=e11]: 未连接
+      - generic [ref=e12]: WS 在线
+      - button "急停" [ref=e13] [cursor=pointer]
+  - generic [ref=e14]:
+    - navigation "主导航" [ref=e15]:
+      - button "快速控制" [ref=e16] [cursor=pointer]
+      - button "姿态" [ref=e17] [cursor=pointer]
+      - button "动作" [ref=e18] [cursor=pointer]
+      - button "轨迹编排" [ref=e19] [cursor=pointer]
+      - button "社区广场" [ref=e20] [cursor=pointer]
+      - button "视觉跟随" [ref=e21] [cursor=pointer]
+      - button "AI 对话" [ref=e22] [cursor=pointer]
+      - button "主体锁定运镜" [ref=e23] [cursor=pointer]
+      - button "运动学" [ref=e24] [cursor=pointer]
+      - button "标定" [ref=e25] [cursor=pointer]
+      - button "设置" [ref=e26] [cursor=pointer]
+      - button "日志" [ref=e27] [cursor=pointer]
+    - main [ref=e28]:
+      - generic [ref=e115]:
+        - generic [ref=e116]:
+          - generic [ref=e117]:
+            - heading "轨迹编排" [level=2] [ref=e118]
+            - paragraph [ref=e119]: V1 当前型号 · 仅显示兼容素材
+          - button "刷新素材" [ref=e120] [cursor=pointer]
+        - generic [ref=e121]:
+          - region "关键帧素材" [ref=e122]:
+            - generic [ref=e123]:
+              - heading "关键帧素材" [level=3] [ref=e124]
+              - generic [ref=e125]: 2 个动作
+            - generic [ref=e126]:
+              - generic "素材类型" [ref=e127]:
+                - button "动作帧" [ref=e128] [cursor=pointer]
+                - button "姿态库" [ref=e129] [cursor=pointer]
+              - searchbox "搜索关键帧素材" [ref=e130]
+            - generic [ref=e131]:
+              - group [ref=e132]:
+                - generic "动作演示 2 帧 全部加入" [ref=e133] [cursor=pointer]:
+                  - generic [ref=e134]:
+                    - strong [ref=e135]: 动作演示
+                    - generic [ref=e136]: 2 帧
+                  - button "全部加入" [ref=e137]
+                - generic [ref=e183]:
+                  - generic [ref=e184]:
+                    - generic [ref=e185]:
+                      - strong [ref=e186]: pose_1
+                      - generic [ref=e187]: J10 -19.5mm · J11 -31.0° · J12 18.2° · J13 -18.0° · J14 -28.9° · J15 0.3°
+                    - button "加入" [ref=e188] [cursor=pointer]
+                  - generic [ref=e189]:
+                    - generic [ref=e190]:
+                      - strong [ref=e191]: pose_2
+                      - generic [ref=e192]: J10 -6.9mm · J11 22.1° · J12 18.2° · J13 -18.0° · J14 -28.9° · J15 -0.3°
+                    - button "加入" [active] [ref=e193] [cursor=pointer]
+              - group [ref=e138]:
+                - generic "环绕平移 2 帧 全部加入" [ref=e139] [cursor=pointer]:
+                  - generic [ref=e140]:
+                    - strong [ref=e141]: 环绕平移
+                    - generic [ref=e142]: 2 帧
+                  - button "全部加入" [ref=e143]
+          - region "轨迹仿真预览" [ref=e144]:
+            - generic [ref=e145]:
+              - heading "仿真预览" [level=3] [ref=e146]
+              - generic [ref=e147]: 待生成
+            - generic [ref=e148]: 点击生成预览
+            - generic [ref=e150]:
+              - button "生成预览" [ref=e151] [cursor=pointer]
+              - button "播放" [disabled] [ref=e152]
+              - button "暂停" [disabled] [ref=e153]
+              - generic [ref=e154]:
+                - checkbox "循环" [ref=e155]
+                - generic [ref=e156]: 循环
+            - generic [ref=e157]:
+              - slider "仿真预览时间轴" [disabled] [ref=e158]: "0"
+              - status [ref=e159]: 0.0 / 0.0s
+            - alert [ref=e160]
+        - region "关键帧时间线" [ref=e161]:
+          - generic [ref=e162]:
+            - generic [ref=e163]:
+              - heading "关键帧时间线" [level=3] [ref=e164]
+              - generic [ref=e165]: 2 帧 · 配置时长 2.6s
+            - button "清空" [ref=e166] [cursor=pointer]
+          - generic [ref=e167]:
+            - article [ref=e214]:
+              - generic [ref=e215]:
+                - generic [ref=e216]: ⋮⋮
+                - generic [ref=e217]: "01"
+                - generic [ref=e218]: 动作帧
+              - heading "pose_1" [level=4] [ref=e219]
+              - paragraph [ref=e220]: "动作演示 · #1"
+              - generic [ref=e221]: J10 -19.5mm · J11 -31.0° · J12 18.2° · J13 -18.0° · J14 -28.9° · J15 0.3°
+              - generic [ref=e222]:
+                - generic [ref=e223]: 轨迹起点
+                - generic [ref=e224]:
+                  - generic [ref=e225]: 停留
+                  - generic [ref=e226]:
+                    - spinbutton "停留 s" [ref=e227]: "0.3"
+                    - generic [ref=e228]: s
+              - generic [ref=e229]:
+                - button "上移第 1 帧" [disabled] [ref=e230]: ↑
+                - button "下移第 1 帧" [ref=e231] [cursor=pointer]: ↓
+                - button "复制第 1 帧" [ref=e232] [cursor=pointer]: ⧉
+                - button "删除第 1 帧" [ref=e233] [cursor=pointer]: ×
+            - article [ref=e234]:
+              - generic [ref=e235]:
+                - generic [ref=e236]: ⋮⋮
+                - generic [ref=e237]: "02"
+                - generic [ref=e238]: 动作帧
+              - heading "pose_2" [level=4] [ref=e239]
+              - paragraph [ref=e240]: "动作演示 · #2"
+              - generic [ref=e241]: J10 -6.9mm · J11 22.1° · J12 18.2° · J13 -18.0° · J14 -28.9° · J15 -0.3°
+              - generic [ref=e242]:
+                - generic [ref=e243]:
+                  - generic [ref=e244]: 从上一帧
+                  - generic [ref=e245]:
+                    - spinbutton "从上一帧 s" [ref=e246]: "2.0"
+                    - generic [ref=e247]: s
+                - generic [ref=e248]:
+                  - generic [ref=e249]: 停留
+                  - generic [ref=e250]:
+                    - spinbutton "停留 s" [ref=e251]: "0.3"
+                    - generic [ref=e252]: s
+              - generic [ref=e253]:
+                - button "上移第 2 帧" [ref=e254] [cursor=pointer]: ↑
+                - button "下移第 2 帧" [disabled] [ref=e255]: ↓
+                - button "复制第 2 帧" [ref=e256] [cursor=pointer]: ⧉
+                - button "删除第 2 帧" [ref=e257] [cursor=pointer]: ×
+          - generic [ref=e168]: 从素材库加入关键帧后，在这里调整顺序和节奏。
+        - region "保存编排动作" [ref=e169]:
+          - generic [ref=e170]:
+            - generic [ref=e171]: 新动作名称
+            - textbox "新动作名称" [ref=e172]:
+              - /placeholder: 例如：口红往返环绕
+          - generic [ref=e173]:
+            - generic [ref=e174]: 说明
+            - textbox "说明" [ref=e175]:
+              - /placeholder: 适用主体或构图说明
+          - generic [ref=e176]:
+            - generic [ref=e177]: 前往起点
+            - generic [ref=e178]:
+              - spinbutton "前往起点 s" [ref=e179]: "2.0"
+              - generic [ref=e180]: s
+          - button "保存为新动作" [ref=e181] [cursor=pointer]
+          - alert [ref=e182]

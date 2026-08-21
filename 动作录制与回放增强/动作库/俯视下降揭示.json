@@ -1,0 +1,133 @@
+{
+  "schema_version": "arm_replay_sequence_v1",
+  "robot_variant": "V2",
+  "name": "俯视下降揭示",
+  "description": "MOMO 开源社区 V2 精选动作。",
+  "created_at": "2026-08-01 10:00:00",
+  "source": "momo_community",
+  "joint_order": [
+    "j10",
+    "j11",
+    "j12",
+    "j13",
+    "j14",
+    "j15"
+  ],
+  "pose_count": 5,
+  "playback": {
+    "default_duration_sec": 1.5,
+    "default_interval_sec": 0.25
+  },
+  "poses": [
+    {
+      "index": 1,
+      "name": "pose_1",
+      "duration_sec": 0.0,
+      "hold_sec": 0.25,
+      "joint_targets_deg": {
+        "j10": -11.0,
+        "j11": -23.0,
+        "j12": 13.0,
+        "j13": 1.0,
+        "j14": -11.0,
+        "j15": -23.0
+      },
+      "replay_joint_targets_deg": {
+        "j10": -11.0,
+        "j11": -23.0,
+        "j12": 13.0,
+        "j13": 1.0,
+        "j14": -11.0,
+        "j15": -23.0
+      }
+    },
+    {
+      "index": 2,
+      "name": "pose_2",
+      "duration_sec": 1.5,
+      "hold_sec": 0.25,
+      "joint_targets_deg": {
+        "j10": -6.5,
+        "j11": -18.5,
+        "j12": 15.5,
+        "j13": 3.5,
+        "j14": -8.5,
+        "j15": -20.5
+      },
+      "replay_joint_targets_deg": {
+        "j10": -6.5,
+        "j11": -18.5,
+        "j12": 15.5,
+        "j13": 3.5,
+        "j14": -8.5,
+        "j15": -20.5
+      }
+    },
+    {
+      "index": 3,
+      "name": "pose_3",
+      "duration_sec": 1.25,
+      "hold_sec": 0.25,
+      "joint_targets_deg": {
+        "j10": -2.0,
+        "j11": -14.0,
+        "j12": 18.0,
+        "j13": 6.0,
+        "j14": -6.0,
+        "j15": -18.0
+      },
+      "replay_joint_targets_deg": {
+        "j10": -2.0,
+        "j11": -14.0,
+        "j12": 18.0,
+        "j13": 6.0,
+        "j14": -6.0,
+        "j15": -18.0
+      }
+    },
+    {
+      "index": 4,
+      "name": "pose_4",
+      "duration_sec": 1.5,
+      "hold_sec": 0.25,
+      "joint_targets_deg": {
+        "j10": 2.5,
+        "j11": -9.5,
+        "j12": 20.5,
+        "j13": 8.5,
+        "j14": -3.5,
+        "j15": -15.5
+      },
+      "replay_joint_targets_deg": {
+        "j10": 2.5,
+        "j11": -9.5,
+        "j12": 20.5,
+        "j13": 8.5,
+        "j14": -3.5,
+        "j15": -15.5
+      }
+    },
+    {
+      "index": 5,
+      "name": "pose_5",
+      "duration_sec": 1.25,
+      "hold_sec": 0.25,
+      "joint_targets_deg": {
+        "j10": 7.0,
+        "j11": -5.0,
+        "j12": 23.0,
+        "j13": 11.0,
+        "j14": -1.0,
+        "j15": -13.0
+      },
+      "replay_joint_targets_deg": {
+        "j10": 7.0,
+        "j11": -5.0,
+        "j12": 23.0,
+        "j13": 11.0,
+        "j14": -1.0,
+        "j15": -13.0
+      }
+    }
+  ]
+}

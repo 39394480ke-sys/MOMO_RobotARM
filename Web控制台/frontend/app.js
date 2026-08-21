@@ -53,6 +53,27 @@ const state = {
   batchDiagnostics: null,
   modeSelectDirty: false,
   libraryRenameTarget: null,
+  localActions: [],
+  localPoses: [],
+  community: { items: [], stats: {}, kind: "all", selected: null, importTarget: null, publishPreset: null },
+  lastActionVideo: null,
+  composer: {
+    sourceKind: "action",
+    sources: { robot_variant: "", actions: [], poses: [], skipped: [] },
+    frames: [],
+    previewId: "",
+    previewDuration: 0,
+    previewSegments: [],
+    previewTime: 0,
+    previewPlaying: false,
+    previewLoop: false,
+    previewAnimation: null,
+    previewStartedAt: 0,
+    previewRenderPending: false,
+    previewQueuedTime: null,
+    previewObjectUrl: "",
+    dragIndex: null,
+  },
 };
 
 document.addEventListener("DOMContentLoaded", init);
@@ -99,6 +120,65 @@ function bindEvents() {
   $("#cancelRecordingBtn").addEventListener("click", cancelActionRecording);
   $("#recordingFrameWarningClose").addEventListener("click", () => $("#recordingFrameWarningDialog").close());
   $("#actionVideoClose").addEventListener("click", () => $("#actionVideoDialog").close());
+  $("#actionVideoShare").addEventListener("click", () => {
+    const video = state.lastActionVideo;
+    $("#actionVideoDialog").close();
+    openCommunityPublish("action", video?.action_name || "", video?.media_id || "");
+  });
+  $("#communityPublishBtn").addEventListener("click", () => openCommunityPublish());
+  $("#communityPublishClose").addEventListener("click", closeCommunityPublish);
+  $("#communityPublishCancel").addEventListener("click", closeCommunityPublish);
+  $("#communityPublishForm").addEventListener("submit", submitCommunityPublish);
+  $("#communityPublishKind").addEventListener("change", () => fillCommunityPublishSources());
+  $("#communityPublishSource").addEventListener("change", () => {
+    const title = $("#communityPublishTitle");
+    if (!title.value || title.value === $("#communityPublishSource").dataset.previousSource) title.value = $("#communityPublishSource").value;
+    $("#communityPublishSource").dataset.previousSource = $("#communityPublishSource").value;
+  });
+  $("#communityDetailClose").addEventListener("click", () => $("#communityDetailDialog").close());
+  $("#communityDetailFavorite").addEventListener("click", toggleCommunityDetailFavorite);
+  $("#communityDetailImport").addEventListener("click", () => importCommunityItem(state.community.selected?.id));
+  $("#communityImportCancel").addEventListener("click", () => $("#communityImportDialog").close());
+  $("#communityImportForm").addEventListener("submit", submitCommunityImportRename);
+  $("#communitySearch").addEventListener("input", debounce(loadCommunity, 220));
+  $("#communityCategory").addEventListener("change", loadCommunity);
+  $("#communitySort").addEventListener("change", loadCommunity);
+  $("#communityFavoritesOnly").addEventListener("change", loadCommunity);
+  $("#communityKindFilter").addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-community-kind]");
+    if (!button) return;
+    state.community.kind = button.dataset.communityKind;
+    $$("#communityKindFilter button").forEach((node) => node.classList.toggle("active", node === button));
+    loadCommunity();
+  });
+  $("#composerRefreshSources").addEventListener("click", loadComposerSources);
+  $("#composerSourceTabs").addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-composer-source-kind]");
+    if (!button) return;
+    state.composer.sourceKind = button.dataset.composerSourceKind;
+    $$("#composerSourceTabs button").forEach((item) => item.classList.toggle("active", item === button));
+    renderComposerSources();
+  });
+  $("#composerSourceSearch").addEventListener("input", renderComposerSources);
+  $("#composerSourceList").addEventListener("click", handleComposerSourceClick);
+  $("#composerTimeline").addEventListener("click", handleComposerTimelineClick);
+  $("#composerTimeline").addEventListener("input", handleComposerTimelineInput);
+  $("#composerTimeline").addEventListener("dragstart", handleComposerDragStart);
+  $("#composerTimeline").addEventListener("dragover", handleComposerDragOver);
+  $("#composerTimeline").addEventListener("dragleave", handleComposerDragLeave);
+  $("#composerTimeline").addEventListener("drop", handleComposerDrop);
+  $("#composerTimeline").addEventListener("dragend", clearComposerDragState);
+  $("#composerClearTimeline").addEventListener("click", () => resetComposerDraft());
+  $("#composerBuildPreview").addEventListener("click", buildComposerPreview);
+  $("#composerPlayPreview").addEventListener("click", playComposerPreview);
+  $("#composerPausePreview").addEventListener("click", pauseComposerPreview);
+  $("#composerLoopPreview").addEventListener("change", () => {
+    state.composer.previewLoop = $("#composerLoopPreview").checked;
+  });
+  $("#composerPreviewScrubber").addEventListener("input", scrubComposerPreview);
+  $("#composerEntryDuration").addEventListener("input", invalidateComposerPreview);
+  $("#composerDescription").addEventListener("input", invalidateComposerPreview);
+  $("#composerSaveAction").addEventListener("click", saveComposedAction);
   $("#libraryRenameCancel").addEventListener("click", closeLibraryRenameDialog);
   $("#libraryRenameForm").addEventListener("submit", submitLibraryRename);
   $("#refreshFollowBtn").addEventListener("click", refreshFollowPageStatus);
@@ -282,7 +362,8 @@ async function refreshState() {
 async function loadPoses() {
   try {
     const data = await getJson("/api/v1/poses");
-    renderPoses(data.poses || []);
+    state.localPoses = data.poses || [];
+    renderPoses(state.localPoses);
   } catch (error) {
     showError(error);
   }
@@ -291,7 +372,8 @@ async function loadPoses() {
 async function loadActions() {
   try {
     const data = await getJson("/api/v1/actions");
-    renderActions(data.actions || []);
+    state.localActions = data.actions || [];
+    renderActions(state.localActions);
     await loadRecordingStatus();
   } catch (error) {
     showError(error);
@@ -927,6 +1009,7 @@ function handleActionVideoState(video) {
   if (finishedAt && Date.now() / 1000 - finishedAt > 60) return;
   if (state.lastActionVideoDialogId === video.media_id) return;
   state.lastActionVideoDialogId = video.media_id;
+  state.lastActionVideo = { ...video };
   const duration = Number(video.duration_sec);
   const durationText = Number.isFinite(duration) ? `，时长 ${duration.toFixed(1)} 秒` : "";
   $("#actionVideoSummary").textContent = `${video.action_name || "动作"} 的录像已保存${durationText}。`;
@@ -942,6 +1025,602 @@ function cameraHubUrl(path = "/") {
   const normalizedPath = String(path || "/").startsWith("/") ? path : `/${path}`;
   return `${protocol}//${host}:${port}${normalizedPath}`;
 }
+
+async function loadCommunity() {
+  try {
+    const params = new URLSearchParams({
+      query: $("#communitySearch")?.value || "",
+      kind: state.community.kind,
+      category: $("#communityCategory")?.value || "all",
+      sort: $("#communitySort")?.value || "popular",
+      favorite: $("#communityFavoritesOnly")?.checked ? "true" : "false",
+    });
+    const data = await getJson(`/api/v1/community/items?${params}`);
+    state.community.items = data.items || [];
+    state.community.stats = data.stats || {};
+    renderCommunity();
+  } catch (error) {
+    showError(error);
+  }
+}
+
+function renderCommunity() {
+  const stats = state.community.stats;
+  $("#communityAssetCount").textContent = stats.asset_count ?? "--";
+  $("#communityCreatorCount").textContent = stats.creator_count ?? "--";
+  $("#communityReuseCount").textContent = formatCompactNumber(stats.reuse_count);
+  $("#communityFavoriteCount").textContent = stats.favorite_count ?? 0;
+  $("#communityEmpty").classList.toggle("hidden", state.community.items.length > 0);
+  $("#communityGrid").innerHTML = state.community.items.map((item) => {
+    const summary = item.summary || {};
+    const metric = item.kind === "action" ? `${summary.pose_count || 0} 姿态 · ${formatNum(summary.duration_sec, 1)}s` : `V2 · ${summary.joint_count || 6} 关节`;
+    return `<article class="community-card" data-community-open="${escapeAttr(item.id)}">
+      <div class="community-card-body"><div class="community-card-head"><div><span class="community-type ${item.kind}">${item.kind === "action" ? "动作" : "姿态"}</span><span class="community-category">${escapeHtml(item.category)}</span></div><button class="community-heart ${item.favorite ? "active" : ""}" data-community-favorite="${escapeAttr(item.id)}" type="button" aria-label="${item.favorite ? "取消收藏" : "收藏"}">${item.favorite ? "♥" : "♡"}</button></div><h3>${escapeHtml(item.title)}</h3><p>${escapeHtml(item.description)}</p><div class="community-card-metric">${escapeHtml(metric)}</div><div class="community-card-footer"><span>${escapeHtml(item.author?.name || "MOMO 创作者")}</span><span>↓ ${formatCompactNumber(item.download_count)} · ♥ ${formatCompactNumber(item.like_count)}</span></div></div>
+    </article>`;
+  }).join("");
+  $("#communityGrid").onclick = (event) => {
+    const favorite = event.target.closest("button[data-community-favorite]");
+    if (favorite) {
+      event.stopPropagation();
+      const item = state.community.items.find((entry) => entry.id === favorite.dataset.communityFavorite);
+      setCommunityFavorite(item.id, !item.favorite);
+      return;
+    }
+    const card = event.target.closest("[data-community-open]");
+    if (card) openCommunityDetail(card.dataset.communityOpen);
+  };
+}
+
+async function openCommunityDetail(itemId) {
+  try {
+    const data = await getJson(`/api/v1/community/items/${encodeURIComponent(itemId)}`);
+    const item = data.item;
+    state.community.selected = item;
+    const mediaLabel = item.media?.id ? `<span>已关联 Camera Hub 素材</span>` : "";
+    $("#communityDetailMeta").innerHTML = `<span class="community-type ${item.kind}">${item.kind === "action" ? "动作" : "姿态"}</span><span>${escapeHtml(item.category)}</span><span class="compat-badge">V2 已适配</span>${mediaLabel}`;
+    $("#communityDetailTitle").textContent = item.title;
+    $("#communityDetailAuthor").textContent = `${item.author?.name || "MOMO Studio"}  ${item.author?.handle || ""}`;
+    $("#communityDetailDescription").textContent = item.description;
+    $("#communityDetailTags").innerHTML = (item.tags || []).map((tag) => `<span class="tag on">${escapeHtml(tag)}</span>`).join("");
+    const s = item.summary || {};
+    const detail = item.kind === "action"
+      ? `<dt>轨迹</dt><dd>${s.pose_count} 个姿态 / ${formatNum(s.duration_sec, 1)} 秒</dd><dt>关节范围</dt><dd>${formatJointRanges(s.joint_ranges_deg)}</dd>`
+      : `<dt>结构</dt><dd>${s.joint_count} 关节 V2 姿态</dd><dt>关节角度</dt><dd>${(s.joints_deg || []).map((v, i) => `J${i + 10} ${formatNum(v, 1)}°`).join(" · ")}</dd>`;
+    $("#communityDetailSpecs").innerHTML = `<dt>兼容型号</dt><dd>机械臂 V2</dd>${detail}<dt>社区数据</dt><dd>${formatCompactNumber(item.like_count)} 赞 · ${formatCompactNumber(item.comment_count)} 评论 · ${formatCompactNumber(item.download_count)} 复用</dd>`;
+    $("#communityDetailSafety").textContent = item.safety_note || "导入后仍由本机安全机制管理。";
+    $("#communityDetailFavorite").textContent = item.favorite ? "已收藏" : "收藏";
+    $("#communityDetailImport").textContent = `加入${item.kind === "action" ? "动作" : "姿态"}库`;
+    if (!$("#communityDetailDialog").open) $("#communityDetailDialog").showModal();
+  } catch (error) { showError(error); }
+}
+
+async function setCommunityFavorite(itemId, favorite) {
+  try {
+    const data = await postJson(`/api/v1/community/items/${encodeURIComponent(itemId)}/favorite`, { favorite });
+    if (state.community.selected?.id === itemId) state.community.selected = data.item;
+    await loadCommunity();
+  } catch (error) { showError(error); }
+}
+
+function toggleCommunityDetailFavorite() {
+  const item = state.community.selected;
+  if (!item) return;
+  setCommunityFavorite(item.id, !item.favorite).then(() => openCommunityDetail(item.id));
+}
+
+async function importCommunityItem(itemId, targetName = null) {
+  if (!itemId) return;
+  try {
+    const data = await postJson(`/api/v1/community/items/${encodeURIComponent(itemId)}/import`, { target_name: targetName });
+    log("info", data.message);
+    if (data.kind === "action") await loadActions(); else await loadPoses();
+    $("#communityDetailDialog").close();
+    $("#communityImportDialog").close();
+    await loadCommunity();
+  } catch (error) {
+    if (error.code === "COMMUNITY_NAME_CONFLICT") {
+      const item = state.community.selected || state.community.importTarget;
+      state.community.importTarget = item;
+      $("#communityImportName").value = `${targetName || item?.title || "社区资产"} 副本`;
+      $("#communityImportError").textContent = "";
+      if (!$("#communityImportDialog").open) $("#communityImportDialog").showModal();
+      return;
+    }
+    showError(error);
+  }
+}
+
+function submitCommunityImportRename(event) {
+  event.preventDefault();
+  importCommunityItem(state.community.importTarget?.id, $("#communityImportName").value.trim());
+}
+
+async function openCommunityPublish(kind = "action", sourceName = "", mediaId = "") {
+  state.community.publishPreset = { kind, sourceName, mediaId };
+  $("#communityPublishKind").value = kind;
+  await Promise.allSettled([loadActions(), loadPoses()]);
+  fillCommunityPublishSources(sourceName);
+  $("#communityPublishTitle").value = sourceName || $("#communityPublishSource").value || "";
+  $("#communityPublishDescription").value = "";
+  $("#communityPublishTags").value = "";
+  $("#communityPublishError").textContent = "";
+  await loadCommunityCameraMedia(mediaId);
+  $("#communityPublishDialog").showModal();
+}
+
+function fillCommunityPublishSources(preferred = "") {
+  const kind = $("#communityPublishKind").value;
+  const items = kind === "action" ? state.localActions : state.localPoses;
+  $("#communityPublishSource").innerHTML = items.map((item) => `<option value="${escapeAttr(item.name)}">${escapeHtml(item.name)}</option>`).join("");
+  if (preferred && items.some((item) => item.name === preferred)) $("#communityPublishSource").value = preferred;
+  $("#communityPublishSource").dataset.previousSource = $("#communityPublishSource").value || "";
+  if (!$("#communityPublishTitle").value) $("#communityPublishTitle").value = $("#communityPublishSource").value || "";
+}
+
+async function loadCommunityCameraMedia(preferred = "") {
+  const select = $("#communityPublishMedia");
+  select.innerHTML = `<option value="">不关联素材</option>`;
+  try {
+    const data = await getJson("/api/v1/community/camera-media", { timeout: 4000 });
+    $("#communityPublishMediaStatus").textContent = data.available ? `已连接 Camera Hub，可选 ${data.items.length} 个素材。` : "Camera Hub 当前离线，不影响发布。";
+    (data.items || []).forEach((item) => select.insertAdjacentHTML("beforeend", `<option value="${escapeAttr(item.id)}">${["video", "recording"].includes(item.type) ? "视频" : "快照"} · ${escapeHtml(item.download_name || item.id)}</option>`));
+    if (preferred) select.value = preferred;
+  } catch (_) { $("#communityPublishMediaStatus").textContent = "Camera Hub 当前离线，不影响发布。"; }
+}
+
+function closeCommunityPublish() { $("#communityPublishDialog").close(); }
+
+async function submitCommunityPublish(event) {
+  event.preventDefault();
+  const button = $("#communityPublishSubmit");
+  button.disabled = true;
+  try {
+    const data = await postJson("/api/v1/community/items", {
+      kind: $("#communityPublishKind").value, source_name: $("#communityPublishSource").value,
+      title: $("#communityPublishTitle").value.trim(), category: $("#communityPublishCategory").value,
+      description: $("#communityPublishDescription").value.trim(),
+      tags: $("#communityPublishTags").value.split(/[，,]/).map((tag) => tag.trim()).filter(Boolean).slice(0, 5),
+      media_id: $("#communityPublishMedia").value,
+    });
+    closeCommunityPublish();
+    log("info", data.message);
+    showPage("community");
+    await loadCommunity();
+    openCommunityDetail(data.item.id);
+  } catch (error) { $("#communityPublishError").textContent = error.message; showError(error); }
+  finally { button.disabled = false; }
+}
+
+async function loadComposerSources() {
+  const list = $("#composerSourceList");
+  list.innerHTML = `<div class="composer-loading">正在读取本地资产库…</div>`;
+  try {
+    state.composer.sources = await getJson("/api/v1/action-composer/sources", { timeout: 12000 });
+    $("#composerVariantLabel").textContent = `${state.composer.sources.robot_variant || "--"} 当前型号 · 仅显示兼容素材`;
+    renderComposerSources();
+  } catch (error) {
+    list.innerHTML = `<div class="composer-loading bad-text">${escapeHtml(error.message)}</div>`;
+    showError(error);
+  }
+}
+
+function renderComposerSources() {
+  const composer = state.composer;
+  const query = $("#composerSourceSearch").value.trim().toLowerCase();
+  const list = $("#composerSourceList");
+  if (composer.sourceKind === "action") {
+    const actions = (composer.sources.actions || []).filter((item) => {
+      const haystack = `${item.name} ${(item.frames || []).map((frame) => frame.name).join(" ")}`.toLowerCase();
+      return !query || haystack.includes(query);
+    });
+    $("#composerSourceCount").textContent = `${actions.length} 个动作`;
+    list.innerHTML = actions.length ? actions.map((action) => `
+      <details class="composer-source-action">
+        <summary><span><strong>${escapeHtml(action.name)}</strong><small>${action.frame_count} 帧</small></span><button type="button" data-composer-add-action="${escapeAttr(action.name)}">全部加入</button></summary>
+        <div class="composer-source-frames">
+          ${(action.frames || []).map((frame) => `
+            <div class="composer-source-frame">
+              <div><strong>${escapeHtml(frame.name || `第 ${frame.display_index} 帧`)}</strong><small>${escapeHtml(composerJointSummary(frame.joints_deg))}</small></div>
+              <button type="button" data-composer-add-frame="${escapeAttr(action.name)}" data-frame-index="${frame.frame_index}">加入</button>
+            </div>`).join("")}
+        </div>
+      </details>`).join("") : `<div class="composer-loading">没有匹配当前型号的动作帧。</div>`;
+    return;
+  }
+
+  const poses = (composer.sources.poses || []).filter((item) => !query || `${item.name} ${item.description || ""}`.toLowerCase().includes(query));
+  $("#composerSourceCount").textContent = `${poses.length} 个姿态`;
+  list.innerHTML = poses.length ? poses.map((pose) => `
+    <article class="composer-source-pose">
+      <div><strong>${escapeHtml(pose.name)}</strong><small>${escapeHtml(pose.description || composerJointSummary(pose.joints_deg))}</small></div>
+      <button type="button" data-composer-add-pose="${escapeAttr(pose.name)}">加入</button>
+    </article>`).join("") : `<div class="composer-loading">没有匹配的姿态。</div>`;
+}
+
+function handleComposerSourceClick(event) {
+  const allButton = event.target.closest("button[data-composer-add-action]");
+  const frameButton = event.target.closest("button[data-composer-add-frame]");
+  const poseButton = event.target.closest("button[data-composer-add-pose]");
+  if (allButton) {
+    event.preventDefault();
+    const action = (state.composer.sources.actions || []).find((item) => item.name === allButton.dataset.composerAddAction);
+    (action?.frames || []).forEach((frame) => addComposerFrame("action", action.name, frame));
+    finishComposerFrameChange();
+  } else if (frameButton) {
+    const action = (state.composer.sources.actions || []).find((item) => item.name === frameButton.dataset.composerAddFrame);
+    const frame = action?.frames?.find((item) => item.frame_index === Number(frameButton.dataset.frameIndex));
+    if (action && frame) {
+      addComposerFrame("action", action.name, frame);
+      finishComposerFrameChange();
+    }
+  } else if (poseButton) {
+    const pose = (state.composer.sources.poses || []).find((item) => item.name === poseButton.dataset.composerAddPose);
+    if (pose) {
+      addComposerFrame("pose", pose.name, pose);
+      finishComposerFrameChange();
+    }
+  }
+}
+
+function addComposerFrame(kind, sourceName, source) {
+  const duration = Number(source.duration_sec);
+  const hold = Number(source.hold_sec);
+  state.composer.frames.push({
+    instanceId: composerInstanceId(),
+    source_kind: kind,
+    source_name: sourceName,
+    source_frame_index: kind === "action" ? Number(source.frame_index) : null,
+    label: source.name || sourceName,
+    duration_sec: Number.isFinite(duration) && duration > 0 ? duration : 2.0,
+    hold_sec: Number.isFinite(hold) && hold >= 0 ? hold : 0.0,
+    joints_deg: { ...(source.joints_deg || {}) },
+    legacy_variant_assumed: Boolean(source.legacy_variant_assumed),
+  });
+}
+
+function finishComposerFrameChange() {
+  invalidateComposerPreview();
+  renderComposerTimeline();
+}
+
+function renderComposerTimeline() {
+  const frames = state.composer.frames;
+  $("#composerTimelineEmpty").classList.toggle("hidden", frames.length > 0);
+  $("#composerClearTimeline").disabled = frames.length === 0;
+  $("#composerSaveAction").disabled = frames.length < 2;
+  $("#composerTimeline").innerHTML = frames.map((frame, index) => {
+    const effective = state.composer.previewSegments[index - 1]?.duration_sec;
+    const adjusted = index > 0 && Number.isFinite(effective) && effective > Number(frame.duration_sec) + 0.01;
+    return `<article class="composer-keyframe" draggable="true" data-composer-frame-index="${index}">
+      <div class="composer-keyframe-head">
+        <span class="composer-drag-handle" title="拖拽排序" aria-hidden="true">⋮⋮</span>
+        <span class="composer-keyframe-number">${String(index + 1).padStart(2, "0")}</span>
+        <span class="community-type ${frame.source_kind === "pose" ? "pose" : ""}">${frame.source_kind === "pose" ? "姿态" : "动作帧"}</span>
+      </div>
+      <h4>${escapeHtml(frame.label)}</h4>
+      <p>${escapeHtml(frame.source_name)}${frame.source_kind === "action" ? ` · #${Number(frame.source_frame_index) + 1}` : ""}</p>
+      <div class="composer-joint-strip">${escapeHtml(composerJointSummary(frame.joints_deg))}</div>
+      <div class="composer-timing-grid">
+        ${index === 0
+          ? `<div class="composer-start-marker">轨迹起点</div>`
+          : `<label class="${adjusted ? "composer-duration-adjusted" : ""}"><span>从上一帧</span><span class="composer-number-input"><input type="number" min="0.1" max="60" step="0.1" value="${formatComposerNumber(frame.duration_sec)}" data-composer-duration="${index}" /><b>s</b></span>${adjusted ? `<small>安全时长 ${formatNum(effective, 1)}s</small>` : ""}</label>`}
+        <label><span>停留</span><span class="composer-number-input"><input type="number" min="0" max="60" step="0.1" value="${formatComposerNumber(frame.hold_sec)}" data-composer-hold="${index}" /><b>s</b></span></label>
+      </div>
+      <div class="composer-keyframe-actions">
+        <button type="button" data-composer-move="up" data-index="${index}" title="上移" aria-label="上移第 ${index + 1} 帧" ${index === 0 ? "disabled" : ""}>↑</button>
+        <button type="button" data-composer-move="down" data-index="${index}" title="下移" aria-label="下移第 ${index + 1} 帧" ${index === frames.length - 1 ? "disabled" : ""}>↓</button>
+        <button type="button" data-composer-duplicate="${index}" title="复制" aria-label="复制第 ${index + 1} 帧">⧉</button>
+        <button type="button" data-composer-remove="${index}" title="删除" aria-label="删除第 ${index + 1} 帧">×</button>
+      </div>
+    </article>`;
+  }).join("");
+  updateComposerSummary();
+}
+
+function handleComposerTimelineClick(event) {
+  const move = event.target.closest("button[data-composer-move]");
+  const duplicate = event.target.closest("button[data-composer-duplicate]");
+  const remove = event.target.closest("button[data-composer-remove]");
+  if (move) {
+    const from = Number(move.dataset.index);
+    const to = move.dataset.composerMove === "up" ? from - 1 : from + 1;
+    moveComposerFrame(from, to);
+  } else if (duplicate) {
+    const index = Number(duplicate.dataset.composerDuplicate);
+    const copy = { ...state.composer.frames[index], joints_deg: { ...state.composer.frames[index].joints_deg }, instanceId: composerInstanceId() };
+    state.composer.frames.splice(index + 1, 0, copy);
+    finishComposerFrameChange();
+  } else if (remove) {
+    state.composer.frames.splice(Number(remove.dataset.composerRemove), 1);
+    finishComposerFrameChange();
+  }
+}
+
+function handleComposerTimelineInput(event) {
+  const durationIndex = event.target.dataset.composerDuration;
+  const holdIndex = event.target.dataset.composerHold;
+  const index = durationIndex ?? holdIndex;
+  if (index === undefined) return;
+  const value = Number(event.target.value);
+  if (!Number.isFinite(value)) return;
+  if (durationIndex !== undefined) state.composer.frames[Number(index)].duration_sec = value;
+  if (holdIndex !== undefined) state.composer.frames[Number(index)].hold_sec = value;
+  invalidateComposerPreview();
+  updateComposerSummary();
+}
+
+function moveComposerFrame(from, to) {
+  const frames = state.composer.frames;
+  if (from < 0 || from >= frames.length || to < 0 || to >= frames.length || from === to) return;
+  const [frame] = frames.splice(from, 1);
+  frames.splice(to, 0, frame);
+  finishComposerFrameChange();
+}
+
+function handleComposerDragStart(event) {
+  const card = event.target.closest("[data-composer-frame-index]");
+  if (!card || event.target.closest("input, button")) return event.preventDefault();
+  state.composer.dragIndex = Number(card.dataset.composerFrameIndex);
+  card.classList.add("dragging");
+  event.dataTransfer.effectAllowed = "move";
+  event.dataTransfer.setData("text/plain", String(state.composer.dragIndex));
+}
+
+function handleComposerDragOver(event) {
+  const card = event.target.closest("[data-composer-frame-index]");
+  if (!card || state.composer.dragIndex === null) return;
+  event.preventDefault();
+  card.classList.add("drag-over");
+  event.dataTransfer.dropEffect = "move";
+}
+
+function handleComposerDragLeave(event) {
+  event.target.closest("[data-composer-frame-index]")?.classList.remove("drag-over");
+}
+
+function handleComposerDrop(event) {
+  const card = event.target.closest("[data-composer-frame-index]");
+  if (!card || state.composer.dragIndex === null) return;
+  event.preventDefault();
+  const from = state.composer.dragIndex;
+  const to = Number(card.dataset.composerFrameIndex);
+  clearComposerDragState();
+  moveComposerFrame(from, to);
+}
+
+function clearComposerDragState() {
+  state.composer.dragIndex = null;
+  $$(".composer-keyframe.dragging, .composer-keyframe.drag-over").forEach((item) => item.classList.remove("dragging", "drag-over"));
+}
+
+function composerPayload(includeName = false) {
+  const payload = {
+    description: $("#composerDescription").value.trim(),
+    entry_duration_sec: Number($("#composerEntryDuration").value || 2),
+    frames: state.composer.frames.map((frame) => ({
+      source_kind: frame.source_kind,
+      source_name: frame.source_name,
+      source_frame_index: frame.source_frame_index,
+      duration_sec: Math.max(0.1, Number(frame.duration_sec || 0.1)),
+      hold_sec: Math.max(0, Number(frame.hold_sec || 0)),
+      label: frame.label,
+    })),
+  };
+  if (includeName) payload.name = $("#composerActionName").value.trim();
+  return payload;
+}
+
+async function buildComposerPreview() {
+  if (state.composer.frames.length < 2) return;
+  const button = $("#composerBuildPreview");
+  button.disabled = true;
+  $("#composerPreviewError").textContent = "";
+  $("#composerPreviewState").textContent = "生成中";
+  await deleteComposerPreviewSession();
+  try {
+    const data = await postJson("/api/v1/action-composer/preview", composerPayload(), { timeout: 20000 });
+    state.composer.previewId = data.preview_id;
+    state.composer.previewDuration = Number(data.total_duration_sec || 0);
+    state.composer.previewSegments = data.segments || [];
+    state.composer.previewTime = 0;
+    $("#composerPreviewScrubber").max = String(Math.max(0.01, state.composer.previewDuration));
+    $("#composerPreviewScrubber").value = "0";
+    $("#composerPreviewScrubber").disabled = false;
+    $("#composerPlayPreview").disabled = false;
+    $("#composerPausePreview").disabled = true;
+    $("#composerPreviewState").textContent = `${data.frame_count} 帧 · ${formatNum(data.total_duration_sec, 1)}s`;
+    renderComposerTimeline();
+    updateComposerPreviewTime();
+    await renderComposerPreviewFrame(0);
+  } catch (error) {
+    $("#composerPreviewState").textContent = "生成失败";
+    $("#composerPreviewError").textContent = error.message;
+    showError(error);
+  } finally {
+    button.disabled = state.composer.frames.length < 2;
+  }
+}
+
+function playComposerPreview() {
+  if (!state.composer.previewId || state.composer.previewPlaying) return;
+  if (state.composer.previewTime >= state.composer.previewDuration) state.composer.previewTime = 0;
+  state.composer.previewPlaying = true;
+  state.composer.previewStartedAt = performance.now() - state.composer.previewTime * 1000;
+  $("#composerPlayPreview").disabled = true;
+  $("#composerPausePreview").disabled = false;
+  state.composer.previewAnimation = requestAnimationFrame(tickComposerPreview);
+}
+
+function pauseComposerPreview() {
+  state.composer.previewPlaying = false;
+  if (state.composer.previewAnimation) cancelAnimationFrame(state.composer.previewAnimation);
+  state.composer.previewAnimation = null;
+  $("#composerPlayPreview").disabled = !state.composer.previewId;
+  $("#composerPausePreview").disabled = true;
+}
+
+function tickComposerPreview(now) {
+  if (!state.composer.previewPlaying) return;
+  let elapsed = (now - state.composer.previewStartedAt) / 1000;
+  if (elapsed >= state.composer.previewDuration) {
+    if (state.composer.previewLoop && state.composer.previewDuration > 0) {
+      elapsed %= state.composer.previewDuration;
+      state.composer.previewStartedAt = now - elapsed * 1000;
+    } else {
+      state.composer.previewTime = state.composer.previewDuration;
+      updateComposerPreviewTime();
+      renderComposerPreviewFrame(state.composer.previewTime);
+      pauseComposerPreview();
+      return;
+    }
+  }
+  state.composer.previewTime = elapsed;
+  updateComposerPreviewTime();
+  renderComposerPreviewFrame(elapsed);
+  state.composer.previewAnimation = requestAnimationFrame(tickComposerPreview);
+}
+
+function scrubComposerPreview() {
+  if (!state.composer.previewId) return;
+  pauseComposerPreview();
+  state.composer.previewTime = Number($("#composerPreviewScrubber").value || 0);
+  updateComposerPreviewTime();
+  renderComposerPreviewFrame(state.composer.previewTime);
+}
+
+async function renderComposerPreviewFrame(elapsed) {
+  if (!state.composer.previewId) return;
+  if (state.composer.previewRenderPending) {
+    state.composer.previewQueuedTime = elapsed;
+    return;
+  }
+  state.composer.previewRenderPending = true;
+  const previewId = state.composer.previewId;
+  try {
+    const params = new URLSearchParams({ t: Number(elapsed).toFixed(3), width: "640", height: "420", nonce: String(Date.now()) });
+    const response = await fetch(`/api/v1/action-composer/preview/${encodeURIComponent(previewId)}/frame.jpg?${params}`, { cache: "no-store" });
+    if (!response.ok) {
+      let message = `仿真帧请求失败：HTTP ${response.status}`;
+      try { message = (await response.json()).error?.message || message; } catch (_) {}
+      throw new ApiError("ACTION_COMPOSER_PREVIEW_FRAME_FAILED", message);
+    }
+    const blob = await response.blob();
+    if (state.composer.previewId !== previewId) return;
+    if (state.composer.previewObjectUrl) URL.revokeObjectURL(state.composer.previewObjectUrl);
+    state.composer.previewObjectUrl = URL.createObjectURL(blob);
+    $("#composerPreviewImage").src = state.composer.previewObjectUrl;
+    $("#composerPreviewImage").classList.add("ready");
+    $("#composerPreviewEmpty").classList.add("hidden");
+  } catch (error) {
+    $("#composerPreviewError").textContent = error.message;
+    pauseComposerPreview();
+  } finally {
+    state.composer.previewRenderPending = false;
+    const queued = state.composer.previewQueuedTime;
+    state.composer.previewQueuedTime = null;
+    if (queued !== null && Math.abs(Number(queued) - Number(elapsed)) > 0.02) renderComposerPreviewFrame(queued);
+  }
+}
+
+function updateComposerPreviewTime() {
+  $("#composerPreviewScrubber").value = String(state.composer.previewTime);
+  $("#composerPreviewTime").textContent = `${formatNum(state.composer.previewTime, 1)} / ${formatNum(state.composer.previewDuration, 1)}s`;
+}
+
+function invalidateComposerPreview() {
+  pauseComposerPreview();
+  deleteComposerPreviewSession();
+  if (state.composer.previewObjectUrl) URL.revokeObjectURL(state.composer.previewObjectUrl);
+  state.composer.previewObjectUrl = "";
+  state.composer.previewDuration = 0;
+  state.composer.previewSegments = [];
+  state.composer.previewTime = 0;
+  $("#composerPreviewState").textContent = "待生成";
+  $("#composerPreviewScrubber").value = "0";
+  $("#composerPreviewScrubber").max = "1";
+  $("#composerPreviewScrubber").disabled = true;
+  $("#composerPlayPreview").disabled = true;
+  $("#composerPausePreview").disabled = true;
+  $("#composerPreviewImage").classList.remove("ready");
+  $("#composerPreviewImage").removeAttribute("src");
+  $("#composerPreviewEmpty").classList.remove("hidden");
+  $("#composerPreviewEmpty").textContent = state.composer.frames.length >= 2 ? "点击生成预览" : "选择至少两个关键帧";
+  updateComposerPreviewTime();
+}
+
+async function deleteComposerPreviewSession() {
+  const previewId = state.composer.previewId;
+  state.composer.previewId = "";
+  if (!previewId) return;
+  try { await deleteJson(`/api/v1/action-composer/preview/${encodeURIComponent(previewId)}`, { timeout: 3000, retries: 0 }); } catch (_) {}
+}
+
+async function saveComposedAction() {
+  if (state.composer.frames.length < 2) return;
+  const errorNode = $("#composerSaveError");
+  errorNode.textContent = "";
+  errorNode.classList.remove("success");
+  const button = $("#composerSaveAction");
+  button.disabled = true;
+  try {
+    const data = await postJson("/api/v1/action-composer/save", composerPayload(true), { timeout: 15000 });
+    const message = data.message || `已保存新动作：${data.name}`;
+    log("info", message);
+    await loadActions();
+    resetComposerDraft({ keepMessage: message });
+    await loadComposerSources();
+  } catch (error) {
+    errorNode.textContent = error.message;
+    if (error.code === "ACTION_NAME_CONFLICT") $("#composerActionName").focus();
+    showError(error);
+  } finally {
+    $("#composerSaveAction").disabled = state.composer.frames.length < 2;
+  }
+}
+
+function resetComposerDraft(options = {}) {
+  pauseComposerPreview();
+  deleteComposerPreviewSession();
+  state.composer.frames = [];
+  state.composer.previewDuration = 0;
+  state.composer.previewSegments = [];
+  state.composer.previewTime = 0;
+  $("#composerActionName").value = "";
+  $("#composerDescription").value = "";
+  $("#composerEntryDuration").value = "2.0";
+  $("#composerPreviewError").textContent = "";
+  $("#composerSaveError").textContent = options.keepMessage || "";
+  $("#composerSaveError").classList.toggle("success", Boolean(options.keepMessage));
+  invalidateComposerPreview();
+  renderComposerTimeline();
+}
+
+function updateComposerSummary() {
+  const frames = state.composer.frames;
+  const requested = frames.reduce((sum, frame, index) => sum + Number(frame.hold_sec || 0) + (index ? Number(frame.duration_sec || 0) : 0), 0);
+  const duration = state.composer.previewId ? state.composer.previewDuration : requested;
+  const label = state.composer.previewId ? "安全时长" : "配置时长";
+  $("#composerTimelineSummary").textContent = `${frames.length} 帧 · ${label} ${formatNum(duration, 1)}s`;
+  $("#composerBuildPreview").disabled = frames.length < 2;
+}
+
+function composerJointSummary(joints = {}) {
+  return JOINTS.map(([key]) => `${key.toUpperCase()} ${formatNum(joints[key], 1)}${key === "j10" ? "mm" : "°"}`).join(" · ");
+}
+
+function composerInstanceId() {
+  if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+  return `frame-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function formatComposerNumber(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number.toFixed(1) : "0.0";
+}
+
+function formatCompactNumber(value) { return new Intl.NumberFormat("zh-CN", { notation: Number(value) >= 1000 ? "compact" : "standard", maximumFractionDigits: 1 }).format(Number(value || 0)); }
+function formatJointRanges(ranges = {}) { return Object.entries(ranges).map(([joint, values]) => `${joint.toUpperCase()} ${formatNum(values[0], 1)}°~${formatNum(values[1], 1)}°`).join(" · "); }
+function debounce(fn, delay) { let timer; return (...args) => { clearTimeout(timer); timer = setTimeout(() => fn(...args), delay); }; }
 
 function updateCameraHubLinks() {
   const url = cameraHubUrl("/");
@@ -2050,6 +2729,7 @@ function renderPoses(poses) {
           <div class="button-row">
             <button data-pose-detail="${escapeAttr(item.name)}">详情</button>
             <button data-pose-goto="${escapeAttr(item.name)}">前往</button>
+            <button data-pose-share="${escapeAttr(item.name)}">分享到社区</button>
             <button data-pose-rename="${escapeAttr(item.name)}">改名</button>
             <button data-pose-delete="${escapeAttr(item.name)}">删除</button>
           </div>
@@ -2060,10 +2740,12 @@ function renderPoses(poses) {
     const detailBtn = event.target.closest("button[data-pose-detail]");
     const gotoBtn = event.target.closest("button[data-pose-goto]");
     const renameBtn = event.target.closest("button[data-pose-rename]");
+    const shareBtn = event.target.closest("button[data-pose-share]");
     const delBtn = event.target.closest("button[data-pose-delete]");
     if (detailBtn) showPoseDetail(detailBtn.dataset.poseDetail);
     if (gotoBtn) gotoPose(gotoBtn.dataset.poseGoto);
     if (renameBtn) openLibraryRenameDialog("pose", renameBtn.dataset.poseRename);
+    if (shareBtn) openCommunityPublish("pose", shareBtn.dataset.poseShare);
     if (delBtn) deletePose(delBtn.dataset.poseDelete);
   };
 }
@@ -2142,6 +2824,7 @@ function renderActions(actions) {
           <div class="button-row">
             <button data-action-play="${escapeAttr(item.name)}">播放</button>
             <button data-action-detail="${escapeAttr(item.name)}">详情</button>
+            <button data-action-share="${escapeAttr(item.name)}">分享到社区</button>
             <button data-action-rename="${escapeAttr(item.name)}">改名</button>
             <button data-action-delete="${escapeAttr(item.name)}">删除</button>
           </div>
@@ -2152,10 +2835,12 @@ function renderActions(actions) {
     const playBtn = event.target.closest("button[data-action-play]");
     const detailBtn = event.target.closest("button[data-action-detail]");
     const renameBtn = event.target.closest("button[data-action-rename]");
+    const shareBtn = event.target.closest("button[data-action-share]");
     const deleteBtn = event.target.closest("button[data-action-delete]");
     if (playBtn) playAction(playBtn.dataset.actionPlay);
     if (detailBtn) showActionDetail(detailBtn.dataset.actionDetail);
     if (renameBtn) openLibraryRenameDialog("action", renameBtn.dataset.actionRename);
+    if (shareBtn) openCommunityPublish("action", shareBtn.dataset.actionShare);
     if (deleteBtn) deleteAction(deleteBtn.dataset.actionDelete);
   };
 }
@@ -2614,6 +3299,8 @@ function renderHardwareCheck() {
 }
 
 function showPage(name) {
+  const leavingComposer = name !== "composer" && $("#pageComposer")?.classList.contains("active");
+  if (leavingComposer) resetComposerDraft();
   if (name !== "cinematic") stopSubjectLockPolling();
   if (name !== "agent" && state.agentVoiceRecorder?.state === "recording") cancelAgentVoiceRecording();
   $$(".nav-item").forEach((btn) => btn.classList.toggle("active", btn.dataset.page === name));
@@ -2621,6 +3308,8 @@ function showPage(name) {
   $(`#page${capitalize(name)}`).classList.add("active");
   if (name === "poses") loadPoses();
   if (name === "actions") loadActions();
+  if (name === "composer") loadComposerSources();
+  if (name === "community") loadCommunity();
   if (name === "follow") {
     refreshFollow();
     loadFollowConfig();

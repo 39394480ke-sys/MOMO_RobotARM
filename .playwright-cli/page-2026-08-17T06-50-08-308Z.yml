@@ -1,0 +1,123 @@
+- generic [ref=f1e2]:
+  - banner [ref=f1e3]:
+    - generic [ref=f1e4]:
+      - generic [ref=f1e5]: A
+      - generic [ref=f1e6]:
+        - heading "机械臂 Web 控制台" [level=1] [ref=f1e7]
+        - paragraph [ref=f1e8]: "API: http://127.0.0.1:8110"
+    - generic [ref=f1e9]:
+      - generic [ref=f1e10]: 模式 dry_run
+      - generic [ref=f1e11]: 未连接
+      - generic [ref=f1e12]: WS 在线
+      - button "急停" [ref=f1e13] [cursor=pointer]
+  - generic [ref=f1e14]:
+    - navigation "主导航" [ref=f1e15]:
+      - button "快速控制" [ref=f1e16] [cursor=pointer]
+      - button "姿态" [ref=f1e17] [cursor=pointer]
+      - button "动作" [ref=f1e18] [cursor=pointer]
+      - button "轨迹编排" [ref=f1e19] [cursor=pointer]
+      - button "社区广场" [ref=f1e20] [cursor=pointer]
+      - button "视觉跟随" [ref=f1e21] [cursor=pointer]
+      - button "AI 对话" [ref=f1e22] [cursor=pointer]
+      - button "主体锁定运镜" [ref=f1e23] [cursor=pointer]
+      - button "运动学" [ref=f1e24] [cursor=pointer]
+      - button "标定" [ref=f1e25] [cursor=pointer]
+      - button "设置" [ref=f1e26] [cursor=pointer]
+      - button "日志" [ref=f1e27] [cursor=pointer]
+    - main [ref=f1e28]:
+      - generic [ref=f1e115]:
+        - generic [ref=f1e116]:
+          - generic [ref=f1e117]:
+            - heading "轨迹编排" [level=2] [ref=f1e118]
+            - paragraph [ref=f1e119]: V1 当前型号 · 仅显示兼容素材
+          - button "刷新素材" [ref=f1e120] [cursor=pointer]
+        - generic [ref=f1e121]:
+          - region "关键帧素材" [ref=f1e122]:
+            - generic [ref=f1e123]:
+              - heading "关键帧素材" [level=3] [ref=f1e124]
+              - generic [ref=f1e125]: 8 个姿态
+            - generic [ref=f1e126]:
+              - generic "素材类型" [ref=f1e127]:
+                - button "动作帧" [ref=f1e128] [cursor=pointer]
+                - button "姿态库" [ref=f1e129] [cursor=pointer]
+              - searchbox "搜索关键帧素材" [ref=f1e130]
+            - generic [ref=f1e131]:
+              - article [ref=f1e567]:
+                - generic [ref=f1e568]:
+                  - strong [ref=f1e569]: "-50mm环绕左"
+                  - generic [ref=f1e570]: Web 控制台保存的当前姿态
+                - button "加入" [ref=f1e571] [cursor=pointer]
+              - article [ref=f1e572]:
+                - generic [ref=f1e573]:
+                  - strong [ref=f1e574]: "-70mm平移"
+                  - generic [ref=f1e575]: Web 控制台保存的当前姿态
+                - button "加入" [ref=f1e576] [cursor=pointer]
+              - article [ref=f1e577]:
+                - generic [ref=f1e578]:
+                  - strong [ref=f1e579]: "-70环绕左"
+                  - generic [ref=f1e580]: Web 控制台保存的当前姿态
+                - button "加入" [ref=f1e581] [cursor=pointer]
+              - article [ref=f1e582]:
+                - generic [ref=f1e583]:
+                  - strong [ref=f1e584]: 50mm环绕右
+                  - generic [ref=f1e585]: Web 控制台保存的当前姿态
+                - button "加入" [ref=f1e586] [cursor=pointer]
+              - article [ref=f1e587]:
+                - generic [ref=f1e588]:
+                  - strong [ref=f1e589]: 70mm平移右
+                  - generic [ref=f1e590]: Web 控制台保存的当前姿态
+                - button "加入" [ref=f1e591] [cursor=pointer]
+              - article [ref=f1e592]:
+                - generic [ref=f1e593]:
+                  - strong [ref=f1e594]: 70环绕右
+                  - generic [ref=f1e595]: Web 控制台保存的当前姿态
+                - button "加入" [ref=f1e596] [cursor=pointer]
+              - article [ref=f1e597]:
+                - generic [ref=f1e598]:
+                  - strong [ref=f1e599]: labubu 视角
+                  - generic [ref=f1e600]: Web 控制台保存的当前姿态
+                - button "加入" [ref=f1e601] [cursor=pointer]
+              - article [ref=f1e602]:
+                - generic [ref=f1e603]:
+                  - strong [ref=f1e604]: 人脸视角
+                  - generic [ref=f1e605]: Web 控制台保存的当前姿态
+                - button "加入" [ref=f1e606] [cursor=pointer]
+          - region "轨迹仿真预览" [ref=f1e144]:
+            - generic [ref=f1e145]:
+              - heading "仿真预览" [level=3] [ref=f1e146]
+              - generic [ref=f1e147]: 待生成
+            - generic [ref=f1e148]: 选择至少两个关键帧
+            - generic [ref=f1e150]:
+              - button "生成预览" [disabled] [ref=f1e151]
+              - button "播放" [disabled] [ref=f1e152]
+              - button "暂停" [disabled] [ref=f1e153]
+              - generic [ref=f1e154]:
+                - checkbox "循环" [ref=f1e155]
+                - generic [ref=f1e156]: 循环
+            - generic [ref=f1e157]:
+              - slider "仿真预览时间轴" [disabled] [ref=f1e158]: "0"
+              - status [ref=f1e159]: 0.0 / 0.0s
+            - alert [ref=f1e160]
+        - region "关键帧时间线" [ref=f1e161]:
+          - generic [ref=f1e162]:
+            - generic [ref=f1e163]:
+              - heading "关键帧时间线" [level=3] [ref=f1e164]
+              - generic [ref=f1e165]: 0 帧 · 配置时长 0.0s
+            - button "清空" [disabled] [ref=f1e166]
+          - generic [ref=f1e168]: 从素材库加入关键帧后，在这里调整顺序和节奏。
+        - region "保存编排动作" [ref=f1e169]:
+          - generic [ref=f1e170]:
+            - generic [ref=f1e171]: 新动作名称
+            - textbox "新动作名称" [ref=f1e172]:
+              - /placeholder: 例如：口红往返环绕
+          - generic [ref=f1e173]:
+            - generic [ref=f1e174]: 说明
+            - textbox "说明" [ref=f1e175]:
+              - /placeholder: 适用主体或构图说明
+          - generic [ref=f1e176]:
+            - generic [ref=f1e177]: 前往起点
+            - generic [ref=f1e178]:
+              - spinbutton "前往起点 s" [ref=f1e179]: "2.0"
+              - generic [ref=f1e180]: s
+          - button "保存为新动作" [disabled] [ref=f1e181]
+          - alert [ref=f1e182]: 已保存新动作：编排器验收_临时_20260817

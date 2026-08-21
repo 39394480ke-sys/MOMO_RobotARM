@@ -9,7 +9,6 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from 动作工具_common import (
-    DEFAULT_JOINT_SPEED_LIMITS,
     JOINT_ORDER,
     MULTI_TURN_JOINTS,
     SCHEMA_VERSION,
@@ -27,10 +26,11 @@ from 动作工具_common import (
     state_joint_targets,
     summarize_sequence_payload,
 )
-from 控制桥接_common import bounded_catmull_rom, build_motion_progress_payload, safe_call_callback, smoothstep01
+from 控制桥接_common import build_motion_progress_payload, safe_call_callback, smoothstep01
 from 通用_io import read_json_object
 from 动作插值器_motion_interpolator import MotionInterpolator
 from 动作日志_motion_logger import MotionLogger
+from 动作轨迹采样_trajectory_sampling import effective_segment_duration, sample_bounded_cinematic
 
 
 class SequencePlayer:
@@ -128,19 +128,30 @@ class SequencePlayer:
 
         poses = list(sequence["poses"])
         cinematic_cfg = sequence.get("cinematic") if isinstance(sequence.get("cinematic"), Mapping) else {}
+        sequence_playback = sequence.get("playback") if isinstance(sequence.get("playback"), Mapping) else {}
         playback_cfg = self.config.get("playback", {})
         pass_through = bool(cinematic_cfg.get("pass_through", False))
+        honor_keyframe_holds = bool(cinematic_cfg.get("honor_keyframe_holds", False))
         continuous_default = bool(playback_cfg.get("continuous_interpolation_default", True))
         synchronized_timing = bool(playback_cfg.get("synchronized_segment_timing", True))
         continuous_playback = pass_through or (continuous_default and synchronized_timing)
         start_index = 0
         first_pose_ready_notified = False
-        position_before_replay = bool(
-            self.config.get("playback", {}).get("return_to_first_pose_before_replay", True)
+        position_override = sequence_playback.get("position_before_replay")
+        position_before_replay = (
+            bool(position_override)
+            if isinstance(position_override, bool)
+            else bool(playback_cfg.get("return_to_first_pose_before_replay", True))
         ) or on_first_pose_ready is not None
         if position_before_replay:
             first_pose = poses[0]
-            first_duration = self._duration_for_pose(first_pose, speed)
+            entry_duration = sequence_playback.get("entry_duration_sec")
+            if entry_duration is None:
+                first_duration = self._duration_for_pose(first_pose, speed)
+            else:
+                first_entry_pose = dict(first_pose)
+                first_entry_pose["duration_sec"] = float(entry_duration)
+                first_duration = self._duration_for_pose(first_entry_pose, speed)
             self.logger.log(
                 "return_to_first_pose",
                 mode=self._mode_name(),
@@ -153,7 +164,7 @@ class SequencePlayer:
             if on_first_pose_ready is not None:
                 on_first_pose_ready()
             first_pose_ready_notified = True
-            if not continuous_playback:
+            if not continuous_playback or honor_keyframe_holds:
                 self._sleep_with_controls(self._hold_duration(first_pose, sequence, speed))
             start_index = 1
 
@@ -162,7 +173,13 @@ class SequencePlayer:
 
         if continuous_playback:
             while True:
-                completed = self._play_cinematic_pass_through(poses, start_index, speed)
+                completed = self._play_cinematic_pass_through(
+                    poses,
+                    start_index,
+                    speed,
+                    honor_keyframe_holds=honor_keyframe_holds,
+                    sequence=sequence,
+                )
                 if not completed:
                     return False
                 if not loop or self.stopped:
@@ -403,7 +420,15 @@ class SequencePlayer:
                 return False
         return True
 
-    def _play_cinematic_pass_through(self, poses: list[Mapping[str, Any]], start_index: int, speed: float) -> bool:
+    def _play_cinematic_pass_through(
+        self,
+        poses: list[Mapping[str, Any]],
+        start_index: int,
+        speed: float,
+        *,
+        honor_keyframe_holds: bool = False,
+        sequence: Mapping[str, Any] | None = None,
+    ) -> bool:
         """Play cinematic keyframes as one continuous joint-space spline."""
 
         if self.stopped:
@@ -444,10 +469,6 @@ class SequencePlayer:
         frame_index = 0
         last_frame: dict[str, float] | None = None
         for segment_index, (steps, duration) in enumerate(segment_steps):
-            p0 = targets_by_waypoint[max(0, segment_index - 1)]
-            p1 = targets_by_waypoint[segment_index]
-            p2 = targets_by_waypoint[segment_index + 1]
-            p3 = targets_by_waypoint[min(len(targets_by_waypoint) - 1, segment_index + 2)]
             per_frame_sleep = max(0.0, duration / max(1, steps))
             for step in range(1, steps + 1):
                 self._wait_if_paused()
@@ -459,16 +480,7 @@ class SequencePlayer:
                 # zero at each waypoint, which looked like a short stop at every
                 # recorded keyframe.
                 t = step / max(1, steps)
-                frame = {
-                    joint: bounded_catmull_rom(
-                        float(p0.get(joint, p1[joint])),
-                        float(p1[joint]),
-                        float(p2[joint]),
-                        float(p3.get(joint, p2[joint])),
-                        t,
-                    )
-                    for joint in p2
-                }
+                frame = sample_bounded_cinematic(targets_by_waypoint, segment_index, t)
                 use_multi = None
                 if segment_index == len(segment_steps) - 1 and step == steps:
                     final_pose = waypoints[-1]
@@ -504,8 +516,11 @@ class SequencePlayer:
                     self._play_gripper(waypoints[segment_index + 1])
                 last_frame = frame
                 self._emit_progress(frame, "cinematic_pass_through", pose=waypoints[segment_index + 1], frame_index=frame_index, frame_count=frame_total)
-                if frame_index < frame_total and per_frame_sleep > 0:
+                if (frame_index < frame_total or honor_keyframe_holds) and per_frame_sleep > 0:
                     self._sleep_with_controls(per_frame_sleep)
+                if step == steps and honor_keyframe_holds:
+                    destination = waypoints[segment_index + 1]
+                    self._sleep_with_controls(self._hold_duration(destination, sequence or {}, speed))
 
         final_pose = waypoints[-1]
         final_targets = targets_by_waypoint[-1]
@@ -542,29 +557,14 @@ class SequencePlayer:
         targets: Mapping[str, float] | None = None,
     ) -> float:
         playback_cfg = self.config.get("playback", {})
-        configured_duration = float(pose.get("duration_sec", 0.0))
-        duration = configured_duration if configured_duration > 0 else float(playback_cfg.get("default_duration_sec", 1.5))
-        if bool(playback_cfg.get("auto_duration_from_distance", True)) and current is not None and targets is not None:
-            duration = max(duration, self._distance_based_duration(current, targets))
-        duration = duration / normalize_playback_speed(speed)
-        if is_real_mode_controller(self.controller):
-            duration = max(duration, float(playback_cfg.get("real_mode_min_duration_sec", 2.0)))
-        return duration
-
-    def _distance_based_duration(self, current: Mapping[str, float], targets: Mapping[str, float]) -> float:
-        speed_limits = self.config.get("playback", {}).get("joint_speed_limits", {})
-        if not isinstance(speed_limits, Mapping):
-            speed_limits = {}
-        required = 0.0
-        for joint in self.joint_order:
-            if joint not in targets:
-                continue
-            limit = float(speed_limits.get(joint, DEFAULT_JOINT_SPEED_LIMITS.get(joint, 45.0)))
-            if limit <= 0:
-                continue
-            delta = abs(float(targets[joint]) - float(current.get(joint, targets[joint])))
-            required = max(required, delta / limit)
-        return required
+        return effective_segment_duration(
+            pose,
+            playback_cfg,
+            current or {},
+            targets or {},
+            speed=normalize_playback_speed(speed),
+            enforce_real_minimum=is_real_mode_controller(self.controller),
+        )
 
     def _hold_duration(self, pose: Mapping[str, Any], sequence: Mapping[str, Any], speed: float) -> float:
         hold = pose.get("hold_sec", sequence.get("playback", {}).get("default_interval_sec", 0.3))

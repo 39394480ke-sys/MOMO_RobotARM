@@ -1,0 +1,136 @@
+{"time": "2026-08-12 20:24:30", "event": "play_start", "mode": "dry-run/仿真", "action_name": "synthetic-action", "loop": false, "speed": 1.0}
+{"time": "2026-08-12 20:24:30", "event": "play_pose", "mode": "dry-run/仿真", "action_name": "synthetic-action", "pose_index": 1, "frame_index": 1, "frame_count": 1, "targets_deg": {"j10": 0.0, "j11": 0.0, "j12": 0.0, "j13": 0.0, "j14": 0.0, "j15": 0.0}, "multi_turn_targets_continuous_raw": {}, "ok": true, "message": "True"}
+{"time": "2026-08-12 20:24:30", "event": "play_complete", "action_name": "synthetic-action"}
+{"time": "2026-08-12 20:24:30", "event": "play_start", "mode": "dry-run/仿真", "action_name": "synthetic-action", "loop": false, "speed": 1.0}
+{"time": "2026-08-12 20:24:30", "event": "play_pose", "mode": "dry-run/仿真", "action_name": "synthetic-action", "pose_index": 1, "frame_index": 1, "frame_count": 1, "targets_deg": {"j10": 0.0, "j11": 0.0, "j12": 0.0, "j13": 0.0, "j14": 0.0, "j15": 0.0}, "multi_turn_targets_continuous_raw": {}, "ok": true, "message": "True"}
+{"time": "2026-08-12 20:24:30", "event": "play_complete", "action_name": "synthetic-action"}
+{"time": "2026-08-12 20:24:30", "event": "play_start", "mode": "dry-run/仿真", "action_name": "synthetic-action", "loop": false, "speed": 1.0}
+{"time": "2026-08-12 20:24:30", "event": "play_pose", "mode": "dry-run/仿真", "action_name": "synthetic-action", "pose_index": 1, "frame_index": 1, "frame_count": 1, "targets_deg": {"j10": 0.0, "j11": 0.0, "j12": 0.0, "j13": 0.0, "j14": 0.0, "j15": 0.0}, "multi_turn_targets_continuous_raw": {}, "ok": true, "message": "True"}
+{"time": "2026-08-12 20:24:30", "event": "play_complete", "action_name": "synthetic-action"}
+{"time": "2026-08-12 20:24:30", "event": "play_start", "mode": "dry-run/仿真", "action_name": "synthetic-action", "loop": false, "speed": 1.0}
+{"time": "2026-08-12 20:24:30", "event": "play_pose", "mode": "dry-run/仿真", "action_name": "synthetic-action", "pose_index": 1, "frame_index": 1, "frame_count": 1, "targets_deg": {"j10": 0.0, "j11": 0.0, "j12": 0.0, "j13": 0.0, "j14": 0.0, "j15": 0.0}, "multi_turn_targets_continuous_raw": {}, "ok": true, "message": "True"}
+{"time": "2026-08-12 20:24:30", "event": "play_complete", "action_name": "synthetic-action"}
+{"time": "2026-08-12 20:24:30", "event": "play_start", "mode": "dry-run/仿真", "action_name": "synthetic-action", "loop": false, "speed": 1.0}
+{"time": "2026-08-12 20:24:30", "event": "play_pose", "mode": "dry-run/仿真", "action_name": "synthetic-action", "pose_index": 1, "frame_index": 1, "frame_count": 1, "targets_deg": {"j10": 0.0, "j11": 0.0, "j12": 0.0, "j13": 0.0, "j14": 0.0, "j15": 0.0}, "multi_turn_targets_continuous_raw": {}, "ok": true, "message": "移动成功。"}
+{"time": "2026-08-12 20:24:30", "event": "play_complete", "action_name": "synthetic-action"}
+{"time": "2026-08-12 20:24:30", "event": "play_start", "mode": "真实", "action_name": "synthetic-action", "loop": false, "speed": 1.0}
+{"time": "2026-08-12 20:24:30", "event": "play_pose", "mode": "真实", "action_name": "synthetic-action", "pose_index": 1, "frame_index": 1, "frame_count": 2, "targets_deg": {"j10": 0.0, "j11": 0.0, "j12": 0.0, "j13": 0.0, "j14": 0.0, "j15": 0.0}, "multi_turn_targets_continuous_raw": null, "ok": true, "message": "True"}
+{"time": "2026-08-12 20:24:31", "event": "play_pose", "mode": "真实", "action_name": "synthetic-action", "pose_index": 1, "frame_index": 2, "frame_count": 2, "targets_deg": {"j10": 0.0, "j11": 0.0, "j12": 0.0, "j13": 0.0, "j14": 0.0, "j15": 0.0}, "multi_turn_targets_continuous_raw": {}, "ok": true, "message": "True"}
+{"time": "2026-08-12 20:24:32", "event": "pose_reached", "mode": "真实", "action_name": "synthetic-action", "pose_index": 1, "errors": {"j10": 0.0, "j11": 0.0, "j12": 0.0, "j13": 0.0, "j14": 0.0, "j15": 0.0}}
+{"time": "2026-08-12 20:24:32", "event": "play_complete", "action_name": "synthetic-action"}
+{"time": "2026-08-12 20:24:32", "event": "play_start", "mode": "simulation", "action_name": "synthetic-action", "loop": false, "speed": 1.0}
+{"time": "2026-08-12 20:24:32", "event": "play_pose", "mode": "simulation", "action_name": "synthetic-action", "pose_index": 1, "frame_index": 1, "frame_count": 1, "targets_deg": {"j10": 0.0, "j11": 0.0, "j12": 0.0, "j13": 0.0, "j14": 0.0, "j15": 0.0}, "multi_turn_targets_continuous_raw": {}, "ok": true, "message": "True"}
+{"time": "2026-08-12 20:24:32", "event": "play_complete", "action_name": "synthetic-action"}
+{"time": "2026-08-13 16:41:01", "event": "play_start", "mode": "dry-run/仿真", "action_name": "synthetic-action", "loop": false, "speed": 1.0}
+{"time": "2026-08-13 16:41:01", "event": "play_pose", "mode": "dry-run/仿真", "action_name": "synthetic-action", "pose_index": 1, "frame_index": 1, "frame_count": 1, "targets_deg": {"j10": 0.0, "j11": 0.0, "j12": 0.0, "j13": 0.0, "j14": 0.0, "j15": 0.0}, "multi_turn_targets_continuous_raw": {}, "ok": true, "message": "True"}
+{"time": "2026-08-13 16:41:01", "event": "play_complete", "action_name": "synthetic-action"}
+{"time": "2026-08-13 16:41:01", "event": "play_start", "mode": "dry-run/仿真", "action_name": "synthetic-action", "loop": false, "speed": 1.0}
+{"time": "2026-08-13 16:41:01", "event": "play_pose", "mode": "dry-run/仿真", "action_name": "synthetic-action", "pose_index": 1, "frame_index": 1, "frame_count": 1, "targets_deg": {"j10": 0.0, "j11": 0.0, "j12": 0.0, "j13": 0.0, "j14": 0.0, "j15": 0.0}, "multi_turn_targets_continuous_raw": {}, "ok": true, "message": "True"}
+{"time": "2026-08-13 16:41:01", "event": "play_complete", "action_name": "synthetic-action"}
+{"time": "2026-08-13 16:41:01", "event": "play_start", "mode": "dry-run/仿真", "action_name": "synthetic-action", "loop": false, "speed": 1.0}
+{"time": "2026-08-13 16:41:01", "event": "play_pose", "mode": "dry-run/仿真", "action_name": "synthetic-action", "pose_index": 1, "frame_index": 1, "frame_count": 1, "targets_deg": {"j10": 0.0, "j11": 0.0, "j12": 0.0, "j13": 0.0, "j14": 0.0, "j15": 0.0}, "multi_turn_targets_continuous_raw": {}, "ok": true, "message": "True"}
+{"time": "2026-08-13 16:41:01", "event": "play_complete", "action_name": "synthetic-action"}
+{"time": "2026-08-13 16:41:01", "event": "play_start", "mode": "dry-run/仿真", "action_name": "synthetic-action", "loop": false, "speed": 1.0}
+{"time": "2026-08-13 16:41:01", "event": "play_pose", "mode": "dry-run/仿真", "action_name": "synthetic-action", "pose_index": 1, "frame_index": 1, "frame_count": 1, "targets_deg": {"j10": 0.0, "j11": 0.0, "j12": 0.0, "j13": 0.0, "j14": 0.0, "j15": 0.0}, "multi_turn_targets_continuous_raw": {}, "ok": true, "message": "True"}
+{"time": "2026-08-13 16:41:01", "event": "play_complete", "action_name": "synthetic-action"}
+{"time": "2026-08-13 16:41:01", "event": "play_start", "mode": "dry-run/仿真", "action_name": "synthetic-action", "loop": false, "speed": 1.0}
+{"time": "2026-08-13 16:41:01", "event": "play_pose", "mode": "dry-run/仿真", "action_name": "synthetic-action", "pose_index": 1, "frame_index": 1, "frame_count": 1, "targets_deg": {"j10": 0.0, "j11": 0.0, "j12": 0.0, "j13": 0.0, "j14": 0.0, "j15": 0.0}, "multi_turn_targets_continuous_raw": {}, "ok": true, "message": "移动成功。"}
+{"time": "2026-08-13 16:41:01", "event": "play_complete", "action_name": "synthetic-action"}
+{"time": "2026-08-13 16:41:01", "event": "play_start", "mode": "真实", "action_name": "synthetic-action", "loop": false, "speed": 1.0}
+{"time": "2026-08-13 16:41:01", "event": "play_pose", "mode": "真实", "action_name": "synthetic-action", "pose_index": 1, "frame_index": 1, "frame_count": 2, "targets_deg": {"j10": 0.0, "j11": 0.0, "j12": 0.0, "j13": 0.0, "j14": 0.0, "j15": 0.0}, "multi_turn_targets_continuous_raw": null, "ok": true, "message": "True"}
+{"time": "2026-08-13 16:41:02", "event": "play_pose", "mode": "真实", "action_name": "synthetic-action", "pose_index": 1, "frame_index": 2, "frame_count": 2, "targets_deg": {"j10": 0.0, "j11": 0.0, "j12": 0.0, "j13": 0.0, "j14": 0.0, "j15": 0.0}, "multi_turn_targets_continuous_raw": {}, "ok": true, "message": "True"}
+{"time": "2026-08-13 16:41:03", "event": "pose_reached", "mode": "真实", "action_name": "synthetic-action", "pose_index": 1, "errors": {"j10": 0.0, "j11": 0.0, "j12": 0.0, "j13": 0.0, "j14": 0.0, "j15": 0.0}}
+{"time": "2026-08-13 16:41:03", "event": "play_complete", "action_name": "synthetic-action"}
+{"time": "2026-08-13 16:41:03", "event": "play_start", "mode": "simulation", "action_name": "synthetic-action", "loop": false, "speed": 1.0}
+{"time": "2026-08-13 16:41:03", "event": "play_pose", "mode": "simulation", "action_name": "synthetic-action", "pose_index": 1, "frame_index": 1, "frame_count": 1, "targets_deg": {"j10": 0.0, "j11": 0.0, "j12": 0.0, "j13": 0.0, "j14": 0.0, "j15": 0.0}, "multi_turn_targets_continuous_raw": {}, "ok": true, "message": "True"}
+{"time": "2026-08-13 16:41:03", "event": "play_complete", "action_name": "synthetic-action"}
+{"time": "2026-08-13 16:58:31", "event": "play_start", "mode": "dry-run/仿真", "action_name": "synthetic-action", "loop": false, "speed": 1.0}
+{"time": "2026-08-13 16:58:31", "event": "play_pose", "mode": "dry-run/仿真", "action_name": "synthetic-action", "pose_index": 1, "frame_index": 1, "frame_count": 1, "targets_deg": {"j10": 0.0, "j11": 0.0, "j12": 0.0, "j13": 0.0, "j14": 0.0, "j15": 0.0}, "multi_turn_targets_continuous_raw": {}, "ok": true, "message": "True"}
+{"time": "2026-08-13 16:58:31", "event": "play_complete", "action_name": "synthetic-action"}
+{"time": "2026-08-13 16:58:31", "event": "play_start", "mode": "dry-run/仿真", "action_name": "synthetic-action", "loop": false, "speed": 1.0}
+{"time": "2026-08-13 16:58:31", "event": "play_pose", "mode": "dry-run/仿真", "action_name": "synthetic-action", "pose_index": 1, "frame_index": 1, "frame_count": 1, "targets_deg": {"j10": 0.0, "j11": 0.0, "j12": 0.0, "j13": 0.0, "j14": 0.0, "j15": 0.0}, "multi_turn_targets_continuous_raw": {}, "ok": true, "message": "True"}
+{"time": "2026-08-13 16:58:31", "event": "play_complete", "action_name": "synthetic-action"}
+{"time": "2026-08-13 16:58:31", "event": "play_start", "mode": "dry-run/仿真", "action_name": "synthetic-action", "loop": false, "speed": 1.0}
+{"time": "2026-08-13 16:58:31", "event": "play_pose", "mode": "dry-run/仿真", "action_name": "synthetic-action", "pose_index": 1, "frame_index": 1, "frame_count": 1, "targets_deg": {"j10": 0.0, "j11": 0.0, "j12": 0.0, "j13": 0.0, "j14": 0.0, "j15": 0.0}, "multi_turn_targets_continuous_raw": {}, "ok": true, "message": "True"}
+{"time": "2026-08-13 16:58:31", "event": "play_complete", "action_name": "synthetic-action"}
+{"time": "2026-08-13 16:58:31", "event": "play_start", "mode": "dry-run/仿真", "action_name": "synthetic-action", "loop": false, "speed": 1.0}
+{"time": "2026-08-13 16:58:31", "event": "play_pose", "mode": "dry-run/仿真", "action_name": "synthetic-action", "pose_index": 1, "frame_index": 1, "frame_count": 1, "targets_deg": {"j10": 0.0, "j11": 0.0, "j12": 0.0, "j13": 0.0, "j14": 0.0, "j15": 0.0}, "multi_turn_targets_continuous_raw": {}, "ok": true, "message": "True"}
+{"time": "2026-08-13 16:58:31", "event": "play_complete", "action_name": "synthetic-action"}
+{"time": "2026-08-13 16:58:31", "event": "play_start", "mode": "dry-run/仿真", "action_name": "synthetic-action", "loop": false, "speed": 1.0}
+{"time": "2026-08-13 16:58:31", "event": "play_pose", "mode": "dry-run/仿真", "action_name": "synthetic-action", "pose_index": 1, "frame_index": 1, "frame_count": 1, "targets_deg": {"j10": 0.0, "j11": 0.0, "j12": 0.0, "j13": 0.0, "j14": 0.0, "j15": 0.0}, "multi_turn_targets_continuous_raw": {}, "ok": true, "message": "移动成功。"}
+{"time": "2026-08-13 16:58:31", "event": "play_complete", "action_name": "synthetic-action"}
+{"time": "2026-08-13 16:58:31", "event": "play_start", "mode": "真实", "action_name": "synthetic-action", "loop": false, "speed": 1.0}
+{"time": "2026-08-13 16:58:31", "event": "play_pose", "mode": "真实", "action_name": "synthetic-action", "pose_index": 1, "frame_index": 1, "frame_count": 2, "targets_deg": {"j10": 0.0, "j11": 0.0, "j12": 0.0, "j13": 0.0, "j14": 0.0, "j15": 0.0}, "multi_turn_targets_continuous_raw": null, "ok": true, "message": "True"}
+{"time": "2026-08-13 16:58:32", "event": "play_pose", "mode": "真实", "action_name": "synthetic-action", "pose_index": 1, "frame_index": 2, "frame_count": 2, "targets_deg": {"j10": 0.0, "j11": 0.0, "j12": 0.0, "j13": 0.0, "j14": 0.0, "j15": 0.0}, "multi_turn_targets_continuous_raw": {}, "ok": true, "message": "True"}
+{"time": "2026-08-13 16:58:33", "event": "pose_reached", "mode": "真实", "action_name": "synthetic-action", "pose_index": 1, "errors": {"j10": 0.0, "j11": 0.0, "j12": 0.0, "j13": 0.0, "j14": 0.0, "j15": 0.0}}
+{"time": "2026-08-13 16:58:33", "event": "play_complete", "action_name": "synthetic-action"}
+{"time": "2026-08-13 16:58:33", "event": "play_start", "mode": "simulation", "action_name": "synthetic-action", "loop": false, "speed": 1.0}
+{"time": "2026-08-13 16:58:33", "event": "play_pose", "mode": "simulation", "action_name": "synthetic-action", "pose_index": 1, "frame_index": 1, "frame_count": 1, "targets_deg": {"j10": 0.0, "j11": 0.0, "j12": 0.0, "j13": 0.0, "j14": 0.0, "j15": 0.0}, "multi_turn_targets_continuous_raw": {}, "ok": true, "message": "True"}
+{"time": "2026-08-13 16:58:33", "event": "play_complete", "action_name": "synthetic-action"}
+{"time": "2026-08-14 21:27:11", "event": "play_start", "mode": "dry-run/仿真", "action_name": "synthetic-action", "loop": false, "speed": 1.0}
+{"time": "2026-08-14 21:27:11", "event": "play_pose", "mode": "dry-run/仿真", "action_name": "synthetic-action", "pose_index": 1, "frame_index": 1, "frame_count": 1, "targets_deg": {"j10": 0.0, "j11": 0.0, "j12": 0.0, "j13": 0.0, "j14": 0.0, "j15": 0.0}, "multi_turn_targets_continuous_raw": {}, "ok": true, "message": "True"}
+{"time": "2026-08-14 21:27:11", "event": "play_complete", "action_name": "synthetic-action"}
+{"time": "2026-08-14 21:27:11", "event": "play_start", "mode": "dry-run/仿真", "action_name": "synthetic-action", "loop": false, "speed": 1.0}
+{"time": "2026-08-14 21:27:11", "event": "play_pose", "mode": "dry-run/仿真", "action_name": "synthetic-action", "pose_index": 1, "frame_index": 1, "frame_count": 1, "targets_deg": {"j10": 0.0, "j11": 0.0, "j12": 0.0, "j13": 0.0, "j14": 0.0, "j15": 0.0}, "multi_turn_targets_continuous_raw": {}, "ok": true, "message": "True"}
+{"time": "2026-08-14 21:27:11", "event": "play_complete", "action_name": "synthetic-action"}
+{"time": "2026-08-14 21:27:11", "event": "play_start", "mode": "dry-run/仿真", "action_name": "synthetic-action", "loop": false, "speed": 1.0}
+{"time": "2026-08-14 21:27:11", "event": "play_pose", "mode": "dry-run/仿真", "action_name": "synthetic-action", "pose_index": 1, "frame_index": 1, "frame_count": 1, "targets_deg": {"j10": 0.0, "j11": 0.0, "j12": 0.0, "j13": 0.0, "j14": 0.0, "j15": 0.0}, "multi_turn_targets_continuous_raw": {}, "ok": true, "message": "True"}
+{"time": "2026-08-14 21:27:11", "event": "play_complete", "action_name": "synthetic-action"}
+{"time": "2026-08-14 21:27:11", "event": "play_start", "mode": "dry-run/仿真", "action_name": "synthetic-action", "loop": false, "speed": 1.0}
+{"time": "2026-08-14 21:27:11", "event": "play_pose", "mode": "dry-run/仿真", "action_name": "synthetic-action", "pose_index": 1, "frame_index": 1, "frame_count": 1, "targets_deg": {"j10": 0.0, "j11": 0.0, "j12": 0.0, "j13": 0.0, "j14": 0.0, "j15": 0.0}, "multi_turn_targets_continuous_raw": {}, "ok": true, "message": "True"}
+{"time": "2026-08-14 21:27:11", "event": "play_complete", "action_name": "synthetic-action"}
+{"time": "2026-08-14 21:27:11", "event": "play_start", "mode": "dry-run/仿真", "action_name": "synthetic-action", "loop": false, "speed": 1.0}
+{"time": "2026-08-14 21:27:11", "event": "play_pose", "mode": "dry-run/仿真", "action_name": "synthetic-action", "pose_index": 1, "frame_index": 1, "frame_count": 1, "targets_deg": {"j10": 0.0, "j11": 0.0, "j12": 0.0, "j13": 0.0, "j14": 0.0, "j15": 0.0}, "multi_turn_targets_continuous_raw": {}, "ok": true, "message": "移动成功。"}
+{"time": "2026-08-14 21:27:11", "event": "play_complete", "action_name": "synthetic-action"}
+{"time": "2026-08-14 21:27:11", "event": "play_start", "mode": "真实", "action_name": "synthetic-action", "loop": false, "speed": 1.0}
+{"time": "2026-08-14 21:27:11", "event": "play_pose", "mode": "真实", "action_name": "synthetic-action", "pose_index": 1, "frame_index": 1, "frame_count": 2, "targets_deg": {"j10": 0.0, "j11": 0.0, "j12": 0.0, "j13": 0.0, "j14": 0.0, "j15": 0.0}, "multi_turn_targets_continuous_raw": null, "ok": true, "message": "True"}
+{"time": "2026-08-14 21:27:12", "event": "play_pose", "mode": "真实", "action_name": "synthetic-action", "pose_index": 1, "frame_index": 2, "frame_count": 2, "targets_deg": {"j10": 0.0, "j11": 0.0, "j12": 0.0, "j13": 0.0, "j14": 0.0, "j15": 0.0}, "multi_turn_targets_continuous_raw": {}, "ok": true, "message": "True"}
+{"time": "2026-08-14 21:27:13", "event": "pose_reached", "mode": "真实", "action_name": "synthetic-action", "pose_index": 1, "errors": {"j10": 0.0, "j11": 0.0, "j12": 0.0, "j13": 0.0, "j14": 0.0, "j15": 0.0}}
+{"time": "2026-08-14 21:27:13", "event": "play_complete", "action_name": "synthetic-action"}
+{"time": "2026-08-14 21:27:13", "event": "play_start", "mode": "simulation", "action_name": "synthetic-action", "loop": false, "speed": 1.0}
+{"time": "2026-08-14 21:27:13", "event": "play_pose", "mode": "simulation", "action_name": "synthetic-action", "pose_index": 1, "frame_index": 1, "frame_count": 1, "targets_deg": {"j10": 0.0, "j11": 0.0, "j12": 0.0, "j13": 0.0, "j14": 0.0, "j15": 0.0}, "multi_turn_targets_continuous_raw": {}, "ok": true, "message": "True"}
+{"time": "2026-08-14 21:27:13", "event": "play_complete", "action_name": "synthetic-action"}
+{"time": "2026-08-17 14:42:48", "event": "play_start", "mode": "dry-run/仿真", "action_name": "synthetic-action", "loop": false, "speed": 1.0}
+{"time": "2026-08-17 14:42:48", "event": "play_pose", "mode": "dry-run/仿真", "action_name": "synthetic-action", "pose_index": 1, "frame_index": 1, "frame_count": 1, "targets_deg": {"j10": 0.0, "j11": 0.0, "j12": 0.0, "j13": 0.0, "j14": 0.0, "j15": 0.0}, "multi_turn_targets_continuous_raw": {}, "ok": true, "message": "True"}
+{"time": "2026-08-17 14:42:48", "event": "play_complete", "action_name": "synthetic-action"}
+{"time": "2026-08-17 14:42:48", "event": "play_start", "mode": "dry-run/仿真", "action_name": "synthetic-action", "loop": false, "speed": 1.0}
+{"time": "2026-08-17 14:42:48", "event": "play_pose", "mode": "dry-run/仿真", "action_name": "synthetic-action", "pose_index": 1, "frame_index": 1, "frame_count": 1, "targets_deg": {"j10": 0.0, "j11": 0.0, "j12": 0.0, "j13": 0.0, "j14": 0.0, "j15": 0.0}, "multi_turn_targets_continuous_raw": {}, "ok": true, "message": "True"}
+{"time": "2026-08-17 14:42:48", "event": "play_complete", "action_name": "synthetic-action"}
+{"time": "2026-08-17 14:42:48", "event": "play_start", "mode": "dry-run/仿真", "action_name": "synthetic-action", "loop": false, "speed": 1.0}
+{"time": "2026-08-17 14:42:48", "event": "play_pose", "mode": "dry-run/仿真", "action_name": "synthetic-action", "pose_index": 1, "frame_index": 1, "frame_count": 1, "targets_deg": {"j10": 0.0, "j11": 0.0, "j12": 0.0, "j13": 0.0, "j14": 0.0, "j15": 0.0}, "multi_turn_targets_continuous_raw": {}, "ok": true, "message": "True"}
+{"time": "2026-08-17 14:42:48", "event": "play_complete", "action_name": "synthetic-action"}
+{"time": "2026-08-17 14:42:48", "event": "play_start", "mode": "dry-run/仿真", "action_name": "synthetic-action", "loop": false, "speed": 1.0}
+{"time": "2026-08-17 14:42:48", "event": "play_pose", "mode": "dry-run/仿真", "action_name": "synthetic-action", "pose_index": 1, "frame_index": 1, "frame_count": 1, "targets_deg": {"j10": 0.0, "j11": 0.0, "j12": 0.0, "j13": 0.0, "j14": 0.0, "j15": 0.0}, "multi_turn_targets_continuous_raw": {}, "ok": true, "message": "True"}
+{"time": "2026-08-17 14:42:48", "event": "play_complete", "action_name": "synthetic-action"}
+{"time": "2026-08-17 14:42:48", "event": "play_start", "mode": "dry-run/仿真", "action_name": "synthetic-action", "loop": false, "speed": 1.0}
+{"time": "2026-08-17 14:42:48", "event": "play_pose", "mode": "dry-run/仿真", "action_name": "synthetic-action", "pose_index": 1, "frame_index": 1, "frame_count": 1, "targets_deg": {"j10": 0.0, "j11": 0.0, "j12": 0.0, "j13": 0.0, "j14": 0.0, "j15": 0.0}, "multi_turn_targets_continuous_raw": {}, "ok": true, "message": "移动成功。"}
+{"time": "2026-08-17 14:42:48", "event": "play_complete", "action_name": "synthetic-action"}
+{"time": "2026-08-17 14:42:48", "event": "play_start", "mode": "真实", "action_name": "synthetic-action", "loop": false, "speed": 1.0}
+{"time": "2026-08-17 14:42:48", "event": "play_pose", "mode": "真实", "action_name": "synthetic-action", "pose_index": 1, "frame_index": 1, "frame_count": 1, "targets_deg": {"j10": 0.0, "j11": 0.0, "j12": 0.0, "j13": 0.0, "j14": 0.0, "j15": 0.0}, "multi_turn_targets_continuous_raw": {}, "ok": true, "message": "True"}
+{"time": "2026-08-17 14:42:48", "event": "pose_reached", "mode": "真实", "action_name": "synthetic-action", "pose_index": 1, "errors": {"j10": 0.0, "j11": 0.0, "j12": 0.0, "j13": 0.0, "j14": 0.0, "j15": 0.0}}
+{"time": "2026-08-17 14:42:48", "event": "play_complete", "action_name": "synthetic-action"}
+{"time": "2026-08-17 14:42:48", "event": "play_start", "mode": "simulation", "action_name": "synthetic-action", "loop": false, "speed": 1.0}
+{"time": "2026-08-17 14:42:48", "event": "play_pose", "mode": "simulation", "action_name": "synthetic-action", "pose_index": 1, "frame_index": 1, "frame_count": 1, "targets_deg": {"j10": 0.0, "j11": 0.0, "j12": 0.0, "j13": 0.0, "j14": 0.0, "j15": 0.0}, "multi_turn_targets_continuous_raw": {}, "ok": true, "message": "True"}
+{"time": "2026-08-17 14:42:48", "event": "play_complete", "action_name": "synthetic-action"}
+{"time": "2026-08-17 14:52:59", "event": "play_start", "mode": "dry-run/仿真", "action_name": "synthetic-action", "loop": false, "speed": 1.0}
+{"time": "2026-08-17 14:52:59", "event": "play_pose", "mode": "dry-run/仿真", "action_name": "synthetic-action", "pose_index": 1, "frame_index": 1, "frame_count": 1, "targets_deg": {"j10": 0.0, "j11": 0.0, "j12": 0.0, "j13": 0.0, "j14": 0.0, "j15": 0.0}, "multi_turn_targets_continuous_raw": {}, "ok": true, "message": "True"}
+{"time": "2026-08-17 14:52:59", "event": "play_complete", "action_name": "synthetic-action"}
+{"time": "2026-08-17 14:52:59", "event": "play_start", "mode": "dry-run/仿真", "action_name": "synthetic-action", "loop": false, "speed": 1.0}
+{"time": "2026-08-17 14:52:59", "event": "play_pose", "mode": "dry-run/仿真", "action_name": "synthetic-action", "pose_index": 1, "frame_index": 1, "frame_count": 1, "targets_deg": {"j10": 0.0, "j11": 0.0, "j12": 0.0, "j13": 0.0, "j14": 0.0, "j15": 0.0}, "multi_turn_targets_continuous_raw": {}, "ok": true, "message": "True"}
+{"time": "2026-08-17 14:52:59", "event": "play_complete", "action_name": "synthetic-action"}
+{"time": "2026-08-17 14:52:59", "event": "play_start", "mode": "dry-run/仿真", "action_name": "synthetic-action", "loop": false, "speed": 1.0}
+{"time": "2026-08-17 14:52:59", "event": "play_pose", "mode": "dry-run/仿真", "action_name": "synthetic-action", "pose_index": 1, "frame_index": 1, "frame_count": 1, "targets_deg": {"j10": 0.0, "j11": 0.0, "j12": 0.0, "j13": 0.0, "j14": 0.0, "j15": 0.0}, "multi_turn_targets_continuous_raw": {}, "ok": true, "message": "True"}
+{"time": "2026-08-17 14:52:59", "event": "play_complete", "action_name": "synthetic-action"}
+{"time": "2026-08-17 14:52:59", "event": "play_start", "mode": "dry-run/仿真", "action_name": "synthetic-action", "loop": false, "speed": 1.0}
+{"time": "2026-08-17 14:52:59", "event": "play_pose", "mode": "dry-run/仿真", "action_name": "synthetic-action", "pose_index": 1, "frame_index": 1, "frame_count": 1, "targets_deg": {"j10": 0.0, "j11": 0.0, "j12": 0.0, "j13": 0.0, "j14": 0.0, "j15": 0.0}, "multi_turn_targets_continuous_raw": {}, "ok": true, "message": "True"}
+{"time": "2026-08-17 14:52:59", "event": "play_complete", "action_name": "synthetic-action"}
+{"time": "2026-08-17 14:52:59", "event": "play_start", "mode": "dry-run/仿真", "action_name": "synthetic-action", "loop": false, "speed": 1.0}
+{"time": "2026-08-17 14:52:59", "event": "play_pose", "mode": "dry-run/仿真", "action_name": "synthetic-action", "pose_index": 1, "frame_index": 1, "frame_count": 1, "targets_deg": {"j10": 0.0, "j11": 0.0, "j12": 0.0, "j13": 0.0, "j14": 0.0, "j15": 0.0}, "multi_turn_targets_continuous_raw": {}, "ok": true, "message": "移动成功。"}
+{"time": "2026-08-17 14:52:59", "event": "play_complete", "action_name": "synthetic-action"}
+{"time": "2026-08-17 14:52:59", "event": "play_start", "mode": "真实", "action_name": "synthetic-action", "loop": false, "speed": 1.0}
+{"time": "2026-08-17 14:52:59", "event": "play_pose", "mode": "真实", "action_name": "synthetic-action", "pose_index": 1, "frame_index": 1, "frame_count": 1, "targets_deg": {"j10": 0.0, "j11": 0.0, "j12": 0.0, "j13": 0.0, "j14": 0.0, "j15": 0.0}, "multi_turn_targets_continuous_raw": {}, "ok": true, "message": "True"}
+{"time": "2026-08-17 14:52:59", "event": "pose_reached", "mode": "真实", "action_name": "synthetic-action", "pose_index": 1, "errors": {"j10": 0.0, "j11": 0.0, "j12": 0.0, "j13": 0.0, "j14": 0.0, "j15": 0.0}}
+{"time": "2026-08-17 14:52:59", "event": "play_complete", "action_name": "synthetic-action"}
+{"time": "2026-08-17 14:52:59", "event": "play_start", "mode": "simulation", "action_name": "synthetic-action", "loop": false, "speed": 1.0}
+{"time": "2026-08-17 14:52:59", "event": "play_pose", "mode": "simulation", "action_name": "synthetic-action", "pose_index": 1, "frame_index": 1, "frame_count": 1, "targets_deg": {"j10": 0.0, "j11": 0.0, "j12": 0.0, "j13": 0.0, "j14": 0.0, "j15": 0.0}, "multi_turn_targets_continuous_raw": {}, "ok": true, "message": "True"}
+{"time": "2026-08-17 14:52:59", "event": "play_complete", "action_name": "synthetic-action"}

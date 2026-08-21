@@ -1,0 +1,115 @@
+- generic [ref=f4e2]:
+  - banner [ref=f4e3]:
+    - generic [ref=f4e4]:
+      - generic [ref=f4e5]: A
+      - generic [ref=f4e6]:
+        - heading "机械臂 Web 控制台" [level=1] [ref=f4e7]
+        - paragraph [ref=f4e8]: "API: http://127.0.0.1:8110"
+    - generic [ref=f4e9]:
+      - generic [ref=f4e10]: 模式 dry_run
+      - generic [ref=f4e11]: 未连接
+      - generic [ref=f4e12]: WS 离线
+      - button "急停" [ref=f4e13] [cursor=pointer]
+  - generic [ref=f4e14]:
+    - navigation "主导航" [ref=f4e15]:
+      - button "快速控制" [ref=f4e16] [cursor=pointer]
+      - button "姿态" [ref=f4e17] [cursor=pointer]
+      - button "动作" [ref=f4e18] [cursor=pointer]
+      - button "轨迹编排" [ref=f4e19] [cursor=pointer]
+      - button "社区广场" [ref=f4e20] [cursor=pointer]
+      - button "视觉跟随" [ref=f4e21] [cursor=pointer]
+      - button "AI 对话" [ref=f4e22] [cursor=pointer]
+      - button "主体锁定运镜" [ref=f4e23] [cursor=pointer]
+      - button "运动学" [ref=f4e24] [cursor=pointer]
+      - button "标定" [ref=f4e25] [cursor=pointer]
+      - button "设置" [ref=f4e26] [cursor=pointer]
+      - button "日志" [ref=f4e27] [cursor=pointer]
+    - main [ref=f4e28]:
+      - generic [ref=f4e29]:
+        - generic [ref=f4e30]:
+          - heading "快速控制" [level=2] [ref=f4e31]
+          - generic [ref=f4e32]:
+            - button "刷新状态" [ref=f4e33] [cursor=pointer]
+            - button "Home" [ref=f4e34] [cursor=pointer]
+            - button "急停" [ref=f4e35] [cursor=pointer]
+        - generic [ref=f4e36]:
+          - generic [ref=f4e37]:
+            - generic [ref=f4e38]:
+              - heading "J10-J15 关节" [level=3] [ref=f4e39]
+              - generic [ref=f4e40]:
+                - generic "控制模式" [ref=f4e41]:
+                  - button "步进" [ref=f4e42] [cursor=pointer]
+                  - button "连续" [ref=f4e43] [cursor=pointer]
+                - generic [ref=f4e44]:
+                  - generic [ref=f4e45]: 步长
+                  - combobox "步长" [ref=f4e46]:
+                    - option "0.5 deg/mm"
+                    - option "1 deg/mm"
+                    - option "2 deg/mm" [selected]
+                    - option "3 deg/mm"
+                    - option "5 deg/mm"
+                - generic [ref=f4e47]:
+                  - generic [ref=f4e48]: 连续速度
+                  - spinbutton "连续速度" [ref=f4e49]: "5"
+            - generic [ref=f4e50]: 连续控制：停止
+            - generic [ref=f4e51]: 未运行
+            - generic [ref=f4e52]:
+              - generic [ref=f4e53]:
+                - generic [ref=f4e54]: J10 底盘导轨
+                - button "-" [ref=f4e55] [cursor=pointer]
+                - generic [ref=f4e56]: 0.00 mm
+                - button "+" [ref=f4e57] [cursor=pointer]
+              - generic [ref=f4e58]:
+                - generic [ref=f4e59]: J11 底座旋转
+                - button "-" [ref=f4e60] [cursor=pointer]
+                - generic [ref=f4e61]: 0.00°
+                - button "+" [ref=f4e62] [cursor=pointer]
+              - generic [ref=f4e63]:
+                - generic [ref=f4e64]: J12 肩部抬升
+                - button "-" [ref=f4e65] [cursor=pointer]
+                - generic [ref=f4e66]: 0.00°
+                - button "+" [ref=f4e67] [cursor=pointer]
+              - generic [ref=f4e68]:
+                - generic [ref=f4e69]: J13 肘部弯曲
+                - button "-" [ref=f4e70] [cursor=pointer]
+                - generic [ref=f4e71]: 0.00°
+                - button "+" [ref=f4e72] [cursor=pointer]
+              - generic [ref=f4e73]:
+                - generic [ref=f4e74]: J14 腕部俯仰
+                - button "-" [ref=f4e75] [cursor=pointer]
+                - generic [ref=f4e76]: 0.00°
+                - button "+" [ref=f4e77] [cursor=pointer]
+              - generic [ref=f4e78]:
+                - generic [ref=f4e79]: J15 腕部旋转
+                - button "-" [ref=f4e80] [cursor=pointer]
+                - generic [ref=f4e81]: 0.00°
+                - button "+" [ref=f4e82] [cursor=pointer]
+          - generic [ref=f4e83]:
+            - generic [ref=f4e84]:
+              - heading "夹爪" [level=3] [ref=f4e85]
+              - strong [ref=f4e86]: 未安装
+            - slider [disabled] [ref=f4e87]: "50"
+            - generic [ref=f4e88]:
+              - button "张开" [disabled] [ref=f4e89]
+              - button "闭合" [disabled] [ref=f4e90]
+              - button "应用" [disabled] [ref=f4e91]
+          - generic [ref=f4e92]:
+            - generic [ref=f4e93]:
+              - heading "TCP" [level=3] [ref=f4e94]
+              - generic [ref=f4e95]: stage5_fk_cached
+            - generic [ref=f4e96]:
+              - term [ref=f4e97]: X
+              - definition [ref=f4e98]: "-0.0033"
+              - term [ref=f4e99]: "Y"
+              - definition [ref=f4e100]: "0.0898"
+              - term [ref=f4e101]: Z
+              - definition [ref=f4e102]: "0.2423"
+              - term [ref=f4e103]: Roll
+              - definition [ref=f4e104]: "0.0000"
+              - term [ref=f4e105]: Pitch
+              - definition [ref=f4e106]: "-1.5708"
+              - term [ref=f4e107]: Yaw
+              - definition [ref=f4e108]: "-1.5708"
+          - generic [ref=f4e110]:
+            - heading "最近日志" [level=3] [ref=f4e111]
+            - button "清空" [ref=f4e112] [cursor=pointer]

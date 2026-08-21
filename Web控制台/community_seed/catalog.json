@@ -1,0 +1,2481 @@
+{
+  "schema_version": "momo_community_v1",
+  "items": [
+    {
+      "schema_version": "momo_community_v1",
+      "id": "seed-01",
+      "kind": "action",
+      "title": "口红 360 环绕",
+      "source_name": "口红环绕",
+      "category": "美妆",
+      "description": "围绕口红完成一圈均匀的英雄镜头，适合金属和镜面包装。",
+      "tags": [
+        "口红",
+        "环绕",
+        "高光"
+      ],
+      "author": {
+        "name": "光场研究所",
+        "handle": "@lightfield",
+        "accent": "#176b5b"
+      },
+      "robot_variant": "V2",
+      "created_at": "2026-07-02T10:00:00+08:00",
+      "base_likes": 61,
+      "base_comments": 5,
+      "base_downloads": 53,
+      "cover_url": "/static/assets/community/cover-01.jpg",
+      "media": {},
+      "payload": {
+        "schema_version": "arm_replay_sequence_v1",
+        "robot_variant": "V2",
+        "name": "口红 360 环绕",
+        "description": "MOMO 开源社区 V2 精选动作。",
+        "created_at": "2026-08-01 10:00:00",
+        "source": "community_seed",
+        "joint_order": [
+          "j10",
+          "j11",
+          "j12",
+          "j13",
+          "j14",
+          "j15"
+        ],
+        "pose_count": 5,
+        "playback": {
+          "default_duration_sec": 1.5,
+          "default_interval_sec": 0.25
+        },
+        "poses": [
+          {
+            "index": 1,
+            "name": "pose_1",
+            "duration_sec": 0.0,
+            "hold_sec": 0.25,
+            "joint_targets_deg": {
+              "j10": -21.0,
+              "j11": -16.0,
+              "j12": -7.0,
+              "j13": -2.0,
+              "j14": 3.0,
+              "j15": 8.0
+            },
+            "replay_joint_targets_deg": {
+              "j10": -21.0,
+              "j11": -16.0,
+              "j12": -7.0,
+              "j13": -2.0,
+              "j14": 3.0,
+              "j15": 8.0
+            }
+          },
+          {
+            "index": 2,
+            "name": "pose_2",
+            "duration_sec": 1.5,
+            "hold_sec": 0.25,
+            "joint_targets_deg": {
+              "j10": -16.5,
+              "j11": -11.5,
+              "j12": -4.5,
+              "j13": 0.5,
+              "j14": 5.5,
+              "j15": 10.5
+            },
+            "replay_joint_targets_deg": {
+              "j10": -16.5,
+              "j11": -11.5,
+              "j12": -4.5,
+              "j13": 0.5,
+              "j14": 5.5,
+              "j15": 10.5
+            }
+          },
+          {
+            "index": 3,
+            "name": "pose_3",
+            "duration_sec": 1.25,
+            "hold_sec": 0.25,
+            "joint_targets_deg": {
+              "j10": -12.0,
+              "j11": -7.0,
+              "j12": -2.0,
+              "j13": 3.0,
+              "j14": 8.0,
+              "j15": 13.0
+            },
+            "replay_joint_targets_deg": {
+              "j10": -12.0,
+              "j11": -7.0,
+              "j12": -2.0,
+              "j13": 3.0,
+              "j14": 8.0,
+              "j15": 13.0
+            }
+          },
+          {
+            "index": 4,
+            "name": "pose_4",
+            "duration_sec": 1.5,
+            "hold_sec": 0.25,
+            "joint_targets_deg": {
+              "j10": -7.5,
+              "j11": -2.5,
+              "j12": 0.5,
+              "j13": 5.5,
+              "j14": 10.5,
+              "j15": 15.5
+            },
+            "replay_joint_targets_deg": {
+              "j10": -7.5,
+              "j11": -2.5,
+              "j12": 0.5,
+              "j13": 5.5,
+              "j14": 10.5,
+              "j15": 15.5
+            }
+          },
+          {
+            "index": 5,
+            "name": "pose_5",
+            "duration_sec": 1.25,
+            "hold_sec": 0.25,
+            "joint_targets_deg": {
+              "j10": -3.0,
+              "j11": 2.0,
+              "j12": 3.0,
+              "j13": 8.0,
+              "j14": 13.0,
+              "j15": 18.0
+            },
+            "replay_joint_targets_deg": {
+              "j10": -3.0,
+              "j11": 2.0,
+              "j12": 3.0,
+              "j13": 8.0,
+              "j14": 13.0,
+              "j15": 18.0
+            }
+          }
+        ]
+      },
+      "user_published": false
+    },
+    {
+      "schema_version": "momo_community_v1",
+      "id": "seed-02",
+      "kind": "pose",
+      "title": "粉底液英雄位",
+      "source_name": "粉底英雄位",
+      "category": "美妆",
+      "description": "略低机位配合瓶身正面标签，保留肩部高光空间。",
+      "tags": [
+        "粉底",
+        "定帧",
+        "棚拍"
+      ],
+      "author": {
+        "name": "一格影像",
+        "handle": "@oneframe",
+        "accent": "#176b5b"
+      },
+      "robot_variant": "V2",
+      "created_at": "2026-07-03T10:00:00+08:00",
+      "base_likes": 74,
+      "base_comments": 6,
+      "base_downloads": 70,
+      "cover_url": "/static/assets/community/cover-02.jpg",
+      "media": {},
+      "payload": {
+        "关节角度": [
+          15,
+          -25,
+          -3,
+          3,
+          17,
+          -23
+        ],
+        "夹爪": 50,
+        "说明": "V2 社区精选安全构图姿态。"
+      },
+      "user_published": false
+    },
+    {
+      "schema_version": "momo_community_v1",
+      "id": "seed-03",
+      "kind": "action",
+      "title": "香水高光扫拍",
+      "source_name": "香水扫光",
+      "category": "美妆",
+      "description": "从瓶肩滑向标签的慢速侧向扫拍。",
+      "tags": [
+        "香水",
+        "扫拍",
+        "玻璃"
+      ],
+      "author": {
+        "name": "产品镜头社",
+        "handle": "@product-shot",
+        "accent": "#176b5b"
+      },
+      "robot_variant": "V2",
+      "created_at": "2026-07-04T10:00:00+08:00",
+      "base_likes": 87,
+      "base_comments": 7,
+      "base_downloads": 87,
+      "cover_url": "/static/assets/community/cover-03.jpg",
+      "media": {},
+      "payload": {
+        "schema_version": "arm_replay_sequence_v1",
+        "robot_variant": "V2",
+        "name": "香水高光扫拍",
+        "description": "MOMO 开源社区 V2 精选动作。",
+        "created_at": "2026-08-01 10:00:00",
+        "source": "community_seed",
+        "joint_order": [
+          "j10",
+          "j11",
+          "j12",
+          "j13",
+          "j14",
+          "j15"
+        ],
+        "pose_count": 4,
+        "playback": {
+          "default_duration_sec": 1.5,
+          "default_interval_sec": 0.25
+        },
+        "poses": [
+          {
+            "index": 1,
+            "name": "pose_1",
+            "duration_sec": 0.0,
+            "hold_sec": 0.25,
+            "joint_targets_deg": {
+              "j10": -1.0,
+              "j11": -30.0,
+              "j12": -11.0,
+              "j13": 4.0,
+              "j14": -25.0,
+              "j15": -10.0
+            },
+            "replay_joint_targets_deg": {
+              "j10": -1.0,
+              "j11": -30.0,
+              "j12": -11.0,
+              "j13": 4.0,
+              "j14": -25.0,
+              "j15": -10.0
+            }
+          },
+          {
+            "index": 2,
+            "name": "pose_2",
+            "duration_sec": 1.5,
+            "hold_sec": 0.25,
+            "joint_targets_deg": {
+              "j10": 5.0,
+              "j11": -24.0,
+              "j12": -7.67,
+              "j13": 7.33,
+              "j14": -21.67,
+              "j15": -6.67
+            },
+            "replay_joint_targets_deg": {
+              "j10": 5.0,
+              "j11": -24.0,
+              "j12": -7.67,
+              "j13": 7.33,
+              "j14": -21.67,
+              "j15": -6.67
+            }
+          },
+          {
+            "index": 3,
+            "name": "pose_3",
+            "duration_sec": 1.25,
+            "hold_sec": 0.25,
+            "joint_targets_deg": {
+              "j10": 11.0,
+              "j11": -18.0,
+              "j12": -4.33,
+              "j13": 10.67,
+              "j14": -18.33,
+              "j15": -3.33
+            },
+            "replay_joint_targets_deg": {
+              "j10": 11.0,
+              "j11": -18.0,
+              "j12": -4.33,
+              "j13": 10.67,
+              "j14": -18.33,
+              "j15": -3.33
+            }
+          },
+          {
+            "index": 4,
+            "name": "pose_4",
+            "duration_sec": 1.5,
+            "hold_sec": 0.25,
+            "joint_targets_deg": {
+              "j10": 17.0,
+              "j11": -12.0,
+              "j12": -1.0,
+              "j13": 14.0,
+              "j14": -15.0,
+              "j15": 0.0
+            },
+            "replay_joint_targets_deg": {
+              "j10": 17.0,
+              "j11": -12.0,
+              "j12": -1.0,
+              "j13": 14.0,
+              "j14": -15.0,
+              "j15": 0.0
+            }
+          }
+        ]
+      },
+      "user_published": false
+    },
+    {
+      "schema_version": "momo_community_v1",
+      "id": "seed-04",
+      "kind": "pose",
+      "title": "眼影盘俯拍构图",
+      "source_name": "眼影俯拍",
+      "category": "美妆",
+      "description": "适合眼影盘和刷具平铺的轻俯拍机位。",
+      "tags": [
+        "眼影",
+        "俯拍",
+        "平铺"
+      ],
+      "author": {
+        "name": "食刻 Studio",
+        "handle": "@foodmoment",
+        "accent": "#176b5b"
+      },
+      "robot_variant": "V2",
+      "created_at": "2026-07-05T10:00:00+08:00",
+      "base_likes": 100,
+      "base_comments": 8,
+      "base_downloads": 104,
+      "cover_url": "/static/assets/community/cover-04.jpg",
+      "media": {},
+      "payload": {
+        "关节角度": [
+          3,
+          -23,
+          13,
+          -21,
+          7,
+          -19
+        ],
+        "夹爪": 50,
+        "说明": "V2 社区精选安全构图姿态。"
+      },
+      "user_published": false
+    },
+    {
+      "schema_version": "momo_community_v1",
+      "id": "seed-05",
+      "kind": "action",
+      "title": "护肤瓶缓慢推近",
+      "source_name": "护肤推近",
+      "category": "美妆",
+      "description": "正面缓慢推近并轻微抬升，突出泵头与品牌字样。",
+      "tags": [
+        "护肤",
+        "推近",
+        "广告"
+      ],
+      "author": {
+        "name": "美妆实验室",
+        "handle": "@beauty-lab",
+        "accent": "#176b5b"
+      },
+      "robot_variant": "V2",
+      "created_at": "2026-07-06T10:00:00+08:00",
+      "base_likes": 113,
+      "base_comments": 9,
+      "base_downloads": 121,
+      "cover_url": "/static/assets/community/cover-05.jpg",
+      "media": {},
+      "payload": {
+        "schema_version": "arm_replay_sequence_v1",
+        "robot_variant": "V2",
+        "name": "护肤瓶缓慢推近",
+        "description": "MOMO 开源社区 V2 精选动作。",
+        "created_at": "2026-08-01 10:00:00",
+        "source": "community_seed",
+        "joint_order": [
+          "j10",
+          "j11",
+          "j12",
+          "j13",
+          "j14",
+          "j15"
+        ],
+        "pose_count": 4,
+        "playback": {
+          "default_duration_sec": 1.5,
+          "default_interval_sec": 0.25
+        },
+        "poses": [
+          {
+            "index": 1,
+            "name": "pose_1",
+            "duration_sec": 0.0,
+            "hold_sec": 0.25,
+            "joint_targets_deg": {
+              "j10": -25.0,
+              "j11": 0.0,
+              "j12": -15.0,
+              "j13": 10.0,
+              "j14": -9.0,
+              "j15": 16.0
+            },
+            "replay_joint_targets_deg": {
+              "j10": -25.0,
+              "j11": 0.0,
+              "j12": -15.0,
+              "j13": 10.0,
+              "j14": -9.0,
+              "j15": 16.0
+            }
+          },
+          {
+            "index": 2,
+            "name": "pose_2",
+            "duration_sec": 1.5,
+            "hold_sec": 0.25,
+            "joint_targets_deg": {
+              "j10": -19.0,
+              "j11": 6.0,
+              "j12": -11.67,
+              "j13": 13.33,
+              "j14": -5.67,
+              "j15": 19.33
+            },
+            "replay_joint_targets_deg": {
+              "j10": -19.0,
+              "j11": 6.0,
+              "j12": -11.67,
+              "j13": 13.33,
+              "j14": -5.67,
+              "j15": 19.33
+            }
+          },
+          {
+            "index": 3,
+            "name": "pose_3",
+            "duration_sec": 1.25,
+            "hold_sec": 0.25,
+            "joint_targets_deg": {
+              "j10": -13.0,
+              "j11": 12.0,
+              "j12": -8.33,
+              "j13": 16.67,
+              "j14": -2.33,
+              "j15": 22.67
+            },
+            "replay_joint_targets_deg": {
+              "j10": -13.0,
+              "j11": 12.0,
+              "j12": -8.33,
+              "j13": 16.67,
+              "j14": -2.33,
+              "j15": 22.67
+            }
+          },
+          {
+            "index": 4,
+            "name": "pose_4",
+            "duration_sec": 1.5,
+            "hold_sec": 0.25,
+            "joint_targets_deg": {
+              "j10": -7.0,
+              "j11": 18.0,
+              "j12": -5.0,
+              "j13": 20.0,
+              "j14": 1.0,
+              "j15": 26.0
+            },
+            "replay_joint_targets_deg": {
+              "j10": -7.0,
+              "j11": 18.0,
+              "j12": -5.0,
+              "j13": 20.0,
+              "j14": 1.0,
+              "j15": 26.0
+            }
+          }
+        ]
+      },
+      "user_published": false
+    },
+    {
+      "schema_version": "momo_community_v1",
+      "id": "seed-06",
+      "kind": "pose",
+      "title": "咖啡杯侧逆光",
+      "source_name": "咖啡侧逆光",
+      "category": "食品饮品",
+      "description": "留出蒸汽和杯把空间的侧逆光构图。",
+      "tags": [
+        "咖啡",
+        "饮品",
+        "逆光"
+      ],
+      "author": {
+        "name": "轨迹工坊",
+        "handle": "@motion-craft",
+        "accent": "#176b5b"
+      },
+      "robot_variant": "V2",
+      "created_at": "2026-07-07T10:00:00+08:00",
+      "base_likes": 126,
+      "base_comments": 10,
+      "base_downloads": 138,
+      "cover_url": "/static/assets/community/cover-06.jpg",
+      "media": {},
+      "payload": {
+        "关节角度": [
+          -9,
+          -21,
+          29,
+          9,
+          -3,
+          -15
+        ],
+        "夹爪": 50,
+        "说明": "V2 社区精选安全构图姿态。"
+      },
+      "user_published": false
+    },
+    {
+      "schema_version": "momo_community_v1",
+      "id": "seed-07",
+      "kind": "action",
+      "title": "汉堡层次展示",
+      "source_name": "汉堡层次",
+      "category": "食品饮品",
+      "description": "低机位横移并微抬镜头，依次展示食材层次。",
+      "tags": [
+        "汉堡",
+        "横移",
+        "餐饮"
+      ],
+      "author": {
+        "name": "北岸片场",
+        "handle": "@northbank",
+        "accent": "#176b5b"
+      },
+      "robot_variant": "V2",
+      "created_at": "2026-07-08T10:00:00+08:00",
+      "base_likes": 139,
+      "base_comments": 11,
+      "base_downloads": 155,
+      "cover_url": "/static/assets/community/cover-07.jpg",
+      "media": {},
+      "payload": {
+        "schema_version": "arm_replay_sequence_v1",
+        "robot_variant": "V2",
+        "name": "汉堡层次展示",
+        "description": "MOMO 开源社区 V2 精选动作。",
+        "created_at": "2026-08-01 10:00:00",
+        "source": "community_seed",
+        "joint_order": [
+          "j10",
+          "j11",
+          "j12",
+          "j13",
+          "j14",
+          "j15"
+        ],
+        "pose_count": 4,
+        "playback": {
+          "default_duration_sec": 1.5,
+          "default_interval_sec": 0.25
+        },
+        "poses": [
+          {
+            "index": 1,
+            "name": "pose_1",
+            "duration_sec": 0.0,
+            "hold_sec": 0.25,
+            "joint_targets_deg": {
+              "j10": -5.0,
+              "j11": -14.0,
+              "j12": -19.0,
+              "j13": 16.0,
+              "j14": 7.0,
+              "j15": -2.0
+            },
+            "replay_joint_targets_deg": {
+              "j10": -5.0,
+              "j11": -14.0,
+              "j12": -19.0,
+              "j13": 16.0,
+              "j14": 7.0,
+              "j15": -2.0
+            }
+          },
+          {
+            "index": 2,
+            "name": "pose_2",
+            "duration_sec": 1.5,
+            "hold_sec": 0.25,
+            "joint_targets_deg": {
+              "j10": 1.0,
+              "j11": -8.0,
+              "j12": -15.67,
+              "j13": 19.33,
+              "j14": 10.33,
+              "j15": 1.33
+            },
+            "replay_joint_targets_deg": {
+              "j10": 1.0,
+              "j11": -8.0,
+              "j12": -15.67,
+              "j13": 19.33,
+              "j14": 10.33,
+              "j15": 1.33
+            }
+          },
+          {
+            "index": 3,
+            "name": "pose_3",
+            "duration_sec": 1.25,
+            "hold_sec": 0.25,
+            "joint_targets_deg": {
+              "j10": 7.0,
+              "j11": -2.0,
+              "j12": -12.33,
+              "j13": 22.67,
+              "j14": 13.67,
+              "j15": 4.67
+            },
+            "replay_joint_targets_deg": {
+              "j10": 7.0,
+              "j11": -2.0,
+              "j12": -12.33,
+              "j13": 22.67,
+              "j14": 13.67,
+              "j15": 4.67
+            }
+          },
+          {
+            "index": 4,
+            "name": "pose_4",
+            "duration_sec": 1.5,
+            "hold_sec": 0.25,
+            "joint_targets_deg": {
+              "j10": 13.0,
+              "j11": 4.0,
+              "j12": -9.0,
+              "j13": 26.0,
+              "j14": 17.0,
+              "j15": 8.0
+            },
+            "replay_joint_targets_deg": {
+              "j10": 13.0,
+              "j11": 4.0,
+              "j12": -9.0,
+              "j13": 26.0,
+              "j14": 17.0,
+              "j15": 8.0
+            }
+          }
+        ]
+      },
+      "user_published": false
+    },
+    {
+      "schema_version": "momo_community_v1",
+      "id": "seed-08",
+      "kind": "pose",
+      "title": "甜点俯拍留白",
+      "source_name": "甜点俯拍",
+      "category": "食品饮品",
+      "description": "为餐盘、餐具和标题文字保留均衡留白。",
+      "tags": [
+        "甜点",
+        "俯拍",
+        "菜单"
+      ],
+      "author": {
+        "name": "小满视觉",
+        "handle": "@xiaoman",
+        "accent": "#176b5b"
+      },
+      "robot_variant": "V2",
+      "created_at": "2026-07-09T10:00:00+08:00",
+      "base_likes": 152,
+      "base_comments": 12,
+      "base_downloads": 172,
+      "cover_url": "/static/assets/community/cover-08.jpg",
+      "media": {},
+      "payload": {
+        "关节角度": [
+          -21,
+          -19,
+          -9,
+          -15,
+          -13,
+          -11
+        ],
+        "夹爪": 50,
+        "说明": "V2 社区精选安全构图姿态。"
+      },
+      "user_published": false
+    },
+    {
+      "schema_version": "momo_community_v1",
+      "id": "seed-09",
+      "kind": "action",
+      "title": "气泡饮料瓶环绕",
+      "source_name": "饮料环绕",
+      "category": "食品饮品",
+      "description": "半环绕配合轻推近，适合透明瓶身和气泡饮料。",
+      "tags": [
+        "饮料",
+        "环绕",
+        "清爽"
+      ],
+      "author": {
+        "name": "台前幕后",
+        "handle": "@onset",
+        "accent": "#176b5b"
+      },
+      "robot_variant": "V2",
+      "created_at": "2026-07-10T10:00:00+08:00",
+      "base_likes": 165,
+      "base_comments": 13,
+      "base_downloads": 189,
+      "cover_url": "/static/assets/community/cover-09.jpg",
+      "media": {},
+      "payload": {
+        "schema_version": "arm_replay_sequence_v1",
+        "robot_variant": "V2",
+        "name": "气泡饮料瓶环绕",
+        "description": "MOMO 开源社区 V2 精选动作。",
+        "created_at": "2026-08-01 10:00:00",
+        "source": "community_seed",
+        "joint_order": [
+          "j10",
+          "j11",
+          "j12",
+          "j13",
+          "j14",
+          "j15"
+        ],
+        "pose_count": 5,
+        "playback": {
+          "default_duration_sec": 1.5,
+          "default_interval_sec": 0.25
+        },
+        "poses": [
+          {
+            "index": 1,
+            "name": "pose_1",
+            "duration_sec": 0.0,
+            "hold_sec": 0.25,
+            "joint_targets_deg": {
+              "j10": -29.0,
+              "j11": -28.0,
+              "j12": -23.0,
+              "j13": -22.0,
+              "j14": -21.0,
+              "j15": -20.0
+            },
+            "replay_joint_targets_deg": {
+              "j10": -29.0,
+              "j11": -28.0,
+              "j12": -23.0,
+              "j13": -22.0,
+              "j14": -21.0,
+              "j15": -20.0
+            }
+          },
+          {
+            "index": 2,
+            "name": "pose_2",
+            "duration_sec": 1.5,
+            "hold_sec": 0.25,
+            "joint_targets_deg": {
+              "j10": -24.5,
+              "j11": -23.5,
+              "j12": -20.5,
+              "j13": -19.5,
+              "j14": -18.5,
+              "j15": -17.5
+            },
+            "replay_joint_targets_deg": {
+              "j10": -24.5,
+              "j11": -23.5,
+              "j12": -20.5,
+              "j13": -19.5,
+              "j14": -18.5,
+              "j15": -17.5
+            }
+          },
+          {
+            "index": 3,
+            "name": "pose_3",
+            "duration_sec": 1.25,
+            "hold_sec": 0.25,
+            "joint_targets_deg": {
+              "j10": -20.0,
+              "j11": -19.0,
+              "j12": -18.0,
+              "j13": -17.0,
+              "j14": -16.0,
+              "j15": -15.0
+            },
+            "replay_joint_targets_deg": {
+              "j10": -20.0,
+              "j11": -19.0,
+              "j12": -18.0,
+              "j13": -17.0,
+              "j14": -16.0,
+              "j15": -15.0
+            }
+          },
+          {
+            "index": 4,
+            "name": "pose_4",
+            "duration_sec": 1.5,
+            "hold_sec": 0.25,
+            "joint_targets_deg": {
+              "j10": -15.5,
+              "j11": -14.5,
+              "j12": -15.5,
+              "j13": -14.5,
+              "j14": -13.5,
+              "j15": -12.5
+            },
+            "replay_joint_targets_deg": {
+              "j10": -15.5,
+              "j11": -14.5,
+              "j12": -15.5,
+              "j13": -14.5,
+              "j14": -13.5,
+              "j15": -12.5
+            }
+          },
+          {
+            "index": 5,
+            "name": "pose_5",
+            "duration_sec": 1.25,
+            "hold_sec": 0.25,
+            "joint_targets_deg": {
+              "j10": -11.0,
+              "j11": -10.0,
+              "j12": -13.0,
+              "j13": -12.0,
+              "j14": -11.0,
+              "j15": -10.0
+            },
+            "replay_joint_targets_deg": {
+              "j10": -11.0,
+              "j11": -10.0,
+              "j12": -13.0,
+              "j13": -12.0,
+              "j14": -11.0,
+              "j15": -10.0
+            }
+          }
+        ]
+      },
+      "user_published": false
+    },
+    {
+      "schema_version": "momo_community_v1",
+      "id": "seed-10",
+      "kind": "pose",
+      "title": "零食袋正面定帧",
+      "source_name": "零食定帧",
+      "category": "食品饮品",
+      "description": "包装正面不变形的电商定帧姿态。",
+      "tags": [
+        "零食",
+        "包装",
+        "电商"
+      ],
+      "author": {
+        "name": "MOMO 精选",
+        "handle": "@momo-picks",
+        "accent": "#176b5b"
+      },
+      "robot_variant": "V2",
+      "created_at": "2026-07-11T10:00:00+08:00",
+      "base_likes": 178,
+      "base_comments": 14,
+      "base_downloads": 206,
+      "cover_url": "/static/assets/community/cover-10.jpg",
+      "media": {},
+      "payload": {
+        "关节角度": [
+          21,
+          -17,
+          7,
+          15,
+          -23,
+          -7
+        ],
+        "夹爪": 50,
+        "说明": "V2 社区精选安全构图姿态。"
+      },
+      "user_published": false
+    },
+    {
+      "schema_version": "momo_community_v1",
+      "id": "seed-11",
+      "kind": "action",
+      "title": "耳机盒开箱轨迹",
+      "source_name": "耳机开箱",
+      "category": "电商产品",
+      "description": "从包装俯视切入产品正面，适合开箱转场。",
+      "tags": [
+        "耳机",
+        "开箱",
+        "科技"
+      ],
+      "author": {
+        "name": "光场研究所",
+        "handle": "@lightfield",
+        "accent": "#176b5b"
+      },
+      "robot_variant": "V2",
+      "created_at": "2026-07-12T10:00:00+08:00",
+      "base_likes": 191,
+      "base_comments": 15,
+      "base_downloads": 223,
+      "cover_url": "/static/assets/community/cover-11.jpg",
+      "media": {},
+      "payload": {
+        "schema_version": "arm_replay_sequence_v1",
+        "robot_variant": "V2",
+        "name": "耳机盒开箱轨迹",
+        "description": "MOMO 开源社区 V2 精选动作。",
+        "created_at": "2026-08-01 10:00:00",
+        "source": "community_seed",
+        "joint_order": [
+          "j10",
+          "j11",
+          "j12",
+          "j13",
+          "j14",
+          "j15"
+        ],
+        "pose_count": 4,
+        "playback": {
+          "default_duration_sec": 1.5,
+          "default_interval_sec": 0.25
+        },
+        "poses": [
+          {
+            "index": 1,
+            "name": "pose_1",
+            "duration_sec": 0.0,
+            "hold_sec": 0.25,
+            "joint_targets_deg": {
+              "j10": -9.0,
+              "j11": 2.0,
+              "j12": -27.0,
+              "j13": -16.0,
+              "j14": -5.0,
+              "j15": 6.0
+            },
+            "replay_joint_targets_deg": {
+              "j10": -9.0,
+              "j11": 2.0,
+              "j12": -27.0,
+              "j13": -16.0,
+              "j14": -5.0,
+              "j15": 6.0
+            }
+          },
+          {
+            "index": 2,
+            "name": "pose_2",
+            "duration_sec": 1.5,
+            "hold_sec": 0.25,
+            "joint_targets_deg": {
+              "j10": -3.0,
+              "j11": 8.0,
+              "j12": -23.67,
+              "j13": -12.67,
+              "j14": -1.67,
+              "j15": 9.33
+            },
+            "replay_joint_targets_deg": {
+              "j10": -3.0,
+              "j11": 8.0,
+              "j12": -23.67,
+              "j13": -12.67,
+              "j14": -1.67,
+              "j15": 9.33
+            }
+          },
+          {
+            "index": 3,
+            "name": "pose_3",
+            "duration_sec": 1.25,
+            "hold_sec": 0.25,
+            "joint_targets_deg": {
+              "j10": 3.0,
+              "j11": 14.0,
+              "j12": -20.33,
+              "j13": -9.33,
+              "j14": 1.67,
+              "j15": 12.67
+            },
+            "replay_joint_targets_deg": {
+              "j10": 3.0,
+              "j11": 14.0,
+              "j12": -20.33,
+              "j13": -9.33,
+              "j14": 1.67,
+              "j15": 12.67
+            }
+          },
+          {
+            "index": 4,
+            "name": "pose_4",
+            "duration_sec": 1.5,
+            "hold_sec": 0.25,
+            "joint_targets_deg": {
+              "j10": 9.0,
+              "j11": 20.0,
+              "j12": -17.0,
+              "j13": -6.0,
+              "j14": 5.0,
+              "j15": 16.0
+            },
+            "replay_joint_targets_deg": {
+              "j10": 9.0,
+              "j11": 20.0,
+              "j12": -17.0,
+              "j13": -6.0,
+              "j14": 5.0,
+              "j15": 16.0
+            }
+          }
+        ]
+      },
+      "user_published": false
+    },
+    {
+      "schema_version": "momo_community_v1",
+      "id": "seed-12",
+      "kind": "action",
+      "title": "手表弧线运镜",
+      "source_name": "手表弧线",
+      "category": "电商产品",
+      "description": "围绕表盘完成短弧线，保持刻度和表冠清晰。",
+      "tags": [
+        "手表",
+        "弧线",
+        "微距"
+      ],
+      "author": {
+        "name": "一格影像",
+        "handle": "@oneframe",
+        "accent": "#176b5b"
+      },
+      "robot_variant": "V2",
+      "created_at": "2026-07-13T10:00:00+08:00",
+      "base_likes": 204,
+      "base_comments": 4,
+      "base_downloads": 240,
+      "cover_url": "/static/assets/community/cover-12.jpg",
+      "media": {},
+      "payload": {
+        "schema_version": "arm_replay_sequence_v1",
+        "robot_variant": "V2",
+        "name": "手表弧线运镜",
+        "description": "MOMO 开源社区 V2 精选动作。",
+        "created_at": "2026-08-01 10:00:00",
+        "source": "community_seed",
+        "joint_order": [
+          "j10",
+          "j11",
+          "j12",
+          "j13",
+          "j14",
+          "j15"
+        ],
+        "pose_count": 5,
+        "playback": {
+          "default_duration_sec": 1.5,
+          "default_interval_sec": 0.25
+        },
+        "poses": [
+          {
+            "index": 1,
+            "name": "pose_1",
+            "duration_sec": 0.0,
+            "hold_sec": 0.25,
+            "joint_targets_deg": {
+              "j10": 1.0,
+              "j11": -27.0,
+              "j12": -7.0,
+              "j13": 9.0,
+              "j14": -19.0,
+              "j15": -3.0
+            },
+            "replay_joint_targets_deg": {
+              "j10": 1.0,
+              "j11": -27.0,
+              "j12": -7.0,
+              "j13": 9.0,
+              "j14": -19.0,
+              "j15": -3.0
+            }
+          },
+          {
+            "index": 2,
+            "name": "pose_2",
+            "duration_sec": 1.5,
+            "hold_sec": 0.25,
+            "joint_targets_deg": {
+              "j10": 5.5,
+              "j11": -22.5,
+              "j12": -4.5,
+              "j13": 11.5,
+              "j14": -16.5,
+              "j15": -0.5
+            },
+            "replay_joint_targets_deg": {
+              "j10": 5.5,
+              "j11": -22.5,
+              "j12": -4.5,
+              "j13": 11.5,
+              "j14": -16.5,
+              "j15": -0.5
+            }
+          },
+          {
+            "index": 3,
+            "name": "pose_3",
+            "duration_sec": 1.25,
+            "hold_sec": 0.25,
+            "joint_targets_deg": {
+              "j10": 10.0,
+              "j11": -18.0,
+              "j12": -2.0,
+              "j13": 14.0,
+              "j14": -14.0,
+              "j15": 2.0
+            },
+            "replay_joint_targets_deg": {
+              "j10": 10.0,
+              "j11": -18.0,
+              "j12": -2.0,
+              "j13": 14.0,
+              "j14": -14.0,
+              "j15": 2.0
+            }
+          },
+          {
+            "index": 4,
+            "name": "pose_4",
+            "duration_sec": 1.5,
+            "hold_sec": 0.25,
+            "joint_targets_deg": {
+              "j10": 14.5,
+              "j11": -13.5,
+              "j12": 0.5,
+              "j13": 16.5,
+              "j14": -11.5,
+              "j15": 4.5
+            },
+            "replay_joint_targets_deg": {
+              "j10": 14.5,
+              "j11": -13.5,
+              "j12": 0.5,
+              "j13": 16.5,
+              "j14": -11.5,
+              "j15": 4.5
+            }
+          },
+          {
+            "index": 5,
+            "name": "pose_5",
+            "duration_sec": 1.25,
+            "hold_sec": 0.25,
+            "joint_targets_deg": {
+              "j10": 19.0,
+              "j11": -9.0,
+              "j12": 3.0,
+              "j13": 19.0,
+              "j14": -9.0,
+              "j15": 7.0
+            },
+            "replay_joint_targets_deg": {
+              "j10": 19.0,
+              "j11": -9.0,
+              "j12": 3.0,
+              "j13": 19.0,
+              "j14": -9.0,
+              "j15": 7.0
+            }
+          }
+        ]
+      },
+      "user_published": false
+    },
+    {
+      "schema_version": "momo_community_v1",
+      "id": "seed-13",
+      "kind": "action",
+      "title": "鞋款侧面扫拍",
+      "source_name": "鞋款扫拍",
+      "category": "电商产品",
+      "description": "沿鞋身侧面匀速平移，适合纹理与轮廓展示。",
+      "tags": [
+        "鞋履",
+        "平移",
+        "纹理"
+      ],
+      "author": {
+        "name": "产品镜头社",
+        "handle": "@product-shot",
+        "accent": "#176b5b"
+      },
+      "robot_variant": "V2",
+      "created_at": "2026-07-14T10:00:00+08:00",
+      "base_likes": 217,
+      "base_comments": 5,
+      "base_downloads": 257,
+      "cover_url": "/static/assets/community/cover-13.jpg",
+      "media": {},
+      "payload": {
+        "schema_version": "arm_replay_sequence_v1",
+        "robot_variant": "V2",
+        "name": "鞋款侧面扫拍",
+        "description": "MOMO 开源社区 V2 精选动作。",
+        "created_at": "2026-08-01 10:00:00",
+        "source": "community_seed",
+        "joint_order": [
+          "j10",
+          "j11",
+          "j12",
+          "j13",
+          "j14",
+          "j15"
+        ],
+        "pose_count": 4,
+        "playback": {
+          "default_duration_sec": 1.5,
+          "default_interval_sec": 0.25
+        },
+        "poses": [
+          {
+            "index": 1,
+            "name": "pose_1",
+            "duration_sec": 0.0,
+            "hold_sec": 0.25,
+            "joint_targets_deg": {
+              "j10": 11.0,
+              "j11": -12.0,
+              "j12": 13.0,
+              "j13": -10.0,
+              "j14": 11.0,
+              "j15": -12.0
+            },
+            "replay_joint_targets_deg": {
+              "j10": 11.0,
+              "j11": -12.0,
+              "j12": 13.0,
+              "j13": -10.0,
+              "j14": 11.0,
+              "j15": -12.0
+            }
+          },
+          {
+            "index": 2,
+            "name": "pose_2",
+            "duration_sec": 1.5,
+            "hold_sec": 0.25,
+            "joint_targets_deg": {
+              "j10": 17.0,
+              "j11": -6.0,
+              "j12": 16.33,
+              "j13": -6.67,
+              "j14": 14.33,
+              "j15": -8.67
+            },
+            "replay_joint_targets_deg": {
+              "j10": 17.0,
+              "j11": -6.0,
+              "j12": 16.33,
+              "j13": -6.67,
+              "j14": 14.33,
+              "j15": -8.67
+            }
+          },
+          {
+            "index": 3,
+            "name": "pose_3",
+            "duration_sec": 1.25,
+            "hold_sec": 0.25,
+            "joint_targets_deg": {
+              "j10": 23.0,
+              "j11": -0.0,
+              "j12": 19.67,
+              "j13": -3.33,
+              "j14": 17.67,
+              "j15": -5.33
+            },
+            "replay_joint_targets_deg": {
+              "j10": 23.0,
+              "j11": -0.0,
+              "j12": 19.67,
+              "j13": -3.33,
+              "j14": 17.67,
+              "j15": -5.33
+            }
+          },
+          {
+            "index": 4,
+            "name": "pose_4",
+            "duration_sec": 1.5,
+            "hold_sec": 0.25,
+            "joint_targets_deg": {
+              "j10": 29.0,
+              "j11": 6.0,
+              "j12": 23.0,
+              "j13": 0.0,
+              "j14": 21.0,
+              "j15": -2.0
+            },
+            "replay_joint_targets_deg": {
+              "j10": 29.0,
+              "j11": 6.0,
+              "j12": 23.0,
+              "j13": 0.0,
+              "j14": 21.0,
+              "j15": -2.0
+            }
+          }
+        ]
+      },
+      "user_published": false
+    },
+    {
+      "schema_version": "momo_community_v1",
+      "id": "seed-14",
+      "kind": "pose",
+      "title": "首饰微距姿态",
+      "source_name": "首饰微距",
+      "category": "电商产品",
+      "description": "轻俯视的微距机位，避开镜头倒影。",
+      "tags": [
+        "首饰",
+        "微距",
+        "质感"
+      ],
+      "author": {
+        "name": "食刻 Studio",
+        "handle": "@foodmoment",
+        "accent": "#176b5b"
+      },
+      "robot_variant": "V2",
+      "created_at": "2026-07-15T10:00:00+08:00",
+      "base_likes": 230,
+      "base_comments": 6,
+      "base_downloads": 274,
+      "cover_url": "/static/assets/community/cover-14.jpg",
+      "media": {},
+      "payload": {
+        "关节角度": [
+          -3,
+          -13,
+          -15,
+          21,
+          11,
+          1
+        ],
+        "夹爪": 50,
+        "说明": "V2 社区精选安全构图姿态。"
+      },
+      "user_published": false
+    },
+    {
+      "schema_version": "momo_community_v1",
+      "id": "seed-15",
+      "kind": "pose",
+      "title": "科技产品中心位",
+      "source_name": "科技中心位",
+      "category": "电商产品",
+      "description": "适合键盘、掌机和桌面设备的对称中心构图。",
+      "tags": [
+        "科技",
+        "中心构图",
+        "桌面"
+      ],
+      "author": {
+        "name": "美妆实验室",
+        "handle": "@beauty-lab",
+        "accent": "#176b5b"
+      },
+      "robot_variant": "V2",
+      "created_at": "2026-07-16T10:00:00+08:00",
+      "base_likes": 243,
+      "base_comments": 7,
+      "base_downloads": 291,
+      "cover_url": "/static/assets/community/cover-15.jpg",
+      "media": {},
+      "payload": {
+        "关节角度": [
+          18,
+          15,
+          20,
+          9,
+          6,
+          3
+        ],
+        "夹爪": 50,
+        "说明": "V2 社区精选安全构图姿态。"
+      },
+      "user_published": false
+    },
+    {
+      "schema_version": "momo_community_v1",
+      "id": "seed-16",
+      "kind": "action",
+      "title": "包装盒三段式展示",
+      "source_name": "包装三段式",
+      "category": "电商产品",
+      "description": "正面、侧面和顶部三个观察角度平滑衔接。",
+      "tags": [
+        "包装",
+        "三段式",
+        "电商"
+      ],
+      "author": {
+        "name": "轨迹工坊",
+        "handle": "@motion-craft",
+        "accent": "#176b5b"
+      },
+      "robot_variant": "V2",
+      "created_at": "2026-07-17T10:00:00+08:00",
+      "base_likes": 256,
+      "base_comments": 8,
+      "base_downloads": 308,
+      "cover_url": "/static/assets/community/cover-16.jpg",
+      "media": {},
+      "payload": {
+        "schema_version": "arm_replay_sequence_v1",
+        "robot_variant": "V2",
+        "name": "包装盒三段式展示",
+        "description": "MOMO 开源社区 V2 精选动作。",
+        "created_at": "2026-08-01 10:00:00",
+        "source": "community_seed",
+        "joint_order": [
+          "j10",
+          "j11",
+          "j12",
+          "j13",
+          "j14",
+          "j15"
+        ],
+        "pose_count": 5,
+        "playback": {
+          "default_duration_sec": 1.5,
+          "default_interval_sec": 0.25
+        },
+        "poses": [
+          {
+            "index": 1,
+            "name": "pose_1",
+            "duration_sec": 0.0,
+            "hold_sec": 0.25,
+            "joint_targets_deg": {
+              "j10": -3.0,
+              "j11": -11.0,
+              "j12": -15.0,
+              "j13": -23.0,
+              "j14": 13.0,
+              "j15": 5.0
+            },
+            "replay_joint_targets_deg": {
+              "j10": -3.0,
+              "j11": -11.0,
+              "j12": -15.0,
+              "j13": -23.0,
+              "j14": 13.0,
+              "j15": 5.0
+            }
+          },
+          {
+            "index": 2,
+            "name": "pose_2",
+            "duration_sec": 1.5,
+            "hold_sec": 0.25,
+            "joint_targets_deg": {
+              "j10": 1.5,
+              "j11": -6.5,
+              "j12": -12.5,
+              "j13": -20.5,
+              "j14": 15.5,
+              "j15": 7.5
+            },
+            "replay_joint_targets_deg": {
+              "j10": 1.5,
+              "j11": -6.5,
+              "j12": -12.5,
+              "j13": -20.5,
+              "j14": 15.5,
+              "j15": 7.5
+            }
+          },
+          {
+            "index": 3,
+            "name": "pose_3",
+            "duration_sec": 1.25,
+            "hold_sec": 0.25,
+            "joint_targets_deg": {
+              "j10": 6.0,
+              "j11": -2.0,
+              "j12": -10.0,
+              "j13": -18.0,
+              "j14": 18.0,
+              "j15": 10.0
+            },
+            "replay_joint_targets_deg": {
+              "j10": 6.0,
+              "j11": -2.0,
+              "j12": -10.0,
+              "j13": -18.0,
+              "j14": 18.0,
+              "j15": 10.0
+            }
+          },
+          {
+            "index": 4,
+            "name": "pose_4",
+            "duration_sec": 1.5,
+            "hold_sec": 0.25,
+            "joint_targets_deg": {
+              "j10": 10.5,
+              "j11": 2.5,
+              "j12": -7.5,
+              "j13": -15.5,
+              "j14": 20.5,
+              "j15": 12.5
+            },
+            "replay_joint_targets_deg": {
+              "j10": 10.5,
+              "j11": 2.5,
+              "j12": -7.5,
+              "j13": -15.5,
+              "j14": 20.5,
+              "j15": 12.5
+            }
+          },
+          {
+            "index": 5,
+            "name": "pose_5",
+            "duration_sec": 1.25,
+            "hold_sec": 0.25,
+            "joint_targets_deg": {
+              "j10": 15.0,
+              "j11": 7.0,
+              "j12": -5.0,
+              "j13": -13.0,
+              "j14": 23.0,
+              "j15": 15.0
+            },
+            "replay_joint_targets_deg": {
+              "j10": 15.0,
+              "j11": 7.0,
+              "j12": -5.0,
+              "j13": -13.0,
+              "j14": 23.0,
+              "j15": 15.0
+            }
+          }
+        ]
+      },
+      "user_published": false
+    },
+    {
+      "schema_version": "momo_community_v1",
+      "id": "seed-17",
+      "kind": "pose",
+      "title": "半身采访机位",
+      "source_name": "采访机位",
+      "category": "人物拍摄",
+      "description": "保留眼神方向与头顶空间的半身采访构图。",
+      "tags": [
+        "采访",
+        "半身",
+        "人物"
+      ],
+      "author": {
+        "name": "北岸片场",
+        "handle": "@northbank",
+        "accent": "#176b5b"
+      },
+      "robot_variant": "V2",
+      "created_at": "2026-07-18T10:00:00+08:00",
+      "base_likes": 269,
+      "base_comments": 9,
+      "base_downloads": 325,
+      "cover_url": "/static/assets/community/cover-17.jpg",
+      "media": {},
+      "payload": {
+        "关节角度": [
+          6,
+          17,
+          -18,
+          -15,
+          -4,
+          7
+        ],
+        "夹爪": 50,
+        "说明": "V2 社区精选安全构图姿态。"
+      },
+      "user_published": false
+    },
+    {
+      "schema_version": "momo_community_v1",
+      "id": "seed-18",
+      "kind": "pose",
+      "title": "人脸自然视角",
+      "source_name": "人脸视角",
+      "category": "人物拍摄",
+      "description": "接近眼平的自然人像机位，适合短视频口播。",
+      "tags": [
+        "人像",
+        "口播",
+        "眼平"
+      ],
+      "author": {
+        "name": "小满视觉",
+        "handle": "@xiaoman",
+        "accent": "#176b5b"
+      },
+      "robot_variant": "V2",
+      "created_at": "2026-07-19T10:00:00+08:00",
+      "base_likes": 282,
+      "base_comments": 10,
+      "base_downloads": 342,
+      "cover_url": "/static/assets/community/cover-18.jpg",
+      "media": {},
+      "payload": {
+        "关节角度": [
+          -27,
+          -9,
+          17,
+          -27,
+          -9,
+          9
+        ],
+        "夹爪": 50,
+        "说明": "V2 社区精选安全构图姿态。"
+      },
+      "user_published": false
+    },
+    {
+      "schema_version": "momo_community_v1",
+      "id": "seed-19",
+      "kind": "action",
+      "title": "桌面讲解跟拍",
+      "source_name": "桌面讲解",
+      "category": "人物拍摄",
+      "description": "在人物与桌面产品之间平滑切换焦点位置。",
+      "tags": [
+        "讲解",
+        "桌面",
+        "跟拍"
+      ],
+      "author": {
+        "name": "台前幕后",
+        "handle": "@onset",
+        "accent": "#176b5b"
+      },
+      "robot_variant": "V2",
+      "created_at": "2026-07-20T10:00:00+08:00",
+      "base_likes": 295,
+      "base_comments": 11,
+      "base_downloads": 359,
+      "cover_url": "/static/assets/community/cover-19.jpg",
+      "media": {},
+      "payload": {
+        "schema_version": "arm_replay_sequence_v1",
+        "robot_variant": "V2",
+        "name": "桌面讲解跟拍",
+        "description": "MOMO 开源社区 V2 精选动作。",
+        "created_at": "2026-08-01 10:00:00",
+        "source": "community_seed",
+        "joint_order": [
+          "j10",
+          "j11",
+          "j12",
+          "j13",
+          "j14",
+          "j15"
+        ],
+        "pose_count": 4,
+        "playback": {
+          "default_duration_sec": 1.5,
+          "default_interval_sec": 0.25
+        },
+        "poses": [
+          {
+            "index": 1,
+            "name": "pose_1",
+            "duration_sec": 0.0,
+            "hold_sec": 0.25,
+            "joint_targets_deg": {
+              "j10": -17.0,
+              "j11": -10.0,
+              "j12": 1.0,
+              "j13": 8.0,
+              "j14": 15.0,
+              "j15": -22.0
+            },
+            "replay_joint_targets_deg": {
+              "j10": -17.0,
+              "j11": -10.0,
+              "j12": 1.0,
+              "j13": 8.0,
+              "j14": 15.0,
+              "j15": -22.0
+            }
+          },
+          {
+            "index": 2,
+            "name": "pose_2",
+            "duration_sec": 1.5,
+            "hold_sec": 0.25,
+            "joint_targets_deg": {
+              "j10": -11.0,
+              "j11": -4.0,
+              "j12": 4.33,
+              "j13": 11.33,
+              "j14": 18.33,
+              "j15": -18.67
+            },
+            "replay_joint_targets_deg": {
+              "j10": -11.0,
+              "j11": -4.0,
+              "j12": 4.33,
+              "j13": 11.33,
+              "j14": 18.33,
+              "j15": -18.67
+            }
+          },
+          {
+            "index": 3,
+            "name": "pose_3",
+            "duration_sec": 1.25,
+            "hold_sec": 0.25,
+            "joint_targets_deg": {
+              "j10": -5.0,
+              "j11": 2.0,
+              "j12": 7.67,
+              "j13": 14.67,
+              "j14": 21.67,
+              "j15": -15.33
+            },
+            "replay_joint_targets_deg": {
+              "j10": -5.0,
+              "j11": 2.0,
+              "j12": 7.67,
+              "j13": 14.67,
+              "j14": 21.67,
+              "j15": -15.33
+            }
+          },
+          {
+            "index": 4,
+            "name": "pose_4",
+            "duration_sec": 1.5,
+            "hold_sec": 0.25,
+            "joint_targets_deg": {
+              "j10": 1.0,
+              "j11": 8.0,
+              "j12": 11.0,
+              "j13": 18.0,
+              "j14": 25.0,
+              "j15": -12.0
+            },
+            "replay_joint_targets_deg": {
+              "j10": 1.0,
+              "j11": 8.0,
+              "j12": 11.0,
+              "j13": 18.0,
+              "j14": 25.0,
+              "j15": -12.0
+            }
+          }
+        ]
+      },
+      "user_published": false
+    },
+    {
+      "schema_version": "momo_community_v1",
+      "id": "seed-20",
+      "kind": "action",
+      "title": "人物出场跟随",
+      "source_name": "人物出场",
+      "category": "人物拍摄",
+      "description": "人物从画外进入时完成短距离横移与回中。",
+      "tags": [
+        "人物",
+        "出场",
+        "回中"
+      ],
+      "author": {
+        "name": "MOMO 精选",
+        "handle": "@momo-picks",
+        "accent": "#176b5b"
+      },
+      "robot_variant": "V2",
+      "created_at": "2026-07-21T10:00:00+08:00",
+      "base_likes": 308,
+      "base_comments": 12,
+      "base_downloads": 376,
+      "cover_url": "/static/assets/community/cover-20.jpg",
+      "media": {},
+      "payload": {
+        "schema_version": "arm_replay_sequence_v1",
+        "robot_variant": "V2",
+        "name": "人物出场跟随",
+        "description": "MOMO 开源社区 V2 精选动作。",
+        "created_at": "2026-08-01 10:00:00",
+        "source": "community_seed",
+        "joint_order": [
+          "j10",
+          "j11",
+          "j12",
+          "j13",
+          "j14",
+          "j15"
+        ],
+        "pose_count": 5,
+        "playback": {
+          "default_duration_sec": 1.5,
+          "default_interval_sec": 0.25
+        },
+        "poses": [
+          {
+            "index": 1,
+            "name": "pose_1",
+            "duration_sec": 0.0,
+            "hold_sec": 0.25,
+            "joint_targets_deg": {
+              "j10": -7.0,
+              "j11": 5.0,
+              "j12": -23.0,
+              "j13": -11.0,
+              "j14": 1.0,
+              "j15": 13.0
+            },
+            "replay_joint_targets_deg": {
+              "j10": -7.0,
+              "j11": 5.0,
+              "j12": -23.0,
+              "j13": -11.0,
+              "j14": 1.0,
+              "j15": 13.0
+            }
+          },
+          {
+            "index": 2,
+            "name": "pose_2",
+            "duration_sec": 1.5,
+            "hold_sec": 0.25,
+            "joint_targets_deg": {
+              "j10": -2.5,
+              "j11": 9.5,
+              "j12": -20.5,
+              "j13": -8.5,
+              "j14": 3.5,
+              "j15": 15.5
+            },
+            "replay_joint_targets_deg": {
+              "j10": -2.5,
+              "j11": 9.5,
+              "j12": -20.5,
+              "j13": -8.5,
+              "j14": 3.5,
+              "j15": 15.5
+            }
+          },
+          {
+            "index": 3,
+            "name": "pose_3",
+            "duration_sec": 1.25,
+            "hold_sec": 0.25,
+            "joint_targets_deg": {
+              "j10": 2.0,
+              "j11": 14.0,
+              "j12": -18.0,
+              "j13": -6.0,
+              "j14": 6.0,
+              "j15": 18.0
+            },
+            "replay_joint_targets_deg": {
+              "j10": 2.0,
+              "j11": 14.0,
+              "j12": -18.0,
+              "j13": -6.0,
+              "j14": 6.0,
+              "j15": 18.0
+            }
+          },
+          {
+            "index": 4,
+            "name": "pose_4",
+            "duration_sec": 1.5,
+            "hold_sec": 0.25,
+            "joint_targets_deg": {
+              "j10": 6.5,
+              "j11": 18.5,
+              "j12": -15.5,
+              "j13": -3.5,
+              "j14": 8.5,
+              "j15": 20.5
+            },
+            "replay_joint_targets_deg": {
+              "j10": 6.5,
+              "j11": 18.5,
+              "j12": -15.5,
+              "j13": -3.5,
+              "j14": 8.5,
+              "j15": 20.5
+            }
+          },
+          {
+            "index": 5,
+            "name": "pose_5",
+            "duration_sec": 1.25,
+            "hold_sec": 0.25,
+            "joint_targets_deg": {
+              "j10": 11.0,
+              "j11": 23.0,
+              "j12": -13.0,
+              "j13": -1.0,
+              "j14": 11.0,
+              "j15": 23.0
+            },
+            "replay_joint_targets_deg": {
+              "j10": 11.0,
+              "j11": 23.0,
+              "j12": -13.0,
+              "j13": -1.0,
+              "j14": 11.0,
+              "j15": 23.0
+            }
+          }
+        ]
+      },
+      "user_published": false
+    },
+    {
+      "schema_version": "momo_community_v1",
+      "id": "seed-21",
+      "kind": "action",
+      "title": "轨道左至右平移",
+      "source_name": "轨道平移",
+      "category": "创意运镜",
+      "description": "通用匀速轨道平移，可用于片头、转场和空间建立。",
+      "tags": [
+        "轨道",
+        "平移",
+        "通用"
+      ],
+      "author": {
+        "name": "光场研究所",
+        "handle": "@lightfield",
+        "accent": "#176b5b"
+      },
+      "robot_variant": "V2",
+      "created_at": "2026-07-22T10:00:00+08:00",
+      "base_likes": 321,
+      "base_comments": 13,
+      "base_downloads": 393,
+      "cover_url": "/static/assets/community/cover-21.jpg",
+      "media": {},
+      "payload": {
+        "schema_version": "arm_replay_sequence_v1",
+        "robot_variant": "V2",
+        "name": "轨道左至右平移",
+        "description": "MOMO 开源社区 V2 精选动作。",
+        "created_at": "2026-08-01 10:00:00",
+        "source": "community_seed",
+        "joint_order": [
+          "j10",
+          "j11",
+          "j12",
+          "j13",
+          "j14",
+          "j15"
+        ],
+        "pose_count": 4,
+        "playback": {
+          "default_duration_sec": 1.5,
+          "default_interval_sec": 0.25
+        },
+        "poses": [
+          {
+            "index": 1,
+            "name": "pose_1",
+            "duration_sec": 0.0,
+            "hold_sec": 0.25,
+            "joint_targets_deg": {
+              "j10": 3.0,
+              "j11": -24.0,
+              "j12": -3.0,
+              "j13": 14.0,
+              "j14": -13.0,
+              "j15": 4.0
+            },
+            "replay_joint_targets_deg": {
+              "j10": 3.0,
+              "j11": -24.0,
+              "j12": -3.0,
+              "j13": 14.0,
+              "j14": -13.0,
+              "j15": 4.0
+            }
+          },
+          {
+            "index": 2,
+            "name": "pose_2",
+            "duration_sec": 1.5,
+            "hold_sec": 0.25,
+            "joint_targets_deg": {
+              "j10": 9.0,
+              "j11": -18.0,
+              "j12": 0.33,
+              "j13": 17.33,
+              "j14": -9.67,
+              "j15": 7.33
+            },
+            "replay_joint_targets_deg": {
+              "j10": 9.0,
+              "j11": -18.0,
+              "j12": 0.33,
+              "j13": 17.33,
+              "j14": -9.67,
+              "j15": 7.33
+            }
+          },
+          {
+            "index": 3,
+            "name": "pose_3",
+            "duration_sec": 1.25,
+            "hold_sec": 0.25,
+            "joint_targets_deg": {
+              "j10": 15.0,
+              "j11": -12.0,
+              "j12": 3.67,
+              "j13": 20.67,
+              "j14": -6.33,
+              "j15": 10.67
+            },
+            "replay_joint_targets_deg": {
+              "j10": 15.0,
+              "j11": -12.0,
+              "j12": 3.67,
+              "j13": 20.67,
+              "j14": -6.33,
+              "j15": 10.67
+            }
+          },
+          {
+            "index": 4,
+            "name": "pose_4",
+            "duration_sec": 1.5,
+            "hold_sec": 0.25,
+            "joint_targets_deg": {
+              "j10": 21.0,
+              "j11": -6.0,
+              "j12": 7.0,
+              "j13": 24.0,
+              "j14": -3.0,
+              "j15": 14.0
+            },
+            "replay_joint_targets_deg": {
+              "j10": 21.0,
+              "j11": -6.0,
+              "j12": 7.0,
+              "j13": 24.0,
+              "j14": -3.0,
+              "j15": 14.0
+            }
+          }
+        ]
+      },
+      "user_published": false
+    },
+    {
+      "schema_version": "momo_community_v1",
+      "id": "seed-22",
+      "kind": "action",
+      "title": "桌面 180 度环绕",
+      "source_name": "桌面环绕",
+      "category": "创意运镜",
+      "description": "适合小型主体的半圆环绕轨迹，起止点稳定。",
+      "tags": [
+        "180度",
+        "环绕",
+        "桌面"
+      ],
+      "author": {
+        "name": "一格影像",
+        "handle": "@oneframe",
+        "accent": "#176b5b"
+      },
+      "robot_variant": "V2",
+      "created_at": "2026-07-23T10:00:00+08:00",
+      "base_likes": 334,
+      "base_comments": 14,
+      "base_downloads": 410,
+      "cover_url": "/static/assets/community/cover-22.jpg",
+      "media": {},
+      "payload": {
+        "schema_version": "arm_replay_sequence_v1",
+        "robot_variant": "V2",
+        "name": "桌面 180 度环绕",
+        "description": "MOMO 开源社区 V2 精选动作。",
+        "created_at": "2026-08-01 10:00:00",
+        "source": "community_seed",
+        "joint_order": [
+          "j10",
+          "j11",
+          "j12",
+          "j13",
+          "j14",
+          "j15"
+        ],
+        "pose_count": 5,
+        "playback": {
+          "default_duration_sec": 1.5,
+          "default_interval_sec": 0.25
+        },
+        "poses": [
+          {
+            "index": 1,
+            "name": "pose_1",
+            "duration_sec": 0.0,
+            "hold_sec": 0.25,
+            "joint_targets_deg": {
+              "j10": -31.0,
+              "j11": -9.0,
+              "j12": -27.0,
+              "j13": -5.0,
+              "j14": -27.0,
+              "j15": -5.0
+            },
+            "replay_joint_targets_deg": {
+              "j10": -31.0,
+              "j11": -9.0,
+              "j12": -27.0,
+              "j13": -5.0,
+              "j14": -27.0,
+              "j15": -5.0
+            }
+          },
+          {
+            "index": 2,
+            "name": "pose_2",
+            "duration_sec": 1.5,
+            "hold_sec": 0.25,
+            "joint_targets_deg": {
+              "j10": -26.5,
+              "j11": -4.5,
+              "j12": -24.5,
+              "j13": -2.5,
+              "j14": -24.5,
+              "j15": -2.5
+            },
+            "replay_joint_targets_deg": {
+              "j10": -26.5,
+              "j11": -4.5,
+              "j12": -24.5,
+              "j13": -2.5,
+              "j14": -24.5,
+              "j15": -2.5
+            }
+          },
+          {
+            "index": 3,
+            "name": "pose_3",
+            "duration_sec": 1.25,
+            "hold_sec": 0.25,
+            "joint_targets_deg": {
+              "j10": -22.0,
+              "j11": 0.0,
+              "j12": -22.0,
+              "j13": 0.0,
+              "j14": -22.0,
+              "j15": 0.0
+            },
+            "replay_joint_targets_deg": {
+              "j10": -22.0,
+              "j11": 0.0,
+              "j12": -22.0,
+              "j13": 0.0,
+              "j14": -22.0,
+              "j15": 0.0
+            }
+          },
+          {
+            "index": 4,
+            "name": "pose_4",
+            "duration_sec": 1.5,
+            "hold_sec": 0.25,
+            "joint_targets_deg": {
+              "j10": -17.5,
+              "j11": 4.5,
+              "j12": -19.5,
+              "j13": 2.5,
+              "j14": -19.5,
+              "j15": 2.5
+            },
+            "replay_joint_targets_deg": {
+              "j10": -17.5,
+              "j11": 4.5,
+              "j12": -19.5,
+              "j13": 2.5,
+              "j14": -19.5,
+              "j15": 2.5
+            }
+          },
+          {
+            "index": 5,
+            "name": "pose_5",
+            "duration_sec": 1.25,
+            "hold_sec": 0.25,
+            "joint_targets_deg": {
+              "j10": -13.0,
+              "j11": 9.0,
+              "j12": -17.0,
+              "j13": 5.0,
+              "j14": -17.0,
+              "j15": 5.0
+            },
+            "replay_joint_targets_deg": {
+              "j10": -13.0,
+              "j11": 9.0,
+              "j12": -17.0,
+              "j13": 5.0,
+              "j14": -17.0,
+              "j15": 5.0
+            }
+          }
+        ]
+      },
+      "user_published": false
+    },
+    {
+      "schema_version": "momo_community_v1",
+      "id": "seed-23",
+      "kind": "pose",
+      "title": "低机位推近起点",
+      "source_name": "低机位起点",
+      "category": "创意运镜",
+      "description": "低机位推近镜头的安全起始姿态。",
+      "tags": [
+        "低机位",
+        "起点",
+        "戏剧感"
+      ],
+      "author": {
+        "name": "产品镜头社",
+        "handle": "@product-shot",
+        "accent": "#176b5b"
+      },
+      "robot_variant": "V2",
+      "created_at": "2026-07-24T10:00:00+08:00",
+      "base_likes": 347,
+      "base_comments": 15,
+      "base_downloads": 427,
+      "cover_url": "/static/assets/community/cover-23.jpg",
+      "media": {},
+      "payload": {
+        "关节角度": [
+          24,
+          23,
+          30,
+          21,
+          20,
+          19
+        ],
+        "夹爪": 50,
+        "说明": "V2 社区精选安全构图姿态。"
+      },
+      "user_published": false
+    },
+    {
+      "schema_version": "momo_community_v1",
+      "id": "seed-24",
+      "kind": "action",
+      "title": "俯视下降揭示",
+      "source_name": "俯视下降",
+      "category": "创意运镜",
+      "description": "由高位俯视缓慢下降，逐步揭示主体和场景。",
+      "tags": [
+        "俯视",
+        "下降",
+        "揭示"
+      ],
+      "author": {
+        "name": "食刻 Studio",
+        "handle": "@foodmoment",
+        "accent": "#176b5b"
+      },
+      "robot_variant": "V2",
+      "created_at": "2026-07-25T10:00:00+08:00",
+      "base_likes": 360,
+      "base_comments": 4,
+      "base_downloads": 444,
+      "cover_url": "/static/assets/community/cover-24.jpg",
+      "media": {},
+      "payload": {
+        "schema_version": "arm_replay_sequence_v1",
+        "robot_variant": "V2",
+        "name": "俯视下降揭示",
+        "description": "MOMO 开源社区 V2 精选动作。",
+        "created_at": "2026-08-01 10:00:00",
+        "source": "community_seed",
+        "joint_order": [
+          "j10",
+          "j11",
+          "j12",
+          "j13",
+          "j14",
+          "j15"
+        ],
+        "pose_count": 5,
+        "playback": {
+          "default_duration_sec": 1.5,
+          "default_interval_sec": 0.25
+        },
+        "poses": [
+          {
+            "index": 1,
+            "name": "pose_1",
+            "duration_sec": 0.0,
+            "hold_sec": 0.25,
+            "joint_targets_deg": {
+              "j10": -11.0,
+              "j11": -23.0,
+              "j12": 13.0,
+              "j13": 1.0,
+              "j14": -11.0,
+              "j15": -23.0
+            },
+            "replay_joint_targets_deg": {
+              "j10": -11.0,
+              "j11": -23.0,
+              "j12": 13.0,
+              "j13": 1.0,
+              "j14": -11.0,
+              "j15": -23.0
+            }
+          },
+          {
+            "index": 2,
+            "name": "pose_2",
+            "duration_sec": 1.5,
+            "hold_sec": 0.25,
+            "joint_targets_deg": {
+              "j10": -6.5,
+              "j11": -18.5,
+              "j12": 15.5,
+              "j13": 3.5,
+              "j14": -8.5,
+              "j15": -20.5
+            },
+            "replay_joint_targets_deg": {
+              "j10": -6.5,
+              "j11": -18.5,
+              "j12": 15.5,
+              "j13": 3.5,
+              "j14": -8.5,
+              "j15": -20.5
+            }
+          },
+          {
+            "index": 3,
+            "name": "pose_3",
+            "duration_sec": 1.25,
+            "hold_sec": 0.25,
+            "joint_targets_deg": {
+              "j10": -2.0,
+              "j11": -14.0,
+              "j12": 18.0,
+              "j13": 6.0,
+              "j14": -6.0,
+              "j15": -18.0
+            },
+            "replay_joint_targets_deg": {
+              "j10": -2.0,
+              "j11": -14.0,
+              "j12": 18.0,
+              "j13": 6.0,
+              "j14": -6.0,
+              "j15": -18.0
+            }
+          },
+          {
+            "index": 4,
+            "name": "pose_4",
+            "duration_sec": 1.5,
+            "hold_sec": 0.25,
+            "joint_targets_deg": {
+              "j10": 2.5,
+              "j11": -9.5,
+              "j12": 20.5,
+              "j13": 8.5,
+              "j14": -3.5,
+              "j15": -15.5
+            },
+            "replay_joint_targets_deg": {
+              "j10": 2.5,
+              "j11": -9.5,
+              "j12": 20.5,
+              "j13": 8.5,
+              "j14": -3.5,
+              "j15": -15.5
+            }
+          },
+          {
+            "index": 5,
+            "name": "pose_5",
+            "duration_sec": 1.25,
+            "hold_sec": 0.25,
+            "joint_targets_deg": {
+              "j10": 7.0,
+              "j11": -5.0,
+              "j12": 23.0,
+              "j13": 11.0,
+              "j14": -1.0,
+              "j15": -13.0
+            },
+            "replay_joint_targets_deg": {
+              "j10": 7.0,
+              "j11": -5.0,
+              "j12": 23.0,
+              "j13": 11.0,
+              "j14": -1.0,
+              "j15": -13.0
+            }
+          }
+        ]
+      },
+      "user_published": false
+    }
+  ]
+}

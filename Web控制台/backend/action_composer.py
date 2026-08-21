@@ -103,7 +103,7 @@ class ActionComposer:
         return {"robot_variant": variant, "actions": actions, "poses": poses, "skipped": skipped}
 
     def create_preview(self, request: Any) -> dict[str, Any]:
-        sequence = self._build_sequence(request, save_name=None)
+        sequence = self._build_sequence(request, save_name=None, min_frames=1)
         targets, segments, total = self._timeline(sequence)
         self._ensure_preview_model()
         preview_id = uuid.uuid4().hex
@@ -143,7 +143,7 @@ class ActionComposer:
         library = self.bridge._get_action_library()
         if library.action_path(name).exists():
             raise ActionComposerError("ACTION_NAME_CONFLICT", f"动作库中已存在“{name}”，请换一个名称。", 409)
-        sequence = self._build_sequence(request, save_name=name)
+        sequence = self._build_sequence(request, save_name=name, min_frames=2)
         path = library.save_action(name, sequence)
         _, segments, total = self._timeline(sequence)
         return {
@@ -155,10 +155,11 @@ class ActionComposer:
             "segments": segments,
         }
 
-    def _build_sequence(self, request: Any, save_name: str | None) -> dict[str, Any]:
+    def _build_sequence(self, request: Any, save_name: str | None, *, min_frames: int = 2) -> dict[str, Any]:
         refs = list(request.frames)
-        if len(refs) < 2:
-            raise ActionComposerError("ACTION_COMPOSER_TOO_SHORT", "轨迹编排至少需要两个关键帧。")
+        if len(refs) < min_frames:
+            message = "轨迹编排至少需要两个关键帧。" if min_frames > 1 else "仿真预览至少需要一个关键帧。"
+            raise ActionComposerError("ACTION_COMPOSER_TOO_SHORT", message)
         library = self.bridge._get_action_library()
         config = library.config
         variant = active_robot_variant(config)

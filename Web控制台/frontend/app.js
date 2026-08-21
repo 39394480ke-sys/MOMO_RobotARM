@@ -58,9 +58,15 @@ const state = {
   community: { items: [], stats: {}, kind: "all", selected: null, importTarget: null, publishPreset: null },
   lastActionVideo: null,
   composer: {
-    sourceKind: "action",
     sources: { robot_variant: "", actions: [], poses: [], skipped: [] },
     frames: [],
+    previewTarget: null,
+    selectedAction: "",
+    selectedPose: "",
+    dirty: false,
+    savedActionName: "",
+    autoPreviewTimer: null,
+    previewBuildToken: 0,
     previewId: "",
     previewDuration: 0,
     previewSegments: [],
@@ -99,6 +105,11 @@ function bindEvents() {
   window.addEventListener("focus", refreshActiveVisionStatus);
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden) refreshActiveVisionStatus();
+  });
+  window.addEventListener("beforeunload", (event) => {
+    if (!state.composer.dirty) return;
+    event.preventDefault();
+    event.returnValue = "";
   });
   $("#topStopBtn").addEventListener("click", stopNow);
   $("#quickStopBtn").addEventListener("click", stopNow);
@@ -152,15 +163,13 @@ function bindEvents() {
     loadCommunity();
   });
   $("#composerRefreshSources").addEventListener("click", loadComposerSources);
-  $("#composerSourceTabs").addEventListener("click", (event) => {
-    const button = event.target.closest("button[data-composer-source-kind]");
-    if (!button) return;
-    state.composer.sourceKind = button.dataset.composerSourceKind;
-    $$("#composerSourceTabs button").forEach((item) => item.classList.toggle("active", item === button));
-    renderComposerSources();
-  });
-  $("#composerSourceSearch").addEventListener("input", renderComposerSources);
-  $("#composerSourceList").addEventListener("click", handleComposerSourceClick);
+  $("#workbenchActionSearch").addEventListener("input", renderWorkbenchActions);
+  $("#workbenchPoseSearch").addEventListener("input", renderWorkbenchPoses);
+  $("#workbenchActionList").addEventListener("click", handleWorkbenchActionClick);
+  $("#workbenchPoseList").addEventListener("click", handleWorkbenchPoseClick);
+  $("#workbenchPoseList").addEventListener("dragstart", handleWorkbenchPoseDragStart);
+  $("#workbenchNewAction").addEventListener("click", startBlankComposerDraft);
+  $("#workbenchRealPlay").addEventListener("click", playWorkbenchRealTarget);
   $("#composerTimeline").addEventListener("click", handleComposerTimelineClick);
   $("#composerTimeline").addEventListener("input", handleComposerTimelineInput);
   $("#composerTimeline").addEventListener("dragstart", handleComposerDragStart);
@@ -168,7 +177,7 @@ function bindEvents() {
   $("#composerTimeline").addEventListener("dragleave", handleComposerDragLeave);
   $("#composerTimeline").addEventListener("drop", handleComposerDrop);
   $("#composerTimeline").addEventListener("dragend", clearComposerDragState);
-  $("#composerClearTimeline").addEventListener("click", () => resetComposerDraft());
+  $("#composerClearTimeline").addEventListener("click", clearComposerDraftWithConfirmation);
   $("#composerBuildPreview").addEventListener("click", buildComposerPreview);
   $("#composerPlayPreview").addEventListener("click", playComposerPreview);
   $("#composerPausePreview").addEventListener("click", pauseComposerPreview);
@@ -176,8 +185,9 @@ function bindEvents() {
     state.composer.previewLoop = $("#composerLoopPreview").checked;
   });
   $("#composerPreviewScrubber").addEventListener("input", scrubComposerPreview);
-  $("#composerEntryDuration").addEventListener("input", invalidateComposerPreview);
-  $("#composerDescription").addEventListener("input", invalidateComposerPreview);
+  $("#composerActionName").addEventListener("input", markComposerDraftChanged);
+  $("#composerEntryDuration").addEventListener("input", markComposerDraftChanged);
+  $("#composerDescription").addEventListener("input", markComposerDraftChanged);
   $("#composerSaveAction").addEventListener("click", saveComposedAction);
   $("#libraryRenameCancel").addEventListener("click", closeLibraryRenameDialog);
   $("#libraryRenameForm").addEventListener("submit", submitLibraryRename);
@@ -897,25 +907,28 @@ async function savePose() {
   try {
     await postJsonLogged("/api/v1/poses/save", { name, description: $("#poseDescInput").value.trim() });
     await loadPoses();
+    await loadComposerSources();
+    $("#poseNameInput").value = "";
+    $("#poseDescInput").value = "";
   } catch (_) {}
 }
 
 async function gotoPose(name) {
-  const body = await withSafety({ name, speed_percent: 50 });
-  if (!body) return;
-  try {
-    await postJsonLogged("/api/v1/poses/goto", body);
-  } catch (_) {}
+  return gotoPoseAtSpeed(name, 50);
 }
 
 async function deletePose(name) {
+  if (composerReferencesSource("pose", name)) {
+    showError(new ApiError("POSE_IN_USE", `姿态“${name}”正被当前时间线引用，请先移除对应关键帧。`));
+    return;
+  }
+  if (!window.confirm(`是否确认删除姿态：${name}？\n删除后无法恢复。`)) return;
   try {
     await withPending(`pose-${name}`, () => deleteJson(`/api/v1/poses/${encodeURIComponent(name)}`));
-    $("#poseDetailName").textContent = "未选择";
-    $("#poseDetailSummary").textContent = "请选择一个姿态。";
-    $("#poseDetailResult").textContent = "";
+    if (state.composer.selectedPose === name) resetWorkbenchSelection();
     log("info", `已删除姿态：${name}`);
     await loadPoses();
+    await loadComposerSources();
   } catch (error) {
     showError(error);
   }
@@ -961,16 +974,24 @@ async function submitLibraryRename(event) {
     await postJson(`/api/v1/${collection}/${encodeURIComponent(target.name)}/rename`, { new_name: newName });
     log("info", `${label}已改名：${target.name} → ${newName}`);
     closeLibraryRenameDialog();
+    state.composer.frames.forEach((frame) => {
+      if (frame.source_kind === target.kind && frame.source_name === target.name) frame.source_name = newName;
+    });
     if (target.kind === "pose") {
-      $("#poseDetailName").textContent = "未选择";
-      $("#poseDetailSummary").textContent = "请选择一个姿态。";
-      $("#poseDetailResult").textContent = "";
+      if (state.composer.selectedPose === target.name) state.composer.selectedPose = newName;
       await loadPoses();
     } else {
-      $("#actionDetailName").textContent = "未选择";
-      $("#actionDetailSummary").textContent = "请选择一个动作。";
-      $("#actionDetailResult").textContent = "";
+      if (state.composer.selectedAction === target.name) state.composer.selectedAction = newName;
       await loadActions();
+    }
+    if (composerReferencesSource(target.kind, newName)) state.composer.dirty = true;
+    await loadComposerSources();
+    if (state.composer.frames.length) {
+      activateComposerDraft("未保存时间线", state.composer.dirty);
+    } else if (target.kind === "action" && state.composer.selectedAction === newName) {
+      selectWorkbenchAction(newName);
+    } else if (target.kind === "pose" && state.composer.selectedPose === newName) {
+      selectWorkbenchPose(newName);
     }
   } catch (error) {
     errorNode.textContent = error.message || "改名失败。";
@@ -1114,6 +1135,7 @@ async function importCommunityItem(itemId, targetName = null) {
     const data = await postJson(`/api/v1/community/items/${encodeURIComponent(itemId)}/import`, { target_name: targetName });
     log("info", data.message);
     if (data.kind === "action") await loadActions(); else await loadPoses();
+    await loadComposerSources();
     $("#communityDetailDialog").close();
     $("#communityImportDialog").close();
     await loadCommunity();
@@ -1192,80 +1214,208 @@ async function submitCommunityPublish(event) {
 }
 
 async function loadComposerSources() {
-  const list = $("#composerSourceList");
-  list.innerHTML = `<div class="composer-loading">正在读取本地资产库…</div>`;
+  $("#workbenchActionList").innerHTML = `<div class="composer-loading">正在读取动作库…</div>`;
+  $("#workbenchPoseList").innerHTML = `<div class="composer-loading">正在读取姿态库…</div>`;
   try {
     state.composer.sources = await getJson("/api/v1/action-composer/sources", { timeout: 12000 });
     $("#composerVariantLabel").textContent = `${state.composer.sources.robot_variant || "--"} 当前型号 · 仅显示兼容素材`;
-    renderComposerSources();
+    renderWorkbenchActions();
+    renderWorkbenchPoses();
   } catch (error) {
-    list.innerHTML = `<div class="composer-loading bad-text">${escapeHtml(error.message)}</div>`;
+    $("#workbenchActionList").innerHTML = `<div class="composer-loading bad-text">${escapeHtml(error.message)}</div>`;
+    $("#workbenchPoseList").innerHTML = `<div class="composer-loading bad-text">${escapeHtml(error.message)}</div>`;
     showError(error);
   }
 }
 
-function renderComposerSources() {
-  const composer = state.composer;
-  const query = $("#composerSourceSearch").value.trim().toLowerCase();
-  const list = $("#composerSourceList");
-  if (composer.sourceKind === "action") {
-    const actions = (composer.sources.actions || []).filter((item) => {
-      const haystack = `${item.name} ${(item.frames || []).map((frame) => frame.name).join(" ")}`.toLowerCase();
-      return !query || haystack.includes(query);
-    });
-    $("#composerSourceCount").textContent = `${actions.length} 个动作`;
-    list.innerHTML = actions.length ? actions.map((action) => `
-      <details class="composer-source-action">
-        <summary><span><strong>${escapeHtml(action.name)}</strong><small>${action.frame_count} 帧</small></span><button type="button" data-composer-add-action="${escapeAttr(action.name)}">全部加入</button></summary>
-        <div class="composer-source-frames">
-          ${(action.frames || []).map((frame) => `
-            <div class="composer-source-frame">
-              <div><strong>${escapeHtml(frame.name || `第 ${frame.display_index} 帧`)}</strong><small>${escapeHtml(composerJointSummary(frame.joints_deg))}</small></div>
-              <button type="button" data-composer-add-frame="${escapeAttr(action.name)}" data-frame-index="${frame.frame_index}">加入</button>
-            </div>`).join("")}
+function renderWorkbenchActions() {
+  const query = $("#workbenchActionSearch").value.trim().toLowerCase();
+  const localByName = new Map((state.localActions || []).map((item) => [item.name, item]));
+  const actions = (state.composer.sources.actions || []).filter((item) => {
+    const haystack = `${item.name} ${(item.frames || []).map((frame) => frame.name).join(" ")}`.toLowerCase();
+    return !query || haystack.includes(query);
+  });
+  $("#workbenchActionCount").textContent = `${actions.length} 个动作`;
+  $("#workbenchActionList").innerHTML = actions.length ? actions.map((action) => {
+    const summary = localByName.get(action.name)?.summary || {};
+    const duration = summary["总时长"] ?? action.frames.reduce((sum, frame) => sum + Number(frame.duration_sec || 0) + Number(frame.hold_sec || 0), 0);
+    const selected = state.composer.selectedAction === action.name ? " selected" : "";
+    return `<article class="workbench-action-card${selected}" data-workbench-action-card="${escapeAttr(action.name)}">
+      <div class="workbench-action-main">
+        <div class="workbench-action-copy" data-action-preview="${escapeAttr(action.name)}">
+          <strong>${escapeHtml(action.name)}</strong>
+          <small>${action.frame_count} 帧 · ${formatNum(duration, 1)}s</small>
         </div>
-      </details>`).join("") : `<div class="composer-loading">没有匹配当前型号的动作帧。</div>`;
-    return;
-  }
-
-  const poses = (composer.sources.poses || []).filter((item) => !query || `${item.name} ${item.description || ""}`.toLowerCase().includes(query));
-  $("#composerSourceCount").textContent = `${poses.length} 个姿态`;
-  list.innerHTML = poses.length ? poses.map((pose) => `
-    <article class="composer-source-pose">
-      <div><strong>${escapeHtml(pose.name)}</strong><small>${escapeHtml(pose.description || composerJointSummary(pose.joints_deg))}</small></div>
-      <button type="button" data-composer-add-pose="${escapeAttr(pose.name)}">加入</button>
-    </article>`).join("") : `<div class="composer-loading">没有匹配的姿态。</div>`;
+        <div class="workbench-action-buttons">
+          <button type="button" data-action-preview="${escapeAttr(action.name)}">预览</button>
+          <button type="button" class="primary" data-action-edit-copy="${escapeAttr(action.name)}">编辑副本</button>
+          <button type="button" data-action-add-all="${escapeAttr(action.name)}">追加整组</button>
+          <button type="button" data-action-share="${escapeAttr(action.name)}">分享</button>
+          <button type="button" data-action-rename="${escapeAttr(action.name)}">改名</button>
+          <button type="button" data-action-delete="${escapeAttr(action.name)}">删除</button>
+        </div>
+      </div>
+      <details class="workbench-action-frames">
+        <summary>展开 ${action.frame_count} 个关键帧</summary>
+        ${(action.frames || []).map((frame) => `<div class="workbench-frame-row">
+          <span><strong>${escapeHtml(frame.name || `第 ${frame.display_index} 帧`)}</strong><br>${escapeHtml(composerJointSummary(frame.joints_deg))}</span>
+          <button type="button" data-action-add-frame="${escapeAttr(action.name)}" data-frame-index="${frame.frame_index}">加入时间线</button>
+        </div>`).join("")}
+      </details>
+    </article>`;
+  }).join("") : `<div class="workbench-empty">没有匹配当前型号的动作。</div>`;
 }
 
-function handleComposerSourceClick(event) {
-  const allButton = event.target.closest("button[data-composer-add-action]");
-  const frameButton = event.target.closest("button[data-composer-add-frame]");
-  const poseButton = event.target.closest("button[data-composer-add-pose]");
-  if (allButton) {
-    event.preventDefault();
-    const action = (state.composer.sources.actions || []).find((item) => item.name === allButton.dataset.composerAddAction);
-    (action?.frames || []).forEach((frame) => addComposerFrame("action", action.name, frame));
-    finishComposerFrameChange();
-  } else if (frameButton) {
-    const action = (state.composer.sources.actions || []).find((item) => item.name === frameButton.dataset.composerAddFrame);
-    const frame = action?.frames?.find((item) => item.frame_index === Number(frameButton.dataset.frameIndex));
-    if (action && frame) {
-      addComposerFrame("action", action.name, frame);
-      finishComposerFrameChange();
-    }
-  } else if (poseButton) {
-    const pose = (state.composer.sources.poses || []).find((item) => item.name === poseButton.dataset.composerAddPose);
-    if (pose) {
-      addComposerFrame("pose", pose.name, pose);
-      finishComposerFrameChange();
-    }
-  }
+function renderWorkbenchPoses() {
+  const query = $("#workbenchPoseSearch").value.trim().toLowerCase();
+  const poses = (state.composer.sources.poses || []).filter((pose) => !query || `${pose.name} ${pose.description || ""}`.toLowerCase().includes(query));
+  $("#workbenchPoseCount").textContent = `${poses.length} 个姿态`;
+  $("#workbenchPoseList").innerHTML = poses.length ? poses.map((pose) => `
+    <article class="workbench-pose-card${state.composer.selectedPose === pose.name ? " selected" : ""}" draggable="true" data-pose-drag="${escapeAttr(pose.name)}">
+      <div class="workbench-pose-copy" data-pose-preview="${escapeAttr(pose.name)}">
+        <strong>${escapeHtml(pose.name)}</strong>
+        <small>${escapeHtml(pose.description || composerJointSummary(pose.joints_deg))}</small>
+      </div>
+      <div class="workbench-pose-buttons">
+        <button type="button" data-pose-preview="${escapeAttr(pose.name)}">预览</button>
+        <button type="button" class="primary" data-pose-add="${escapeAttr(pose.name)}">加入时间线</button>
+        <button type="button" data-pose-goto="${escapeAttr(pose.name)}">真机前往</button>
+        <button type="button" data-pose-share="${escapeAttr(pose.name)}">分享</button>
+        <button type="button" data-pose-rename="${escapeAttr(pose.name)}">改名</button>
+        <button type="button" data-pose-delete="${escapeAttr(pose.name)}">删除</button>
+      </div>
+    </article>`).join("") : `<div class="workbench-empty">没有匹配的姿态。</div>`;
 }
 
-function addComposerFrame(kind, sourceName, source) {
+function handleWorkbenchActionClick(event) {
+  const preview = event.target.closest("[data-action-preview]");
+  const edit = event.target.closest("button[data-action-edit-copy]");
+  const addAll = event.target.closest("button[data-action-add-all]");
+  const addFrame = event.target.closest("button[data-action-add-frame]");
+  const rename = event.target.closest("button[data-action-rename]");
+  const share = event.target.closest("button[data-action-share]");
+  const remove = event.target.closest("button[data-action-delete]");
+  if (edit) return editWorkbenchAction(edit.dataset.actionEditCopy);
+  if (addAll) return appendWorkbenchAction(addAll.dataset.actionAddAll);
+  if (addFrame) return appendWorkbenchActionFrame(addFrame.dataset.actionAddFrame, Number(addFrame.dataset.frameIndex));
+  if (rename) return openLibraryRenameDialog("action", rename.dataset.actionRename);
+  if (share) return openCommunityPublish("action", share.dataset.actionShare);
+  if (remove) return deleteAction(remove.dataset.actionDelete);
+  if (preview) selectWorkbenchAction(preview.dataset.actionPreview);
+}
+
+function handleWorkbenchPoseClick(event) {
+  const preview = event.target.closest("[data-pose-preview]");
+  const add = event.target.closest("button[data-pose-add]");
+  const go = event.target.closest("button[data-pose-goto]");
+  const rename = event.target.closest("button[data-pose-rename]");
+  const share = event.target.closest("button[data-pose-share]");
+  const remove = event.target.closest("button[data-pose-delete]");
+  if (add) return appendWorkbenchPose(add.dataset.poseAdd);
+  if (go) return gotoPoseAtSpeed(go.dataset.poseGoto, Number($("#workbenchPoseSpeed").value || 50));
+  if (rename) return openLibraryRenameDialog("pose", rename.dataset.poseRename);
+  if (share) return openCommunityPublish("pose", share.dataset.poseShare);
+  if (remove) return deletePose(remove.dataset.poseDelete);
+  if (preview) selectWorkbenchPose(preview.dataset.posePreview);
+}
+
+function selectWorkbenchAction(name) {
+  const action = findWorkbenchAction(name);
+  if (!action) return;
+  state.composer.selectedAction = name;
+  state.composer.selectedPose = "";
+  state.composer.previewTarget = { kind: "action", name, label: `动作 · ${name}`, frames: workbenchActionFrames(action) };
+  renderWorkbenchActions();
+  renderWorkbenchPoses();
+  updateWorkbenchPreviewTarget();
+  scheduleComposerPreview(0);
+}
+
+function selectWorkbenchPose(name) {
+  const pose = findWorkbenchPose(name);
+  if (!pose) return;
+  state.composer.selectedAction = "";
+  state.composer.selectedPose = name;
+  state.composer.previewTarget = { kind: "pose", name, label: `姿态 · ${name}`, frames: [workbenchFrameFromSource("pose", name, pose)] };
+  renderWorkbenchActions();
+  renderWorkbenchPoses();
+  updateWorkbenchPreviewTarget();
+  scheduleComposerPreview(0);
+}
+
+function editWorkbenchAction(name) {
+  if (!confirmDiscardComposerDraft()) return;
+  const action = findWorkbenchAction(name);
+  if (!action) return;
+  state.composer.frames = workbenchActionFrames(action).map((frame) => ({ ...frame, joints_deg: { ...frame.joints_deg }, instanceId: composerInstanceId() }));
+  state.composer.dirty = false;
+  state.composer.savedActionName = "";
+  $("#composerActionName").value = `${name}_副本`;
+  $("#composerDescription").value = "";
+  activateComposerDraft(`编辑副本 · ${name}`, false);
+}
+
+function appendWorkbenchAction(name) {
+  const action = findWorkbenchAction(name);
+  if (!action) return;
+  (action.frames || []).forEach((frame) => addComposerFrame("action", name, frame));
+  finishComposerFrameChange();
+}
+
+function appendWorkbenchActionFrame(name, frameIndex) {
+  const action = findWorkbenchAction(name);
+  const frame = action?.frames?.find((item) => item.frame_index === frameIndex);
+  if (!frame) return;
+  addComposerFrame("action", name, frame);
+  finishComposerFrameChange();
+}
+
+function appendWorkbenchPose(name) {
+  const pose = findWorkbenchPose(name);
+  if (!pose) return;
+  addComposerFrame("pose", name, pose);
+  finishComposerFrameChange();
+}
+
+function handleWorkbenchPoseDragStart(event) {
+  const card = event.target.closest("[data-pose-drag]");
+  if (!card || event.target.closest("button, input")) return;
+  event.dataTransfer.effectAllowed = "copy";
+  event.dataTransfer.setData("application/x-momo-pose", card.dataset.poseDrag);
+}
+
+function findWorkbenchAction(name) {
+  return (state.composer.sources.actions || []).find((item) => item.name === name);
+}
+
+function findWorkbenchPose(name) {
+  return (state.composer.sources.poses || []).find((item) => item.name === name);
+}
+
+function composerReferencesSource(kind, name) {
+  return state.composer.frames.some((frame) => frame.source_kind === kind && frame.source_name === name);
+}
+
+function resetWorkbenchSelection() {
+  state.composer.selectedAction = "";
+  state.composer.selectedPose = "";
+  if (state.composer.frames.length) {
+    state.composer.previewTarget = { kind: "draft", name: "", label: "时间线草稿", frames: state.composer.frames };
+  } else {
+    state.composer.previewTarget = null;
+  }
+  updateWorkbenchPreviewTarget();
+  scheduleComposerPreview(0);
+}
+
+function workbenchActionFrames(action) {
+  return (action.frames || []).map((frame) => workbenchFrameFromSource("action", action.name, frame));
+}
+
+function workbenchFrameFromSource(kind, sourceName, source) {
   const duration = Number(source.duration_sec);
   const hold = Number(source.hold_sec);
-  state.composer.frames.push({
+  return {
     instanceId: composerInstanceId(),
     source_kind: kind,
     source_name: sourceName,
@@ -1275,11 +1425,15 @@ function addComposerFrame(kind, sourceName, source) {
     hold_sec: Number.isFinite(hold) && hold >= 0 ? hold : 0.0,
     joints_deg: { ...(source.joints_deg || {}) },
     legacy_variant_assumed: Boolean(source.legacy_variant_assumed),
-  });
+  };
+}
+
+function addComposerFrame(kind, sourceName, source) {
+  state.composer.frames.push(workbenchFrameFromSource(kind, sourceName, source));
 }
 
 function finishComposerFrameChange() {
-  invalidateComposerPreview();
+  markComposerDraftChanged();
   renderComposerTimeline();
 }
 
@@ -1345,7 +1499,7 @@ function handleComposerTimelineInput(event) {
   if (!Number.isFinite(value)) return;
   if (durationIndex !== undefined) state.composer.frames[Number(index)].duration_sec = value;
   if (holdIndex !== undefined) state.composer.frames[Number(index)].hold_sec = value;
-  invalidateComposerPreview();
+  markComposerDraftChanged();
   updateComposerSummary();
 }
 
@@ -1368,6 +1522,11 @@ function handleComposerDragStart(event) {
 
 function handleComposerDragOver(event) {
   const card = event.target.closest("[data-composer-frame-index]");
+  if (event.dataTransfer?.types?.includes("application/x-momo-pose")) {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+    return;
+  }
   if (!card || state.composer.dragIndex === null) return;
   event.preventDefault();
   card.classList.add("drag-over");
@@ -1379,6 +1538,12 @@ function handleComposerDragLeave(event) {
 }
 
 function handleComposerDrop(event) {
+  const poseName = event.dataTransfer?.getData("application/x-momo-pose");
+  if (poseName) {
+    event.preventDefault();
+    appendWorkbenchPose(poseName);
+    return;
+  }
   const card = event.target.closest("[data-composer-frame-index]");
   if (!card || state.composer.dragIndex === null) return;
   event.preventDefault();
@@ -1393,11 +1558,11 @@ function clearComposerDragState() {
   $$(".composer-keyframe.dragging, .composer-keyframe.drag-over").forEach((item) => item.classList.remove("dragging", "drag-over"));
 }
 
-function composerPayload(includeName = false) {
+function composerPayload(includeName = false, frames = state.composer.frames) {
   const payload = {
     description: $("#composerDescription").value.trim(),
     entry_duration_sec: Number($("#composerEntryDuration").value || 2),
-    frames: state.composer.frames.map((frame) => ({
+    frames: frames.map((frame) => ({
       source_kind: frame.source_kind,
       source_name: frame.source_name,
       source_frame_index: frame.source_frame_index,
@@ -1411,33 +1576,37 @@ function composerPayload(includeName = false) {
 }
 
 async function buildComposerPreview() {
-  if (state.composer.frames.length < 2) return;
+  const frames = previewFramesForWorkbench();
+  if (frames.length < 1) return;
+  const buildToken = ++state.composer.previewBuildToken;
   const button = $("#composerBuildPreview");
   button.disabled = true;
   $("#composerPreviewError").textContent = "";
   $("#composerPreviewState").textContent = "生成中";
   await deleteComposerPreviewSession();
   try {
-    const data = await postJson("/api/v1/action-composer/preview", composerPayload(), { timeout: 20000 });
+    const data = await postJson("/api/v1/action-composer/preview", composerPayload(false, frames), { timeout: 20000 });
+    if (buildToken !== state.composer.previewBuildToken) return;
     state.composer.previewId = data.preview_id;
     state.composer.previewDuration = Number(data.total_duration_sec || 0);
     state.composer.previewSegments = data.segments || [];
     state.composer.previewTime = 0;
     $("#composerPreviewScrubber").max = String(Math.max(0.01, state.composer.previewDuration));
     $("#composerPreviewScrubber").value = "0";
-    $("#composerPreviewScrubber").disabled = false;
-    $("#composerPlayPreview").disabled = false;
+    $("#composerPreviewScrubber").disabled = state.composer.previewDuration <= 0;
+    $("#composerPlayPreview").disabled = state.composer.previewDuration <= 0;
     $("#composerPausePreview").disabled = true;
     $("#composerPreviewState").textContent = `${data.frame_count} 帧 · ${formatNum(data.total_duration_sec, 1)}s`;
-    renderComposerTimeline();
+    if (state.composer.previewTarget?.kind === "draft") renderComposerTimeline();
     updateComposerPreviewTime();
     await renderComposerPreviewFrame(0);
   } catch (error) {
+    if (buildToken !== state.composer.previewBuildToken) return;
     $("#composerPreviewState").textContent = "生成失败";
     $("#composerPreviewError").textContent = error.message;
     showError(error);
   } finally {
-    button.disabled = state.composer.frames.length < 2;
+    if (buildToken === state.composer.previewBuildToken) button.disabled = previewFramesForWorkbench().length < 1;
   }
 }
 
@@ -1455,7 +1624,7 @@ function pauseComposerPreview() {
   state.composer.previewPlaying = false;
   if (state.composer.previewAnimation) cancelAnimationFrame(state.composer.previewAnimation);
   state.composer.previewAnimation = null;
-  $("#composerPlayPreview").disabled = !state.composer.previewId;
+  $("#composerPlayPreview").disabled = !state.composer.previewId || state.composer.previewDuration <= 0;
   $("#composerPausePreview").disabled = true;
 }
 
@@ -1534,6 +1703,7 @@ function updateComposerPreviewTime() {
 }
 
 function invalidateComposerPreview() {
+  state.composer.previewBuildToken += 1;
   pauseComposerPreview();
   deleteComposerPreviewSession();
   if (state.composer.previewObjectUrl) URL.revokeObjectURL(state.composer.previewObjectUrl);
@@ -1541,7 +1711,7 @@ function invalidateComposerPreview() {
   state.composer.previewDuration = 0;
   state.composer.previewSegments = [];
   state.composer.previewTime = 0;
-  $("#composerPreviewState").textContent = "待生成";
+  $("#composerPreviewState").textContent = previewFramesForWorkbench().length ? "正在更新" : "等待选择";
   $("#composerPreviewScrubber").value = "0";
   $("#composerPreviewScrubber").max = "1";
   $("#composerPreviewScrubber").disabled = true;
@@ -1550,7 +1720,7 @@ function invalidateComposerPreview() {
   $("#composerPreviewImage").classList.remove("ready");
   $("#composerPreviewImage").removeAttribute("src");
   $("#composerPreviewEmpty").classList.remove("hidden");
-  $("#composerPreviewEmpty").textContent = state.composer.frames.length >= 2 ? "点击生成预览" : "选择至少两个关键帧";
+  $("#composerPreviewEmpty").textContent = previewFramesForWorkbench().length ? "正在更新仿真…" : "从动作库或姿态库选择内容";
   updateComposerPreviewTime();
 }
 
@@ -1573,8 +1743,14 @@ async function saveComposedAction() {
     const message = data.message || `已保存新动作：${data.name}`;
     log("info", message);
     await loadActions();
-    resetComposerDraft({ keepMessage: message });
     await loadComposerSources();
+    state.composer.dirty = false;
+    state.composer.savedActionName = data.name;
+    $("#composerActionName").value = data.name;
+    errorNode.textContent = message;
+    errorNode.classList.add("success");
+    renderComposerTimeline();
+    selectWorkbenchAction(data.name);
   } catch (error) {
     errorNode.textContent = error.message;
     if (error.code === "ACTION_NAME_CONFLICT") $("#composerActionName").focus();
@@ -1585,9 +1761,16 @@ async function saveComposedAction() {
 }
 
 function resetComposerDraft(options = {}) {
+  if (state.composer.autoPreviewTimer) window.clearTimeout(state.composer.autoPreviewTimer);
+  state.composer.autoPreviewTimer = null;
   pauseComposerPreview();
   deleteComposerPreviewSession();
   state.composer.frames = [];
+  state.composer.previewTarget = null;
+  state.composer.selectedAction = "";
+  state.composer.selectedPose = "";
+  state.composer.dirty = false;
+  state.composer.savedActionName = "";
   state.composer.previewDuration = 0;
   state.composer.previewSegments = [];
   state.composer.previewTime = 0;
@@ -1599,15 +1782,109 @@ function resetComposerDraft(options = {}) {
   $("#composerSaveError").classList.toggle("success", Boolean(options.keepMessage));
   invalidateComposerPreview();
   renderComposerTimeline();
+  renderWorkbenchActions();
+  renderWorkbenchPoses();
+  updateWorkbenchPreviewTarget();
 }
 
 function updateComposerSummary() {
   const frames = state.composer.frames;
   const requested = frames.reduce((sum, frame, index) => sum + Number(frame.hold_sec || 0) + (index ? Number(frame.duration_sec || 0) : 0), 0);
-  const duration = state.composer.previewId ? state.composer.previewDuration : requested;
-  const label = state.composer.previewId ? "安全时长" : "配置时长";
+  const draftPreview = state.composer.previewTarget?.kind === "draft" && state.composer.previewId;
+  const duration = draftPreview ? state.composer.previewDuration : requested;
+  const label = draftPreview ? "安全时长" : "配置时长";
   $("#composerTimelineSummary").textContent = `${frames.length} 帧 · ${label} ${formatNum(duration, 1)}s`;
-  $("#composerBuildPreview").disabled = frames.length < 2;
+  $("#composerBuildPreview").disabled = previewFramesForWorkbench().length < 1;
+  $("#workbenchDraftState").textContent = state.composer.savedActionName
+    ? `已保存 · ${state.composer.savedActionName}`
+    : state.composer.dirty
+      ? "未保存修改"
+      : frames.length
+        ? "已载入编辑副本"
+        : "未开始编辑";
+}
+
+function previewFramesForWorkbench() {
+  if (state.composer.previewTarget?.kind === "draft") return state.composer.frames;
+  return state.composer.previewTarget?.frames || [];
+}
+
+function scheduleComposerPreview(delay = 300) {
+  if (state.composer.autoPreviewTimer) window.clearTimeout(state.composer.autoPreviewTimer);
+  state.composer.autoPreviewTimer = null;
+  invalidateComposerPreview();
+  if (!previewFramesForWorkbench().length) return;
+  state.composer.autoPreviewTimer = window.setTimeout(() => {
+    state.composer.autoPreviewTimer = null;
+    buildComposerPreview();
+  }, Math.max(0, delay));
+}
+
+function markComposerDraftChanged() {
+  state.composer.dirty = true;
+  state.composer.savedActionName = "";
+  activateComposerDraft("未保存时间线", true);
+}
+
+function activateComposerDraft(label = "时间线草稿", dirty = state.composer.dirty) {
+  state.composer.dirty = Boolean(dirty);
+  state.composer.selectedAction = "";
+  state.composer.selectedPose = "";
+  state.composer.previewTarget = { kind: "draft", name: "", label, frames: state.composer.frames };
+  renderWorkbenchActions();
+  renderWorkbenchPoses();
+  updateWorkbenchPreviewTarget();
+  renderComposerTimeline();
+  scheduleComposerPreview(300);
+}
+
+function confirmDiscardComposerDraft() {
+  return !state.composer.dirty || window.confirm("当前时间线有未保存修改，是否丢弃？");
+}
+
+function clearComposerDraftWithConfirmation() {
+  if (!confirmDiscardComposerDraft()) return;
+  resetComposerDraft();
+}
+
+function startBlankComposerDraft() {
+  if (!confirmDiscardComposerDraft()) return;
+  resetComposerDraft();
+  state.composer.previewTarget = { kind: "draft", name: "", label: "新建空白动作", frames: state.composer.frames };
+  updateWorkbenchPreviewTarget();
+  renderComposerTimeline();
+}
+
+function updateWorkbenchPreviewTarget() {
+  const target = state.composer.previewTarget;
+  $("#workbenchPreviewTarget").textContent = target?.label || "未选择资产";
+  const isAction = target?.kind === "action";
+  const isPose = target?.kind === "pose";
+  const isDraft = target?.kind === "draft";
+  $("#workbenchActionSpeedField").classList.toggle("hidden", !isAction);
+  $("#workbenchActionLoopField").classList.toggle("hidden", !isAction);
+  $("#workbenchRecordVideoField").classList.toggle("hidden", !isAction);
+  $("#workbenchPoseSpeedField").classList.toggle("hidden", !isPose);
+  const button = $("#workbenchRealPlay");
+  button.disabled = !(isAction || isPose);
+  button.textContent = isAction ? `真机播放“${target.name}”` : isPose ? `真机前往“${target.name}”` : isDraft ? "请先保存为动作" : "请先选择已保存资产";
+  $("#pauseActionBtn").disabled = !isAction;
+  $("#resumeActionBtn").disabled = !isAction;
+  $("#stopActionBtn").disabled = !isAction;
+}
+
+async function playWorkbenchRealTarget() {
+  const target = state.composer.previewTarget;
+  if (target?.kind === "action") return playAction(target.name);
+  if (target?.kind === "pose") return gotoPoseAtSpeed(target.name, Number($("#workbenchPoseSpeed").value || 50));
+}
+
+async function gotoPoseAtSpeed(name, speedPercent) {
+  const body = await withSafety({ name, speed_percent: Math.max(1, Math.min(100, Number(speedPercent || 50))) });
+  if (!body) return;
+  try {
+    await postJsonLogged("/api/v1/poses/goto", body);
+  } catch (_) {}
 }
 
 function composerJointSummary(joints = {}) {
@@ -1671,6 +1948,7 @@ async function saveActionRecording() {
     if (clearAutoName) $("#recordingNameInput").value = "";
     renderRecordingStatus();
     await loadActions();
+    await loadComposerSources();
   } catch (_) {}
 }
 
@@ -2305,6 +2583,7 @@ async function confirmAgentPendingAction(actionId) {
       refreshState(),
       loadActions(),
       loadPoses(),
+      loadComposerSources(),
       loadSubjectLockStatus({ quiet: true }),
       refreshFollow(),
     ]);
@@ -2723,37 +3002,7 @@ function updateGripperLabel(value) {
 }
 
 function renderPoses(poses) {
-  $("#posesList").innerHTML = poses
-    .map((item) => {
-      const angles = (item.pose?.关节角度 || []).map((v) => formatNum(v, 1)).join(", ");
-      return `
-        <article class="item-card">
-          <h3>${escapeHtml(item.name)}</h3>
-          <p>${escapeHtml(item.description || item.pose?.说明 || "")}</p>
-          <p>关节：${escapeHtml(angles)}</p>
-          <p>夹爪：${formatNum(item.pose?.夹爪 ?? 50, 0)}%</p>
-          <div class="button-row">
-            <button data-pose-detail="${escapeAttr(item.name)}">详情</button>
-            <button data-pose-goto="${escapeAttr(item.name)}">前往</button>
-            <button data-pose-share="${escapeAttr(item.name)}">分享到社区</button>
-            <button data-pose-rename="${escapeAttr(item.name)}">改名</button>
-            <button data-pose-delete="${escapeAttr(item.name)}">删除</button>
-          </div>
-        </article>`;
-    })
-    .join("");
-  $("#posesList").onclick = (event) => {
-    const detailBtn = event.target.closest("button[data-pose-detail]");
-    const gotoBtn = event.target.closest("button[data-pose-goto]");
-    const renameBtn = event.target.closest("button[data-pose-rename]");
-    const shareBtn = event.target.closest("button[data-pose-share]");
-    const delBtn = event.target.closest("button[data-pose-delete]");
-    if (detailBtn) showPoseDetail(detailBtn.dataset.poseDetail);
-    if (gotoBtn) gotoPose(gotoBtn.dataset.poseGoto);
-    if (renameBtn) openLibraryRenameDialog("pose", renameBtn.dataset.poseRename);
-    if (shareBtn) openCommunityPublish("pose", shareBtn.dataset.poseShare);
-    if (delBtn) deletePose(delBtn.dataset.poseDelete);
-  };
+  if ($("#workbenchPoseList") && state.composer.sources.poses.length) renderWorkbenchPoses();
 }
 
 function renderPoseDetail(name, detail) {
@@ -2815,40 +3064,7 @@ function normalizePoseJoints(pose) {
 }
 
 function renderActions(actions) {
-  $("#actionsList").innerHTML = actions
-    .map((item) => {
-      const s = item.summary || {};
-      return `
-        <article class="item-card">
-          <h3>${escapeHtml(item.name)}</h3>
-          <p>姿态数：${s.pose_count ?? "--"}，预计时长：${s["总时长"] ?? "--"} 秒（不含前往首帧）</p>
-          <div class="tag-row">
-            <span class="tag ${s["是否包含 gripper"] ? "on" : ""}">gripper</span>
-            <span class="tag ${s["是否包含 tcp_pose"] ? "on" : ""}">tcp_pose</span>
-            <span class="tag ${s["是否包含 multi_turn_state"] ? "on" : ""}">multi_turn_state</span>
-          </div>
-          <div class="button-row">
-            <button data-action-play="${escapeAttr(item.name)}">播放</button>
-            <button data-action-detail="${escapeAttr(item.name)}">详情</button>
-            <button data-action-share="${escapeAttr(item.name)}">分享到社区</button>
-            <button data-action-rename="${escapeAttr(item.name)}">改名</button>
-            <button data-action-delete="${escapeAttr(item.name)}">删除</button>
-          </div>
-        </article>`;
-    })
-    .join("");
-  $("#actionsList").onclick = async (event) => {
-    const playBtn = event.target.closest("button[data-action-play]");
-    const detailBtn = event.target.closest("button[data-action-detail]");
-    const renameBtn = event.target.closest("button[data-action-rename]");
-    const shareBtn = event.target.closest("button[data-action-share]");
-    const deleteBtn = event.target.closest("button[data-action-delete]");
-    if (playBtn) playAction(playBtn.dataset.actionPlay);
-    if (detailBtn) showActionDetail(detailBtn.dataset.actionDetail);
-    if (renameBtn) openLibraryRenameDialog("action", renameBtn.dataset.actionRename);
-    if (shareBtn) openCommunityPublish("action", shareBtn.dataset.actionShare);
-    if (deleteBtn) deleteAction(deleteBtn.dataset.actionDelete);
-  };
+  if ($("#workbenchActionList") && state.composer.sources.actions.length) renderWorkbenchActions();
 }
 
 function renderRecordingStatus(latestPose = null) {
@@ -2889,15 +3105,18 @@ async function showActionDetail(name) {
 }
 
 async function deleteAction(name) {
+  if (composerReferencesSource("action", name)) {
+    showError(new ApiError("ACTION_IN_USE", `动作“${name}”的关键帧正被当前时间线引用，请先移除对应关键帧。`));
+    return;
+  }
   try {
     const confirmed = window.confirm(`是否确认删除动作：${name}？\n删除后无法恢复。`);
     if (!confirmed) return;
     await deleteJson(`/api/v1/actions/${encodeURIComponent(name)}`, { timeout: 8000 });
-    $("#actionDetailName").textContent = "未选择";
-    $("#actionDetailSummary").textContent = "请选择一个动作。";
-    $("#actionDetailResult").textContent = "";
+    if (state.composer.selectedAction === name) resetWorkbenchSelection();
     log("warning", `动作已删除：${name}`);
     await loadActions();
+    await loadComposerSources();
   } catch (error) {
     showError(error);
   }
@@ -3305,16 +3524,20 @@ function renderHardwareCheck() {
 }
 
 function showPage(name) {
-  const leavingComposer = name !== "composer" && $("#pageComposer")?.classList.contains("active");
-  if (leavingComposer) resetComposerDraft();
+  const leavingWorkbench = name !== "workbench" && $("#pageWorkbench")?.classList.contains("active");
+  if (leavingWorkbench && !confirmDiscardComposerDraft()) return;
+  if (leavingWorkbench) resetComposerDraft();
   if (name !== "cinematic") stopSubjectLockPolling();
   if (name !== "agent" && state.agentVoiceRecorder?.state === "recording") cancelAgentVoiceRecording();
   $$(".nav-item").forEach((btn) => btn.classList.toggle("active", btn.dataset.page === name));
   $$(".page").forEach((page) => page.classList.remove("active"));
   $(`#page${capitalize(name)}`).classList.add("active");
-  if (name === "poses") loadPoses();
-  if (name === "actions") loadActions();
-  if (name === "composer") loadComposerSources();
+  if (name === "workbench") {
+    updateWorkbenchPreviewTarget();
+    renderComposerTimeline();
+    Promise.allSettled([loadPoses(), loadActions(), loadComposerSources()]);
+  }
+  if (name === "recording") loadRecordingStatus();
   if (name === "community") loadCommunity();
   if (name === "follow") {
     refreshFollow();

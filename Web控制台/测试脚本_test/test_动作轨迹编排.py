@@ -216,11 +216,20 @@ class ActionComposerTest(unittest.TestCase):
                 composer.create_preview(request)
             self.assertEqual(corrupt.exception.code, "ACTION_COMPOSER_INVALID_FRAME")
 
-    def test_request_schema_rejects_short_or_illegal_timing(self) -> None:
+    def test_single_pose_preview_is_allowed_but_save_still_requires_two_frames(self) -> None:
         payload = self.make_request().model_dump()
-        payload["frames"] = payload["frames"][:1]
+        payload["frames"] = [{"source_kind": "pose", "source_name": "中景", "duration_sec": 1.0, "hold_sec": 0.0}]
+        request = ActionComposerPreviewRequest(**payload)
+        with TemporaryDirectory() as root:
+            preview = ActionComposer(FakeBridge(Path(root))).create_preview(request)
+        self.assertEqual(preview["frame_count"], 1)
+        self.assertEqual(preview["total_duration_sec"], 0.0)
+
+        payload["name"] = "单帧不可保存"
         with self.assertRaises(ValidationError):
-            ActionComposerPreviewRequest(**payload)
+            ActionComposerSaveRequest(**payload)
+
+    def test_request_schema_rejects_illegal_timing(self) -> None:
 
         payload = self.make_request().model_dump()
         payload["frames"][1]["duration_sec"] = 0.0
@@ -246,10 +255,19 @@ class ActionComposerTest(unittest.TestCase):
         app_js = (WEB_ROOT / "frontend" / "app.js").read_text(encoding="utf-8")
         html = (WEB_ROOT / "frontend" / "index.html").read_text(encoding="utf-8")
         backend = (WEB_ROOT / "backend" / "app.py").read_text(encoding="utf-8")
-        self.assertIn('id="pageComposer"', html)
+        self.assertIn('id="pageWorkbench"', html)
+        self.assertIn('data-page="workbench"', html)
+        self.assertNotIn('data-page="poses"', html)
+        self.assertNotIn('data-page="actions"', html)
+        self.assertNotIn('data-page="composer"', html)
         self.assertIn('id="composerTimeline"', html)
+        self.assertIn('id="workbenchActionList"', html)
+        self.assertIn('id="workbenchPoseList"', html)
+        self.assertIn('id="workbenchRealPlay"', html)
         self.assertIn("data-composer-duplicate", app_js)
         self.assertIn("handleComposerDrop", app_js)
+        self.assertIn("scheduleComposerPreview(300)", app_js)
+        self.assertIn("confirmDiscardComposerDraft", app_js)
         self.assertIn("Math.max(0, (now - state.composer.previewStartedAt) / 1000)", app_js)
         self.assertIn("t: safeElapsed.toFixed(3)", app_js)
         self.assertIn("/api/v1/action-composer/preview", backend)

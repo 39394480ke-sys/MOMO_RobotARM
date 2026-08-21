@@ -189,11 +189,12 @@ class ActionComposerFrameRef(BaseModel):
 class ActionComposerPreviewRequest(BaseModel):
     description: str = Field("", max_length=400)
     entry_duration_sec: float = Field(2.0, ge=0.1, le=60.0)
-    frames: list[ActionComposerFrameRef] = Field(..., min_items=2, max_items=100)
+    frames: list[ActionComposerFrameRef] = Field(..., min_items=1, max_items=100)
 
 
 class ActionComposerSaveRequest(ActionComposerPreviewRequest):
     name: str = Field(..., min_length=1, max_length=64)
+    frames: list[ActionComposerFrameRef] = Field(..., min_items=2, max_items=100)
 
 
 class GotoPoseRequest(BaseModel):

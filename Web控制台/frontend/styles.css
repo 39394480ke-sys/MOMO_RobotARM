@@ -1407,6 +1407,203 @@ th {
   padding: 14px;
 }
 
+.workbench-page {
+  max-width: 1560px;
+}
+
+.workbench-search {
+  width: 100%;
+  margin: 10px 0;
+}
+
+.workbench-action-list {
+  height: 476px;
+}
+
+.workbench-action-card {
+  border-bottom: 1px solid var(--line);
+  background: #fff;
+}
+
+.workbench-action-card.selected {
+  box-shadow: inset 3px 0 0 var(--blue);
+  background: #f7f9fe;
+}
+
+.workbench-action-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  padding: 11px 4px;
+}
+
+.workbench-action-copy {
+  min-width: 0;
+  cursor: pointer;
+}
+
+.workbench-action-copy strong,
+.workbench-pose-copy strong {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.workbench-action-copy small,
+.workbench-pose-copy small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.workbench-action-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  max-width: 220px;
+}
+
+.workbench-action-buttons button,
+.workbench-pose-buttons button,
+.workbench-frame-row button {
+  min-height: 30px;
+  padding: 4px 8px;
+  font-size: 11px;
+}
+
+.workbench-action-frames {
+  margin: 0 4px 9px 18px;
+  border-left: 2px solid #c9d8fa;
+}
+
+.workbench-action-frames summary {
+  padding: 7px 9px;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.workbench-frame-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 9px;
+  border-top: 1px solid #edf0f4;
+}
+
+.workbench-frame-row span {
+  min-width: 0;
+  color: #475467;
+  font-size: 10px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.workbench-control-group {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.workbench-control-label {
+  display: block;
+  color: #475467;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.workbench-real-controls {
+  margin-top: 12px;
+}
+
+.workbench-real-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.workbench-real-row .field-inline input {
+  width: 76px;
+}
+
+.workbench-real-row .hidden {
+  display: none;
+}
+
+.workbench-timeline-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.workbench-timeline-actions span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.workbench-pose-library {
+  min-width: 0;
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.workbench-pose-head {
+  align-items: flex-end;
+}
+
+.workbench-pose-capture {
+  display: grid;
+  grid-template-columns: minmax(120px, 180px) minmax(150px, 260px) auto;
+  gap: 8px;
+}
+
+.workbench-pose-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 9px;
+}
+
+.workbench-pose-card {
+  min-width: 0;
+  padding: 11px;
+  border: 1px solid #d6dce5;
+  border-radius: 7px;
+  background: #fbfcfe;
+}
+
+.workbench-pose-card.selected {
+  border-color: var(--blue);
+  background: #f5f8ff;
+}
+
+.workbench-pose-card[draggable="true"] {
+  cursor: grab;
+}
+
+.workbench-pose-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 9px;
+}
+
+.workbench-empty {
+  display: grid;
+  place-items: center;
+  min-height: 100px;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
+
 .composer-panel-head {
   min-height: 36px;
   display: flex;
@@ -2060,6 +2257,16 @@ th {
     height: 320px;
   }
 
+  .workbench-pose-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .workbench-pose-capture {
+    width: 100%;
+    grid-template-columns: 1fr 1fr auto;
+  }
+
   .composer-save-band {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
@@ -2081,13 +2288,6 @@ th {
   .composer-save-band {
     grid-template-columns: minmax(0, 1fr);
   }
-  #composerSourceTabs {
-    width: 100%;
-  }
-  #composerSourceTabs button {
-    flex: 1;
-    width: auto;
-  }
   .composer-preview-controls {
     flex-wrap: wrap;
   }
@@ -2108,6 +2308,21 @@ th {
   }
   .composer-save-band > button {
     min-height: 42px;
+  }
+  .workbench-action-main {
+    grid-template-columns: 1fr;
+  }
+  .workbench-action-buttons {
+    max-width: none;
+    justify-content: flex-start;
+  }
+  .workbench-pose-capture,
+  .workbench-pose-list {
+    grid-template-columns: 1fr;
+  }
+  .workbench-real-row {
+    align-items: flex-start;
+    flex-direction: column;
   }
   .community-masthead { min-height: 132px; padding: 18px; align-items: flex-start; flex-direction: column; }
   .community-masthead h2 { font-size: 24px; }

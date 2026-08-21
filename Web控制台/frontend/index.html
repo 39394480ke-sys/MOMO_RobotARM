@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="icon" href="data:," />
     <title>机械臂 Web 控制台</title>
-    <link rel="stylesheet" href="/static/styles.css?v=20260716-continuous-follow-j10-mm-ai-confirm-mobile-joint-hold-agent-layout-recording-unnamed-two-frame-guard-20260812-action-camera-recording-camera-hub-vision-v3-20260814-library-item-rename-20260815-community-market-text-only-20260817-action-keyframe-composer" />
+    <link rel="stylesheet" href="/static/styles.css?v=20260716-continuous-follow-j10-mm-ai-confirm-mobile-joint-hold-agent-layout-recording-unnamed-two-frame-guard-20260812-action-camera-recording-camera-hub-vision-v3-20260814-library-item-rename-20260815-community-market-text-only-20260817-action-keyframe-composer-20260821-trajectory-workbench" />
   </head>
   <body>
     <div id="app">
@@ -29,9 +29,8 @@
       <div class="shell">
         <nav class="sidebar" aria-label="主导航">
           <button class="nav-item active" data-page="quick">快速控制</button>
-          <button class="nav-item" data-page="poses">姿态</button>
-          <button class="nav-item" data-page="actions">动作</button>
-          <button class="nav-item" data-page="composer">轨迹编排</button>
+          <button class="nav-item" data-page="workbench">轨迹工作台</button>
+          <button class="nav-item" data-page="recording">动作录制</button>
           <button class="nav-item community-nav" data-page="community">社区广场</button>
           <button class="nav-item" data-page="follow">视觉跟随</button>
           <button class="nav-item" data-page="agent">AI 对话</button>
@@ -121,46 +120,9 @@
             </div>
           </section>
 
-          <section id="pagePoses" class="page">
+          <section id="pageRecording" class="page recording-page">
             <div class="section-head">
-              <h2>姿态</h2>
-              <div class="inline-actions">
-                <input id="poseNameInput" placeholder="姿态名称" />
-                <input id="poseDescInput" placeholder="说明" />
-                <button id="savePoseBtn">保存当前姿态</button>
-              </div>
-            </div>
-            <section class="panel pose-detail-panel">
-              <div class="panel-head">
-                <h3>姿态详情</h3>
-                <span id="poseDetailName" class="inline-status">未选择</span>
-              </div>
-              <pre id="poseDetailSummary" class="result-box pose-summary-text">请选择一个姿态。</pre>
-              <pre id="poseDetailResult" class="result-box pose-detail-json"></pre>
-            </section>
-            <div id="posesList" class="list-grid"></div>
-          </section>
-
-          <section id="pageActions" class="page">
-            <div class="section-head">
-              <h2>动作</h2>
-              <div class="inline-actions">
-                <label class="field-inline">
-                  <span>速度</span>
-                  <input id="actionSpeed" type="number" min="0.1" max="3" step="0.1" value="1" />
-                </label>
-                <label class="check-inline">
-                  <input id="actionLoop" type="checkbox" />
-                  <span>循环</span>
-                </label>
-                <label class="check-inline">
-                  <input id="recordActionVideo" type="checkbox" checked />
-                  <span>同步录像</span>
-                </label>
-                <button id="pauseActionBtn">暂停</button>
-                <button id="resumeActionBtn">继续</button>
-                <button id="stopActionBtn">停止</button>
-              </div>
+              <h2>动作录制</h2>
             </div>
             <section class="panel action-recording-panel">
               <div class="panel-head">
@@ -181,60 +143,63 @@
               </div>
               <pre id="recordingDetail" class="result-box"></pre>
             </section>
-            <section class="panel action-detail-panel">
-              <div class="panel-head">
-                <h3>动作详情</h3>
-                <span id="actionDetailName" class="inline-status">未选择</span>
-              </div>
-              <pre id="actionDetailSummary" class="result-box action-summary-text">请选择一个动作。</pre>
-              <pre id="actionDetailResult" class="result-box action-detail-json"></pre>
-            </section>
-            <div id="actionsList" class="list-grid"></div>
           </section>
 
-          <section id="pageComposer" class="page composer-page">
+          <section id="pageWorkbench" class="page composer-page workbench-page">
             <div class="section-head composer-title-row">
               <div>
-                <h2>轨迹编排</h2>
+                <h2>轨迹工作台</h2>
                 <p id="composerVariantLabel" class="composer-variant-label">正在读取当前机械臂型号</p>
               </div>
-              <button id="composerRefreshSources" type="button">刷新素材</button>
+              <button id="composerRefreshSources" type="button">刷新资产</button>
             </div>
 
             <div class="composer-workspace">
-              <section class="composer-source-panel" aria-label="关键帧素材">
+              <section class="composer-source-panel workbench-action-panel" aria-label="动作库">
                 <div class="composer-panel-head">
-                  <h3>关键帧素材</h3>
-                  <span id="composerSourceCount" class="composer-count">0</span>
+                  <div><h3>动作库</h3><span id="workbenchActionCount">0 个动作</span></div>
+                  <button id="workbenchNewAction" type="button">新建空白</button>
                 </div>
-                <div class="composer-source-tools">
-                  <div id="composerSourceTabs" class="segmented" aria-label="素材类型">
-                    <button class="active" type="button" data-composer-source-kind="action">动作帧</button>
-                    <button type="button" data-composer-source-kind="pose">姿态库</button>
-                  </div>
-                  <input id="composerSourceSearch" type="search" placeholder="搜索素材" aria-label="搜索关键帧素材" />
-                </div>
-                <div id="composerSourceList" class="composer-source-list"></div>
+                <input id="workbenchActionSearch" class="workbench-search" type="search" placeholder="搜索动作" aria-label="搜索动作" />
+                <div id="workbenchActionList" class="composer-source-list workbench-action-list"></div>
               </section>
 
-              <section class="composer-preview-panel" aria-label="轨迹仿真预览">
+              <section class="composer-preview-panel" aria-label="统一预览与执行">
                 <div class="composer-panel-head">
-                  <h3>仿真预览</h3>
-                  <span id="composerPreviewState" class="composer-preview-state">未生成</span>
+                  <div><h3>预览与执行</h3><span id="workbenchPreviewTarget">未选择资产</span></div>
+                  <span id="composerPreviewState" class="composer-preview-state">等待选择</span>
                 </div>
                 <div class="composer-preview-stage">
                   <img id="composerPreviewImage" alt="机械臂轨迹仿真预览" />
-                  <div id="composerPreviewEmpty" class="composer-preview-empty">选择至少两个关键帧</div>
+                  <div id="composerPreviewEmpty" class="composer-preview-empty">从动作库或姿态库选择内容</div>
                 </div>
-                <div class="composer-preview-controls">
-                  <button id="composerBuildPreview" class="primary" type="button" disabled>生成预览</button>
-                  <button id="composerPlayPreview" type="button" disabled>播放</button>
-                  <button id="composerPausePreview" type="button" disabled>暂停</button>
-                  <label class="check-inline"><input id="composerLoopPreview" type="checkbox" /><span>循环</span></label>
+                <div class="workbench-control-group">
+                  <span class="workbench-control-label">仿真预览</span>
+                  <div class="composer-preview-controls">
+                    <button id="composerBuildPreview" type="button" disabled>刷新仿真</button>
+                    <button id="composerPlayPreview" class="primary" type="button" disabled>播放</button>
+                    <button id="composerPausePreview" type="button" disabled>暂停</button>
+                    <label class="check-inline"><input id="composerLoopPreview" type="checkbox" /><span>循环</span></label>
+                  </div>
                 </div>
                 <div class="composer-scrubber-row">
                   <input id="composerPreviewScrubber" type="range" min="0" max="1" step="0.01" value="0" disabled aria-label="仿真预览时间轴" />
                   <output id="composerPreviewTime">0.0 / 0.0s</output>
+                </div>
+                <div class="workbench-control-group workbench-real-controls">
+                  <span class="workbench-control-label">真机执行</span>
+                  <div class="workbench-real-row">
+                    <label id="workbenchActionSpeedField" class="field-inline"><span>动作速度</span><input id="actionSpeed" type="number" min="0.1" max="3" step="0.1" value="1" /></label>
+                    <label id="workbenchPoseSpeedField" class="field-inline hidden"><span>姿态速度</span><input id="workbenchPoseSpeed" type="number" min="1" max="100" step="1" value="50" /></label>
+                    <label id="workbenchActionLoopField" class="check-inline"><input id="actionLoop" type="checkbox" /><span>循环</span></label>
+                    <label id="workbenchRecordVideoField" class="check-inline"><input id="recordActionVideo" type="checkbox" checked /><span>同步录像</span></label>
+                  </div>
+                  <div class="composer-preview-controls">
+                    <button id="workbenchRealPlay" class="primary" type="button" disabled>请先选择已保存资产</button>
+                    <button id="pauseActionBtn" type="button" disabled>暂停</button>
+                    <button id="resumeActionBtn" type="button" disabled>继续</button>
+                    <button id="stopActionBtn" type="button" disabled>停止</button>
+                  </div>
                 </div>
                 <p id="composerPreviewError" class="composer-inline-error" role="alert"></p>
               </section>
@@ -243,7 +208,7 @@
             <section class="composer-timeline-section" aria-label="关键帧时间线">
               <div class="composer-panel-head">
                 <div><h3>关键帧时间线</h3><span id="composerTimelineSummary">0 帧</span></div>
-                <button id="composerClearTimeline" type="button" disabled>清空</button>
+                <div class="workbench-timeline-actions"><span id="workbenchDraftState">未开始编辑</span><button id="composerClearTimeline" type="button" disabled>清空</button></div>
               </div>
               <div id="composerTimeline" class="composer-timeline"></div>
               <div id="composerTimelineEmpty" class="composer-timeline-empty">从素材库加入关键帧后，在这里调整顺序和节奏。</div>
@@ -255,6 +220,19 @@
               <label class="field composer-entry-field"><span>前往起点</span><span class="composer-number-input"><input id="composerEntryDuration" type="number" min="0.1" max="60" step="0.1" value="2.0" /><b>s</b></span></label>
               <button id="composerSaveAction" class="primary" type="button" disabled>保存为新动作</button>
               <p id="composerSaveError" class="composer-inline-error" role="alert"></p>
+            </section>
+
+            <section class="workbench-pose-library" aria-label="姿态关键帧库">
+              <div class="composer-panel-head workbench-pose-head">
+                <div><h3>姿态库</h3><span id="workbenchPoseCount">0 个姿态</span></div>
+                <div class="workbench-pose-capture">
+                  <input id="poseNameInput" maxlength="64" placeholder="新姿态名称" aria-label="新姿态名称" />
+                  <input id="poseDescInput" maxlength="400" placeholder="说明" aria-label="姿态说明" />
+                  <button id="savePoseBtn" type="button">保存当前姿态</button>
+                </div>
+              </div>
+              <input id="workbenchPoseSearch" class="workbench-search" type="search" placeholder="搜索姿态" aria-label="搜索姿态" />
+              <div id="workbenchPoseList" class="workbench-pose-list"></div>
             </section>
           </section>
 
@@ -873,6 +851,6 @@
     </dialog>
 
     <script src="/static/audio-recorder.js?v=20260724-web-cloud-stt"></script>
-    <script src="/static/app.js?v=20260716-continuous-follow-j10-mm-ai-confirm-mobile-joint-hold-agent-layout-recording-unnamed-two-frame-guard-lan-retry-20260813-subject-lock-playback-speed-20260814-library-item-rename-gripper-silent-20260815-community-market-text-only-20260817-action-keyframe-composer-20260821-preview-time-clamp"></script>
+    <script src="/static/app.js?v=20260716-continuous-follow-j10-mm-ai-confirm-mobile-joint-hold-agent-layout-recording-unnamed-two-frame-guard-lan-retry-20260813-subject-lock-playback-speed-20260814-library-item-rename-gripper-silent-20260815-community-market-text-only-20260817-action-keyframe-composer-20260821-preview-time-clamp-20260821-trajectory-workbench"></script>
   </body>
 </html>

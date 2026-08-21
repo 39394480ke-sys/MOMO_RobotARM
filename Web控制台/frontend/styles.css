@@ -1416,7 +1416,14 @@ th {
   margin: 10px 0;
 }
 
+.workbench-action-panel {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+}
+
 .workbench-action-list {
+  flex: 1 1 auto;
   height: 476px;
 }
 
@@ -2254,6 +2261,7 @@ th {
   }
 
   .composer-source-list {
+    flex: none;
     height: 320px;
   }
 

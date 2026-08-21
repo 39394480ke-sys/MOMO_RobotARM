@@ -373,8 +373,8 @@ class ActionComposer:
         model.forward(targets_to_kinematics_q(targets))
         yaw = math.radians(-55.0)
         pitch = math.radians(28.0)
-        distance = 0.62
-        target = [0.0, 0.0, 0.16]
+        distance = 1.25
+        target = [0.0, 0.0, 0.02]
         horizontal = distance * math.cos(pitch)
         eye = [
             target[0] + horizontal * math.cos(yaw),
